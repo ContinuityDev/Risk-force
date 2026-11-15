@@ -1,1 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 28" width="56" height="28" fill="none"><rect x="4" y="12" width="48" height="10" fill="#1c2733" stroke="#8a9aac"/><polygon points="52,12 56,17 52,22" fill="#2a3848"/><rect x="16" y="6" width="12" height="8" fill="#2a3848" stroke="#5c6b7e"/><rect x="36" y="8" width="8" height="4" fill="#3d6a7a"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 32" width="64" height="32" fill="none">
+  <defs>
+    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
+    </radialGradient>
+    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#d4eef5"/>
+      <stop offset="45%" stop-color="#7eb6c9"/>
+      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
+    </radialGradient>
+    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a3848"/>
+      <stop offset="50%" stop-color="#1c2733"/>
+      <stop offset="100%" stop-color="#121820"/>
+    </linearGradient>
+    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b0bec8"/>
+      <stop offset="40%" stop-color="#8a9aac"/>
+      <stop offset="100%" stop-color="#5c6b7e"/>
+    </linearGradient>
+    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0c9a0"/>
+      <stop offset="100%" stop-color="#8a7350"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    
+  </defs>
+
+  <ellipse cx="32" cy="28" rx="24" ry="2.5" fill="rgba(0,0,0,0.45)" opacity="0.4"/>
+  <!-- waterline hull -->
+  <path d="M2 22 L8 16 L56 16 L62 22 L56 26 L8 26 Z" fill="url(#hullL)" stroke="#8a9aac" stroke-width="0.8"/>
+  <path d="M8 16 L56 16 L52 20 L12 20 Z" fill="#2a3848"/>
+  <!-- superstructure -->
+  <path d="M20 16 L20 8 L36 6 L42 10 L42 16 Z" fill="#1c2733" stroke="#8a9aac" stroke-width="0.6"/>
+  <path d="M20 8 L36 6 L42 10 L28 10 Z" fill="#2a3848"/>
+  <!-- bridge -->
+  <rect x="26" y="4" width="10" height="5" rx="0.5" fill="#121820" stroke="#7eb6c9" stroke-width="0.5"/>
+  <rect x="28" y="5" width="6" height="2" fill="#7eb6c9" opacity="0.4"/>
+  <!-- gun turrets -->
+  <rect x="10" y="12" width="8" height="3" rx="0.5" fill="url(#steelL)"/>
+  <rect x="48" y="12" width="8" height="3" rx="0.5" fill="url(#steelL)"/>
+  <circle cx="10" cy="13.5" r="1" fill="#7eb6c9" opacity="0.6"/>
+  <circle cx="56" cy="13.5" r="1" fill="#7eb6c9" opacity="0.6"/>
+  <!-- mast -->
+  <line x1="32" y1="6" x2="32" y2="0" stroke="#8a9aac" stroke-width="1"/>
+  <circle cx="32" cy="0" r="1.2" fill="#7eb6c9"/>
+  <line x1="14" y1="24" x2="50" y2="24" stroke="#c4a574" stroke-width="0.5" opacity="0.5"/>
+
+</svg>

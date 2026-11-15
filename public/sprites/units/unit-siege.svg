@@ -1,1 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32" width="48" height="32" fill="none"><rect x="4" y="16" width="28" height="12" fill="#1c2733" stroke="#5c6b7e"/><rect x="24" y="10" width="20" height="5" fill="#8a9aac" stroke="#3d6a7a"/><rect x="8" y="12" width="12" height="8" fill="#2a3848"/><circle cx="10" cy="28" r="3" fill="#5c6b7e"/><circle cx="24" cy="28" r="3" fill="#5c6b7e"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 40" width="48" height="40" fill="none">
+  <defs>
+    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
+    </radialGradient>
+    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#d4eef5"/>
+      <stop offset="45%" stop-color="#7eb6c9"/>
+      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
+    </radialGradient>
+    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a3848"/>
+      <stop offset="50%" stop-color="#1c2733"/>
+      <stop offset="100%" stop-color="#121820"/>
+    </linearGradient>
+    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b0bec8"/>
+      <stop offset="40%" stop-color="#8a9aac"/>
+      <stop offset="100%" stop-color="#5c6b7e"/>
+    </linearGradient>
+    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0c9a0"/>
+      <stop offset="100%" stop-color="#8a7350"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    
+  </defs>
+
+  <ellipse cx="24" cy="37" rx="16" ry="2.5" fill="rgba(0,0,0,0.45)"/>
+  <!-- tracks -->
+  <rect x="6" y="28" width="36" height="7" rx="2" fill="#121820" stroke="#5c6b7e" stroke-width="0.6"/>
+  <rect x="8" y="29" width="4" height="5" fill="#2a3848"/>
+  <rect x="14" y="29" width="4" height="5" fill="#2a3848"/>
+  <rect x="30" y="29" width="4" height="5" fill="#2a3848"/>
+  <rect x="36" y="29" width="4" height="5" fill="#2a3848"/>
+  <!-- chassis -->
+  <path d="M8 28 L8 18 L24 12 L40 18 L40 28 Z" fill="url(#hullL)" stroke="#8a9aac" stroke-width="0.8"/>
+  <path d="M8 18 L24 12 L40 18 L24 22 Z" fill="#2a3848"/>
+  <!-- siege cannon -->
+  <g transform="rotate(-20 28 18)">
+    <rect x="16" y="14" width="28" height="5" rx="1" fill="url(#steelL)" stroke="#5c6b7e" stroke-width="0.5"/>
+    <rect x="16" y="15" width="28" height="1.5" fill="#0a0e14" opacity="0.3"/>
+    <rect x="14" y="13" width="6" height="7" rx="0.5" fill="#1c2733" stroke="#8a9aac" stroke-width="0.4"/>
+  </g>
+  <!-- recoil brace -->
+  <rect x="18" y="22" width="12" height="3" fill="#c4a574" opacity="0.7"/>
+  <circle cx="24" cy="16" r="2" fill="#7eb6c9" opacity="0.5"/>
+
+</svg>

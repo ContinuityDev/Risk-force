@@ -1,1 +1,49 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 28" width="40" height="28" fill="none"><polygon points="2,14 30,8 38,14 30,20 2,18" fill="#1c2733" stroke="#8a9aac"/><circle cx="22" cy="14" r="2" fill="#7eb6c9"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 24" width="44" height="24" fill="none">
+  <defs>
+    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
+    </radialGradient>
+    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#d4eef5"/>
+      <stop offset="45%" stop-color="#7eb6c9"/>
+      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
+    </radialGradient>
+    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a3848"/>
+      <stop offset="50%" stop-color="#1c2733"/>
+      <stop offset="100%" stop-color="#121820"/>
+    </linearGradient>
+    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b0bec8"/>
+      <stop offset="40%" stop-color="#8a9aac"/>
+      <stop offset="100%" stop-color="#5c6b7e"/>
+    </linearGradient>
+    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0c9a0"/>
+      <stop offset="100%" stop-color="#8a7350"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    
+  </defs>
+
+  <ellipse cx="22" cy="21" rx="10" ry="1.5" fill="rgba(0,0,0,0.45)" opacity="0.35"/>
+  <!-- sleek fighter -->
+  <path d="M2 12 L16 6 L32 6 L42 10 L38 14 L24 16 L8 14 Z" fill="url(#hullL)" stroke="#8a9aac" stroke-width="0.7"/>
+  <path d="M16 6 L32 6 L30 9 L18 9 Z" fill="#2a3848"/>
+  <!-- canopy -->
+  <ellipse cx="14" cy="10" rx="4" ry="2" fill="#0a0e14" stroke="#7eb6c9" stroke-width="0.5"/>
+  <ellipse cx="14" cy="9.5" rx="2" ry="1" fill="#7eb6c9" opacity="0.4"/>
+  <!-- twin engines -->
+  <rect x="34" y="8" width="6" height="3" rx="0.5" fill="#1c2733" stroke="#7eb6c9" stroke-width="0.4"/>
+  <rect x="34" y="12" width="6" height="2.5" rx="0.5" fill="#1c2733" stroke="#7eb6c9" stroke-width="0.4"/>
+  <ellipse cx="40" cy="9.5" rx="2" ry="1.2" fill="#7eb6c9" opacity="0.6" filter="url(#softGlow)"/>
+  <ellipse cx="40" cy="13.25" rx="2" ry="1" fill="#7eb6c9" opacity="0.5"/>
+  <!-- wing weapons -->
+  <rect x="20" y="14" width="8" height="1.2" fill="#c4a574" opacity="0.6"/>
+
+</svg>
