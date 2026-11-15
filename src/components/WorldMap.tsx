@@ -19,6 +19,11 @@ import { TERRITORIES } from "../data/map/territories";
 import type { TerritoryDef } from "../data/types";
 import type { GameAction } from "../engine/actions";
 import type { GameState } from "../engine/state";
+import {
+  buildingsFingerprint,
+  layoutBuildingMinis,
+} from "../map/buildingMinis";
+import { getSpriteUrl } from "../sprites/registry";
 import { Drawer } from "./Drawer";
 
 interface WorldMapProps {
@@ -283,6 +288,31 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     [labels],
   );
 
+  const bldgFp = useMemo(
+    () => buildingsFingerprint(state.territories),
+    [state.territories],
+  );
+  const buildingMinis = useMemo(
+    () =>
+      layoutBuildingMinis(
+        TERRITORIES,
+        state.territories,
+        deferredCam.w / WORLD_W,
+        deferredCam,
+        labels,
+      ),
+    // bldgFp tracks building mutations without deep-comparing territory state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deferredCam, labels, bldgFp],
+  );
+  const miniSpriteIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of buildingMinis) {
+      if (m.spriteId) ids.add(m.spriteId);
+    }
+    return [...ids];
+  }, [buildingMinis]);
+
   const scheduleCamera = useCallback((next: Camera) => {
     cameraRef.current = next;
     if (rafRef.current != null) return;
@@ -344,7 +374,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     (e: React.PointerEvent) => {
       if (e.button !== 0 && e.button !== 1) return;
       const target = e.target as Element;
-      const onTerritory = Boolean(target.closest?.(".rf-map__territory"));
+      const onTerritory = Boolean(
+        target.closest?.(".rf-map__territory, .rf-map__bldg-hit"),
+      );
       const territoryId =
         target
           .closest?.("[data-territory-id]")
@@ -590,6 +622,21 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           >
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#9fd4e4" />
           </marker>
+          {miniSpriteIds.map((id) => (
+            <symbol
+              key={id}
+              id={`rf-bldg-sym-${id}`}
+              viewBox="0 0 1 1"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <image
+                href={getSpriteUrl(id)}
+                width="1"
+                height="1"
+                preserveAspectRatio="xMidYMid meet"
+              />
+            </symbol>
+          ))}
         </defs>
 
         <rect width={WORLD_W} height={WORLD_H} fill="url(#rf-ocean)" />
@@ -746,6 +793,142 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           opacity="0.22"
           pointerEvents="none"
         />
+
+        {buildingMinis.length > 0 && (
+          <g className="rf-map__bldgs">
+            {buildingMinis.map((m) => {
+              const owner =
+                state.territories[m.territoryId]?.owner ?? "neutral";
+              const col = factionColor(owner);
+              const half = m.size / 2;
+              const strokeW = Math.max(0.35, 0.9 * zoomScale);
+              if (m.more != null) {
+                return (
+                  <g
+                    key={m.key}
+                    className="rf-map__bldg-more"
+                    transform={`translate(${m.x}, ${m.y})`}
+                  >
+                    <rect
+                      className="rf-map__bldg-hit"
+                      data-territory-id={m.territoryId}
+                      x={-half}
+                      y={-half}
+                      width={m.size}
+                      height={m.size}
+                      rx={Math.max(0.4, 1.2 * zoomScale)}
+                      fill="rgba(8,14,20,0.82)"
+                      stroke={col}
+                      strokeWidth={strokeW}
+                    />
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="rf-map__bldg-more-txt"
+                      fontSize={Math.max(4, m.size * 0.48)}
+                      fill="#e8eef4"
+                      pointerEvents="none"
+                    >
+                      +{m.more}
+                    </text>
+                  </g>
+                );
+              }
+              const r = half + strokeW;
+              const circ = 2 * Math.PI * r;
+              const dash = Math.max(0.01, m.progress) * circ;
+              return (
+                <g
+                  key={m.key}
+                  className={`rf-map__bldg${m.constructing ? " is-building" : ""}${
+                    m.compact ? " is-compact" : ""
+                  }`}
+                  transform={`translate(${m.x}, ${m.y})`}
+                  opacity={m.constructing ? 0.62 : 1}
+                >
+                  <rect
+                    className="rf-map__bldg-hit"
+                    data-territory-id={m.territoryId}
+                    x={-half - strokeW}
+                    y={-half - strokeW}
+                    width={m.size + strokeW * 2}
+                    height={m.size + strokeW * 2}
+                    fill="transparent"
+                  />
+                  <rect
+                    x={-half}
+                    y={-half}
+                    width={m.size}
+                    height={m.size}
+                    rx={Math.max(0.35, 1.1 * zoomScale)}
+                    fill="rgba(6,10,16,0.78)"
+                    stroke={col}
+                    strokeWidth={Math.max(strokeW, 1.15 * zoomScale)}
+                    pointerEvents="none"
+                  />
+                  {/* Faction tint wash over the sprite */}
+                  <rect
+                    x={-half}
+                    y={-half}
+                    width={m.size}
+                    height={Math.max(0.5, m.size * 0.14)}
+                    rx={Math.max(0.35, 1.1 * zoomScale)}
+                    fill={col}
+                    opacity="0.85"
+                    pointerEvents="none"
+                  />
+                  {m.spriteId ? (
+                    <use
+                      href={`#rf-bldg-sym-${m.spriteId}`}
+                      x={-half * 0.92}
+                      y={-half * 0.78}
+                      width={m.size * 0.92}
+                      height={m.size * 0.82}
+                      pointerEvents="none"
+                    />
+                  ) : null}
+                  {m.constructing && (
+                    <circle
+                      className="rf-map__bldg-ring"
+                      r={r}
+                      fill="none"
+                      stroke={col}
+                      strokeWidth={Math.max(0.4, 1.1 * zoomScale)}
+                      strokeDasharray={`${dash} ${circ}`}
+                      strokeLinecap="round"
+                      transform="rotate(-90)"
+                      pointerEvents="none"
+                      opacity="0.95"
+                    />
+                  )}
+                  {m.compact && m.count != null && m.count > 1 && (
+                    <g pointerEvents="none">
+                      <circle
+                        cx={half * 0.75}
+                        cy={-half * 0.75}
+                        r={Math.max(2.2, m.size * 0.32)}
+                        fill={col}
+                        stroke="#0a1218"
+                        strokeWidth={Math.max(0.25, 0.55 * zoomScale)}
+                      />
+                      <text
+                        x={half * 0.75}
+                        y={-half * 0.75}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={Math.max(3.5, m.size * 0.34)}
+                        fill="#0a1218"
+                        fontWeight="700"
+                      >
+                        {m.count > 9 ? "9+" : m.count}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        )}
       </svg>
 
       <div className="rf-map__hint rf-text-dim">

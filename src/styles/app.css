@@ -704,6 +704,24 @@
   stroke: var(--rf-accent);
 }
 
+.rf-map__bldgs {
+  pointer-events: auto;
+}
+
+.rf-map__bldg-hit {
+  cursor: pointer;
+}
+
+.rf-map__bldg use,
+.rf-map__bldg image {
+  image-rendering: auto;
+}
+
+.rf-map__bldg-more-txt {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .rf-map__label {
   fill: rgba(248, 252, 255, 0.96);
   font-family: var(--rf-font-body);
