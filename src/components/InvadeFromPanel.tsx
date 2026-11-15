@@ -72,6 +72,8 @@ export function InvadeFromPanel({
   const [selected, setSelected] = useState<Set<string>>(() =>
     new Set(origins[0] ? [origins[0].id] : []),
   );
+  /** Expanded origin shows full unit steppers; keep collapsed by default on short panels. */
+  const [editForce, setEditForce] = useState<string | null>(null);
   const [forces, setForces] = useState<Record<string, Record<string, number>>>(
     () => {
       const init: Record<string, Record<string, number>> = {};
@@ -200,18 +202,39 @@ export function InvadeFromPanel({
                   </small>
                 </button>
                 <div className="rf-invade-from__minis">
-                  {units.map((u) => (
-                    <span
-                      key={u.id}
-                      className="rf-invade-from__chip"
-                      title={u.name}
-                    >
-                      <Sprite id={u.sprite.id} size={20} anim="none" />
-                      <em>{g[u.id]}</em>
-                    </span>
-                  ))}
+                  {units.map((u) => {
+                    const cur = forces[o.id]?.[u.id] ?? 0;
+                    return (
+                      <span
+                        key={u.id}
+                        className="rf-invade-from__chip"
+                        title={`${u.name}: send ${cur}/${g[u.id]}`}
+                      >
+                        <Sprite id={u.sprite.id} size={20} anim="none" />
+                        <em>
+                          {active ? cur : g[u.id]}
+                          {active ? `/${g[u.id]}` : ""}
+                        </em>
+                      </span>
+                    );
+                  })}
                 </div>
                 {active && (
+                  <div className="rf-invade-from__adjust">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        setEditForce((prev) =>
+                          prev === o.id ? null : o.id,
+                        )
+                      }
+                    >
+                      {editForce === o.id ? "Hide units" : "Adjust units"}
+                    </button>
+                  </div>
+                )}
+                {active && editForce === o.id && (
                   <ul className="rf-invade-from__force">
                     {units.map((u) => {
                       const reserve = g[u.id] ?? 0;

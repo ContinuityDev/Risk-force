@@ -326,9 +326,10 @@ export function layoutUnitMinis(
       continue;
     }
 
-    // Mid on tiny plots → single compact chip (Europe declutter).
-    const forceCompact = tier === "mid" && t.area < 0.008;
-    if (forceCompact || (tier === "mid" && sorted.length === 1)) {
+    // Mid: only larger territories get a multi-type row; Europe stays readable.
+    const forceCompact =
+      tier === "mid" && (t.area < 0.012 || sorted.length === 1);
+    if (forceCompact) {
       const chipSize = size * (t.area < 0.005 ? 0.85 : 1);
       const aboveY = labelTop - gap - chipSize / 2;
       const anchors = [
@@ -369,8 +370,9 @@ export function layoutUnitMinis(
         : Math.min(3, slotCount);
     const rows = Math.ceil(slotCount / cols);
     const gridH = rows * size + (rows - 1) * gap;
-    // Center the grid so its bottom edge clears the label top.
-    const aboveCy = labelTop - gap - gridH / 2;
+    // Extra clearance so unit chips never kiss the label / building band.
+    const clearGap = gap + size * (tier === "deep" ? 0.45 : 0.3);
+    const aboveCy = labelTop - clearGap - gridH / 2;
     const sideX = baseX - size * (cols * 0.55 + 0.8);
 
     const anchors = [

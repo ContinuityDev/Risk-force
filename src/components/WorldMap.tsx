@@ -964,26 +964,26 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   {m.count > 0 && (
                     <g className="rf-map__unit-badge" pointerEvents="none">
                       <circle
-                        cx={half * 0.58}
-                        cy={half * 0.58}
+                        cx={half * 0.68}
+                        cy={half * 0.68}
                         r={
                           m.compact
-                            ? Math.max(1.35, m.size * 0.2)
-                            : Math.max(1.05, m.size * 0.14)
+                            ? Math.max(1.15, m.size * 0.16)
+                            : Math.max(0.85, m.size * 0.11)
                         }
                         fill={col}
                         stroke="#f2f7fa"
-                        strokeWidth={Math.max(0.22, 0.45 * zoomScale)}
+                        strokeWidth={Math.max(0.18, 0.35 * zoomScale)}
                       />
                       <text
-                        x={half * 0.58}
-                        y={half * 0.58}
+                        x={half * 0.68}
+                        y={half * 0.68}
                         textAnchor="middle"
                         dominantBaseline="middle"
                         fontSize={
                           m.compact
-                            ? Math.max(2.4, m.size * 0.2)
-                            : Math.max(2.0, m.size * 0.155)
+                            ? Math.max(2.1, m.size * 0.165)
+                            : Math.max(1.7, m.size * 0.125)
                         }
                         fill="#0a1218"
                         fontWeight="700"
@@ -1208,14 +1208,18 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       >
         {selected && (
           <>
-            <span className="rf-label">Selected</span>
-            <h3 className="rf-map__sheet-title">{selected.name}</h3>
-            <p className="rf-text-dim">
-              {selected.continent}
-              {selectedTs
-                ? ` · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
-                : ""}
-            </p>
+            {!(invadeOpen && selectedIsEnemy) && (
+              <>
+                <span className="rf-label">Selected</span>
+                <h3 className="rf-map__sheet-title">{selected.name}</h3>
+                <p className="rf-text-dim">
+                  {selected.continent}
+                  {selectedTs
+                    ? ` · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
+                    : ""}
+                </p>
+              </>
+            )}
 
             {invadeOpen && selectedIsEnemy && humanId ? (
               <InvadeFromPanel
