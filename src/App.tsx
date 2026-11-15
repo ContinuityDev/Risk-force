@@ -38,6 +38,29 @@ export default function App() {
 
   const { state, dispatch, activePlayer, isHumanTurn } = useGame(transport);
 
+  // Playwright / debug harness — map zoom never opens battle/base.
+  useEffect(() => {
+    const w = window as Window & {
+      __RF__?: {
+        getState: () => ReturnType<Transport["getState"]>;
+        dispatch: Transport["dispatch"];
+        neighbors: Record<string, string[]>;
+      };
+    };
+    void import("./data/map/territories").then((mod) => {
+      w.__RF__ = {
+        getState: () => transport.getState(),
+        dispatch: (a) => transport.dispatch(a),
+        neighbors: Object.fromEntries(
+          mod.TERRITORIES.map((t) => [t.id, t.neighbors]),
+        ),
+      };
+    });
+    return () => {
+      delete w.__RF__;
+    };
+  }, [transport, dispatch]);
+
   function resetToMenu() {
     transport.disconnect?.();
     setLanStatus(null);

@@ -475,7 +475,7 @@ export function buildTerritoryDefs(topo, byName) {
       // lon cut is vertical; for Brazil use a rough split via lon
       pieces.push({
         id: "brazil_north",
-        name: "Northern Brazil",
+        name: "N. Brazil",
         continent: "South America",
         geom: north,
         sourceNames: names,
@@ -483,7 +483,7 @@ export function buildTerritoryDefs(topo, byName) {
       });
       pieces.push({
         id: "brazil_south",
-        name: "Southern Brazil",
+        name: "S. Brazil",
         continent: "South America",
         geom: south,
         sourceNames: names,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CONTINENT_LIST } from "../data/continents";
 import { factionColor } from "../data/factions";
 import { HELP } from "../data/gameLoop";
@@ -22,19 +22,32 @@ interface WorldMapProps {
 
 interface PlacedLabel {
   id: string;
-  /** Display text (full name or abbrev). */
   text: string;
   x: number;
   y: number;
-  /** Font size in SVG user units (already zoom-compensated). */
   size: number;
   w: number;
   h: number;
 }
 
-/** Preferred on-screen label height in px at full-world framing. */
-const BASE_SCREEN_PX = 12;
-const MIN_SCREEN_PX = 8;
+interface Camera {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const WORLD_W = OCEAN_VIEW.w;
+const WORLD_H = OCEAN_VIEW.h;
+const MIN_VIEW_W = 80;
+/** At world framing (scale≈1) no labels. As scale drops (zoom in), larger territories unlock first. */
+const LABEL_AREA_THRESHOLDS = [
+  { maxScale: 0.72, minArea: 0.012 },
+  { maxScale: 0.48, minArea: 0.004 },
+  { maxScale: 0.32, minArea: 0.0012 },
+  { maxScale: 0.2, minArea: 0.00035 },
+  { maxScale: 0.12, minArea: 0 },
+];
 
 function hexToRgba(hex: string, a: number): string {
   const h = hex.replace("#", "");
@@ -52,7 +65,7 @@ function approxTextWidth(text: string, size: number): number {
 function overlaps(
   a: { x: number; y: number; w: number; h: number },
   b: { x: number; y: number; w: number; h: number },
-  pad = 2.5,
+  pad = 3,
 ): boolean {
   return !(
     a.x + a.w / 2 + pad < b.x - b.w / 2 ||
@@ -62,46 +75,76 @@ function overlaps(
   );
 }
 
-function parseViewBox(vb: string): { x: number; y: number; w: number; h: number } {
+function parseViewBox(vb: string): Camera {
   const [x, y, w, h] = vb.trim().split(/[\s,]+/).map(Number);
   return {
     x: x || 0,
     y: y || 0,
-    w: w || OCEAN_VIEW.w,
-    h: h || OCEAN_VIEW.h,
+    w: w || WORLD_W,
+    h: h || WORLD_H,
   };
 }
 
+function clampCamera(cam: Camera): Camera {
+  let { x, y, w, h } = cam;
+  w = Math.min(WORLD_W, Math.max(MIN_VIEW_W, w));
+  h = w * (WORLD_H / WORLD_W);
+  x = Math.min(WORLD_W - w, Math.max(0, x));
+  y = Math.min(WORLD_H - h, Math.max(0, y));
+  return { x, y, w, h };
+}
+
+function camToViewBox(cam: Camera): string {
+  const c = clampCamera(cam);
+  return `${c.x} ${c.y} ${c.w} ${c.h}`;
+}
+
 /**
- * Place every territory label at its polylabel. Never hide —
- * resolve collisions by shrinking then abbreviating. Sizes are in
- * SVG user units already compensated so on-screen px stays ~constant
- * under zoom (`userSize = screenPx * viewBoxW / worldW`).
+ * Progressive labels: invisible at world zoom; as you zoom in, larger
+ * territories unlock first. Collision → shrink / abbreviate; never hide
+ * an unlocked label that fits. Hover/selection names live in the panel.
  */
 function layoutLabels(
   territories: TerritoryDef[],
   zoomScale: number,
+  cam: Camera,
 ): PlacedLabel[] {
-  // zoomScale = viewBoxW / worldW  (≤ 1 when zoomed in)
-  const ranked = [...territories].sort((a, b) => b.area - a.area);
+  if (zoomScale >= 0.95) return [];
+
+  let minArea = Infinity;
+  for (const t of LABEL_AREA_THRESHOLDS) {
+    if (zoomScale <= t.maxScale) minArea = t.minArea;
+  }
+  if (!Number.isFinite(minArea)) return [];
+
+  const visible = territories.filter((t) => {
+    if (t.area < minArea) return false;
+    // Only label if anchor is roughly in the current camera
+    return (
+      t.label.x >= cam.x - 20 &&
+      t.label.x <= cam.x + cam.w + 20 &&
+      t.label.y >= cam.y - 20 &&
+      t.label.y <= cam.y + cam.h + 20
+    );
+  });
+
+  const ranked = [...visible].sort((a, b) => b.area - a.area);
   const placed: PlacedLabel[] = [];
 
   for (const t of ranked) {
     const full = t.name;
     const short = territoryAbbrev(t.id, t.name);
-    // Prefer slightly larger text for bigger territories at full zoom
+    // Prefer short names that don't wrap / split mid-word
     const preferScreen = Math.min(
-      14,
-      Math.max(BASE_SCREEN_PX, 10 + Math.sqrt(t.area) * 8),
+      13,
+      Math.max(9, 9 + Math.sqrt(t.area) * 10),
     );
     const candidates: Array<{ text: string; screenPx: number }> = [
       { text: full, screenPx: preferScreen },
-      { text: full, screenPx: BASE_SCREEN_PX },
       { text: full, screenPx: 10 },
-      { text: full, screenPx: MIN_SCREEN_PX },
-      { text: short, screenPx: BASE_SCREEN_PX },
-      { text: short, screenPx: 10 },
-      { text: short, screenPx: MIN_SCREEN_PX },
+      { text: short, screenPx: preferScreen },
+      { text: short, screenPx: 9 },
+      { text: short, screenPx: 8 },
     ];
 
     let chosen: PlacedLabel | null = null;
@@ -121,71 +164,156 @@ function layoutLabels(
         break;
       }
     }
-    // Last resort: always show abbreviated at min size (may slightly overlap)
-    if (!chosen) {
-      const size = MIN_SCREEN_PX * zoomScale;
-      chosen = {
-        id: t.id,
-        text: short,
-        x: t.label.x,
-        y: t.label.y,
-        size,
-        w: approxTextWidth(short, size),
-        h: size + 2 * zoomScale,
-      };
-    }
-    placed.push(chosen);
+    // If nothing fits without collision, skip (zoom further will free space)
+    if (chosen) placed.push(chosen);
   }
   return placed;
 }
 
 export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
-  const { w, h } = OCEAN_VIEW;
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    origin: Camera;
+  } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
-  const propViewBox = useMemo(() => {
-    if (focusViewBox) return focusViewBox;
-    return `0 0 ${w} ${h}`;
-  }, [focusViewBox, w, h]);
+  const initialCam = useMemo(() => {
+    if (focusViewBox) return parseViewBox(focusViewBox);
+    return { x: 0, y: 0, w: WORLD_W, h: WORLD_H };
+  }, [focusViewBox]);
 
-  // Track live viewBox so zoom (incl. screenshot DOM tweaks) counter-scales labels
-  const [liveViewBox, setLiveViewBox] = useState(propViewBox);
+  const [camera, setCamera] = useState<Camera>(initialCam);
   useEffect(() => {
-    setLiveViewBox(propViewBox);
-  }, [propViewBox]);
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!el) return;
-    const sync = () => {
-      const v = el.getAttribute("viewBox");
-      if (v) setLiveViewBox(v);
-    };
-    const obs = new MutationObserver(sync);
-    obs.observe(el, { attributes: true, attributeFilter: ["viewBox"] });
-    return () => obs.disconnect();
-  }, []);
+    setCamera(initialCam);
+  }, [initialCam]);
 
-  const vb = useMemo(() => parseViewBox(liveViewBox), [liveViewBox]);
-  const zoomScale = vb.w / w;
+  const zoomScale = camera.w / WORLD_W;
+  const viewBox = camToViewBox(camera);
 
   const labels = useMemo(
-    () => layoutLabels(TERRITORIES, zoomScale),
-    [zoomScale],
+    () => layoutLabels(TERRITORIES, zoomScale, camera),
+    [zoomScale, camera],
   );
   const labelById = useMemo(
     () => Object.fromEntries(labels.map((l) => [l.id, l])),
     [labels],
   );
 
+  const clientToWorld = useCallback(
+    (clientX: number, clientY: number) => {
+      const el = svgRef.current;
+      if (!el) return { x: camera.x + camera.w / 2, y: camera.y + camera.h / 2 };
+      const rect = el.getBoundingClientRect();
+      const px = (clientX - rect.left) / Math.max(1, rect.width);
+      const py = (clientY - rect.top) / Math.max(1, rect.height);
+      return {
+        x: camera.x + px * camera.w,
+        y: camera.y + py * camera.h,
+      };
+    },
+    [camera],
+  );
+
+  const onWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+      const pivot = clientToWorld(e.clientX, e.clientY);
+      setCamera((prev) => {
+        const nw = Math.min(WORLD_W, Math.max(MIN_VIEW_W, prev.w * factor));
+        const nh = nw * (WORLD_H / WORLD_W);
+        const nx = pivot.x - ((pivot.x - prev.x) / prev.w) * nw;
+        const ny = pivot.y - ((pivot.y - prev.y) / prev.h) * nh;
+        return clampCamera({ x: nx, y: ny, w: nw, h: nh });
+      });
+    },
+    [clientToWorld],
+  );
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      // Middle button or left-drag on ocean / empty — pan only.
+      // Territory clicks still select via path onClick (no drag if click).
+      if (e.button !== 0 && e.button !== 1) return;
+      const target = e.target as Element;
+      // Don't start pan on territory paths — those are clicks for selection
+      if (target.closest?.(".rf-map__territory")) return;
+      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      dragRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        origin: camera,
+      };
+      setDragging(true);
+    },
+    [camera],
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const d = dragRef.current;
+      if (!d || d.pointerId !== e.pointerId) return;
+      const el = svgRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const dx = ((e.clientX - d.startX) / rect.width) * d.origin.w;
+      const dy = ((e.clientY - d.startY) / rect.height) * d.origin.h;
+      setCamera(
+        clampCamera({
+          ...d.origin,
+          x: d.origin.x - dx,
+          y: d.origin.y - dy,
+        }),
+      );
+    },
+    [],
+  );
+
+  const endDrag = useCallback((e: React.PointerEvent) => {
+    if (dragRef.current?.pointerId === e.pointerId) {
+      dragRef.current = null;
+      setDragging(false);
+    }
+  }, []);
+
+  const selected = state.selectedTerritoryId
+    ? TERRITORIES.find((t) => t.id === state.selectedTerritoryId)
+    : null;
+  const selectedTs = state.selectedTerritoryId
+    ? state.territories[state.selectedTerritoryId]
+    : null;
+  const hovered = hoveredId
+    ? TERRITORIES.find((t) => t.id === hoveredId)
+    : null;
+
+  // Friendly neighbors for march UI
+  const marchTargets = useMemo(() => {
+    if (!selected || !selectedTs) return [];
+    const pid = Object.values(state.players).find((p) => p.kind === "human")?.id;
+    if (!pid || selectedTs.owner !== pid) return [];
+    return selected.neighbors.filter(
+      (n) => state.territories[n]?.owner === pid,
+    );
+  }, [selected, selectedTs, state.players, state.territories]);
+
   return (
     <div className="rf-map rf-fade-in">
       <svg
         ref={svgRef}
-        className="rf-map__svg"
-        viewBox={propViewBox}
+        className={`rf-map__svg${dragging ? " is-dragging" : ""}`}
+        viewBox={viewBox}
         role="img"
-        aria-label="Earth theater holographic map"
+        aria-label="Earth theater strategic map — scroll to zoom, drag to pan"
+        onWheel={onWheel}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
       >
         <defs>
           <radialGradient id="rf-ocean" cx="50%" cy="42%" r="70%">
@@ -219,14 +347,13 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
-          <filter id="rf-select-glow">
-            <feGaussianBlur stdDeviation="1.4" result="b" />
+          <filter id="rf-select-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.4" result="blur" />
             <feMerge>
-              <feMergeNode in="b" />
+              <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
-          {/* Soft contrast halo — no stroke-outline ghosting */}
           <filter id="rf-label-halo" x="-40%" y="-50%" width="180%" height="200%">
             <feDropShadow
               dx="0"
@@ -260,35 +387,13 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </marker>
         </defs>
 
-        <rect width={w} height={h} fill="url(#rf-ocean)" />
-        <rect width={w} height={h} fill="url(#rf-holo-sheen)" pointerEvents="none" />
-
-        {[83.3, 166.7, 250, 333.3, 416.7, 500].map((y) => (
-          <line
-            key={`lat-${y}`}
-            x1="0"
-            y1={y}
-            x2={w}
-            y2={y}
-            stroke="#7eb6c9"
-            strokeWidth="0.3"
-            opacity="0.07"
-          />
-        ))}
-        {[83.3, 166.7, 250, 333.3, 416.7, 500, 583.3, 666.7, 750, 833.3, 916.7].map(
-          (x) => (
-            <line
-              key={`lon-${x}`}
-              x1={x}
-              y1="0"
-              x2={x}
-              y2={h}
-              stroke="#7eb6c9"
-              strokeWidth="0.3"
-              opacity="0.06"
-            />
-          ),
-        )}
+        <rect width={WORLD_W} height={WORLD_H} fill="url(#rf-ocean)" />
+        <rect
+          width={WORLD_W}
+          height={WORLD_H}
+          fill="url(#rf-holo-sheen)"
+          pointerEvents="none"
+        />
 
         <path
           d={LAND_PATH}
@@ -297,14 +402,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           stroke="#4a7a8c"
           strokeWidth="0.7"
           filter="url(#rf-land-glow)"
-          pointerEvents="none"
-        />
-        <path
-          d={LAND_PATH}
-          fill="none"
-          stroke="#7eb6c9"
-          strokeWidth="0.35"
-          opacity="0.4"
           pointerEvents="none"
         />
 
@@ -322,7 +419,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           ))}
         </g>
 
-        {/* AI multi-front attack plan arrows */}
         {state.aiAttackPlans.length > 0 && (
           <g className="rf-map__ai-plans" pointerEvents="none">
             {state.aiAttackPlans.map((plan, i) => {
@@ -352,7 +448,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </g>
         )}
 
-        {/* Armies in transit with ETA */}
         {(state.armiesInTransit ?? []).length > 0 && (
           <g className="rf-map__marches" pointerEvents="none">
             {state.armiesInTransit.map((army) => {
@@ -402,7 +497,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           const ts = state.territories[t.id];
           const owner = ts?.owner ?? t.startingOwner;
           const base = factionColor(owner);
-          const selected = state.selectedTerritoryId === t.id;
+          const isSelected = state.selectedTerritoryId === t.id;
           const lbl = labelById[t.id];
           return (
             <g
@@ -413,34 +508,35 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             >
               <path
                 d={t.path}
-                className={`rf-map__territory${selected ? " is-selected" : ""}`}
-                fill={hexToRgba(base, selected ? 0.72 : 0.55)}
-                stroke={selected ? "#e8f4f8" : "#9fd4e4"}
-                strokeWidth={selected ? 1.6 : 0.55}
+                className={`rf-map__territory${isSelected ? " is-selected" : ""}`}
+                data-territory-id={t.id}
+                fill={hexToRgba(base, isSelected ? 0.72 : 0.55)}
+                stroke={isSelected ? "#e8f4f8" : "#9fd4e4"}
+                strokeWidth={isSelected ? 1.6 : 0.55}
                 strokeLinejoin="round"
                 strokeLinecap="round"
-                filter={selected ? "url(#rf-select-glow)" : undefined}
-                onClick={() =>
+                filter={isSelected ? "url(#rf-select-glow)" : undefined}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  // Selection only — never opens base / battle (those are explicit actions).
                   dispatch({
                     type: "SELECT_TERRITORY",
                     payload: { territoryId: t.id },
-                  })
-                }
+                  });
+                }}
               />
               {lbl && (
                 <text
                   x={lbl.x}
                   y={lbl.y}
-                  className={`rf-map__label${
-                    hoveredId === t.id || selected ? " is-hot" : ""
-                  }`}
+                  className="rf-map__label"
                   fontSize={lbl.size}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   pointerEvents="none"
                   filter="url(#rf-label-halo)"
                 >
-                  {hoveredId === t.id || selected ? t.name : lbl.text}
+                  {lbl.text}
                 </text>
               )}
             </g>
@@ -448,28 +544,18 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         })}
 
         <rect
-          width={w}
-          height={h}
+          width={WORLD_W}
+          height={WORLD_H}
           fill="url(#rf-holo-grid)"
           opacity="0.22"
           pointerEvents="none"
         />
-
-        <rect
-          x="3"
-          y="3"
-          width={w - 6}
-          height={h - 6}
-          fill="none"
-          stroke="#2c3a4d"
-          strokeWidth="1"
-          opacity="0.65"
-          pointerEvents="none"
-        />
-        <text x="14" y="18" className="rf-map__chrome-label">
-          EARTH THEATER · NATURAL EARTH / EQUIRECTANGULAR
-        </text>
       </svg>
+
+      <div className="rf-map__hint rf-text-dim">
+        Scroll to zoom · drag empty ocean to pan · click territory to select ·
+        Open Base / Invade are explicit actions
+      </div>
 
       <aside className="rf-map__legend" title={HELP.continents}>
         <span className="rf-label">Continent bonuses</span>
@@ -488,27 +574,66 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         </ul>
       </aside>
 
-      {state.selectedTerritoryId && (
+      {(selected || hovered) && (
         <aside className="rf-map__detail">
-          <span className="rf-label">Selected</span>
-          <strong>
-            {TERRITORIES.find((t) => t.id === state.selectedTerritoryId)?.name}
-          </strong>
-          <span className="rf-text-dim">
-            {
-              TERRITORIES.find((t) => t.id === state.selectedTerritoryId)
-                ?.continent
-            }
-          </span>
-          <button
-            type="button"
-            className="primary"
-            onClick={() =>
-              dispatch({ type: "SET_SCREEN", payload: { screen: "base" } })
-            }
-          >
-            Open Base
-          </button>
+          <span className="rf-label">{selected ? "Selected" : "Hover"}</span>
+          <strong>{(selected ?? hovered)!.name}</strong>
+          <span className="rf-text-dim">{(selected ?? hovered)!.continent}</span>
+          {selected && selectedTs && (
+            <span className="rf-text-dim">
+              Pop {selectedTs.population} · Garrison{" "}
+              {Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}
+            </span>
+          )}
+          {selected && (
+            <>
+              <button
+                type="button"
+                className="primary"
+                onClick={() =>
+                  dispatch({ type: "SET_SCREEN", payload: { screen: "base" } })
+                }
+              >
+                Open Base
+              </button>
+              {marchTargets.length > 0 && (
+                <div className="rf-map__march">
+                  <span className="rf-label">March to</span>
+                  {marchTargets.slice(0, 4).map((nid) => {
+                    const nName =
+                      TERRITORIES.find((t) => t.id === nid)?.name ?? nid;
+                    const g = selectedTs?.garrison ?? {};
+                    const force = Object.entries(g)
+                      .filter(([, c]) => c > 0)
+                      .map(([unitId, count]) => ({
+                        unitId,
+                        count: Math.max(1, Math.floor(count / 2)),
+                      }));
+                    return (
+                      <button
+                        key={nid}
+                        type="button"
+                        className="ghost"
+                        disabled={!force.length}
+                        onClick={() =>
+                          dispatch({
+                            type: "ORDER_MOVE",
+                            payload: {
+                              fromId: selected.id,
+                              toId: nid,
+                              force,
+                            },
+                          })
+                        }
+                      >
+                        → {nName}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </aside>
       )}
     </div>

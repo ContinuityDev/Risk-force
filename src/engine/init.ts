@@ -229,8 +229,12 @@ export function createInitialState(payload: NewGamePayload): GameState {
           (isCore ? GAME_LOOP.startingPopBonus : 0),
         workers: isCore ? 4 : 1,
         garrison: isCore
-          ? { trooper: 3, assault_mech: fid === humans[0] ? 2 : 1 }
-          : { trooper: 1 },
+          ? {
+              trooper: fid === humans[0] ? 8 : 6,
+              assault_mech: fid === humans[0] ? 3 : 2,
+              hover_tank: fid === humans[0] ? 2 : 1,
+            }
+          : { trooper: 2 },
         trainingQueue: [],
       };
     });

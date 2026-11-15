@@ -91,8 +91,12 @@ export function planAiTurn(state: GameState): GameAction[] {
     }
   }
 
-  // Build
-  for (const t of owned) {
+  // Build — cap placements so the turn reaches multi-front attacks promptly
+  const buildSites = [...frontier, ...safe];
+  let buildsThisTurn = 0;
+  const maxBuilds = 4;
+  for (const t of buildSites) {
+    if (buildsThisTurn >= maxBuilds) break;
     const ts = state.territories[t.id]!;
     const isFront = frontier.some((f) => f.id === t.id);
     const candidates = BUILDING_LIST.filter((b) => {
@@ -105,9 +109,7 @@ export function planAiTurn(state: GameState): GameAction[] {
       return b.category === "economy" || b.category === "support";
     }).sort((a, b) => a.cost.energy - b.cost.energy);
 
-    let placed = 0;
-    for (const b of candidates) {
-      if (placed >= (isFront ? 2 : 1)) break;
+    for (const b of candidates.slice(0, 1)) {
       outer: for (let y = 0; y < t.grid.rows; y++) {
         for (let x = 0; x < t.grid.cols; x++) {
           if (canPlaceBuilding(ts, t.id, b.id, x, y, player).ok) {
@@ -115,11 +117,12 @@ export function planAiTurn(state: GameState): GameAction[] {
               type: "PLACE_BUILDING",
               payload: { territoryId: t.id, buildingId: b.id, x, y },
             });
-            placed++;
+            buildsThisTurn++;
             break outer;
           }
         }
       }
+      break;
     }
   }
 
