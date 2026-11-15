@@ -153,7 +153,7 @@ export interface TerritoryDef {
   id: string;
   name: string;
   continent: string;
-  /** SVG path on the world map viewBox (0 0 1000 520). */
+  /** SVG path on the world map viewBox (0 0 1000 500, equirectangular). */
   path: string;
   label: { x: number; y: number };
   neighbors: string[];

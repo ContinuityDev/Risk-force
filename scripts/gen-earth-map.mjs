@@ -1,83 +1,928 @@
+#!/usr/bin/env node
 /**
- * Emits non-overlapping territory polygons that partition stylized continents.
+ * Build Risk Force territories from locally-bundled Natural Earth / world-atlas
+ * TopoJSON (countries-110m). Projects with d3-geo equirectangular.
  * Run: node scripts/gen-earth-map.mjs
  */
-import fs from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  geoArea,
+  geoBounds,
+  geoEquirectangular,
+  geoPath,
+} from "d3-geo";
+import { feature } from "topojson-client";
+import { presimplify, quantile, simplify } from "topojson-simplify";
 
-// Helper: build a simple rectangular-ish region from corner points
-function poly(pts) {
-  return "M " + pts.map(([x, y]) => `${x},${y}`).join(" L ") + " Z";
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const RAW = join(ROOT, "src/data/map/raw");
+const OUT_W = 1000;
+const OUT_H = 500;
+
+// Prefer 50m coasts when present; fall back to 110m.
+const countriesFile = existsSync(join(RAW, "countries-50m.json"))
+  ? "countries-50m.json"
+  : "countries-110m.json";
+const landFile = existsSync(join(RAW, "land-50m.json"))
+  ? "land-50m.json"
+  : "land-110m.json";
+console.log("using", countriesFile, landFile);
+
+let topo = JSON.parse(readFileSync(join(RAW, countriesFile), "utf8"));
+let landTopo = JSON.parse(readFileSync(join(RAW, landFile), "utf8"));
+
+// 110m is already compact enough for the game map; only simplify 50m+.
+if (countriesFile.includes("50m")) {
+  const pre = presimplify(topo);
+  topo = simplify(pre, quantile(pre, 0.4));
+  const preL = presimplify(landTopo);
+  landTopo = simplify(preL, quantile(preL, 0.4));
 }
 
-const territories = [
-  // NA partitions of silhouette roughly (50-330, 50-310)
-  { id: "alaska", name: "Alaska", continent: "North America", pts: [[55,70],[120,50],[155,75],[140,120],[90,135],[55,110]], label: [105,90], neighbors: ["northwest","kamchatka"], startingOwner: "player", coastal: true },
-  { id: "northwest", name: "Northwest", continent: "North America", pts: [[155,75],[215,60],[245,110],[210,155],[145,145],[140,120]], label: [185,105], neighbors: ["alaska","ontario","california"], startingOwner: "player", coastal: true },
-  { id: "ontario", name: "Ontario", continent: "North America", pts: [[215,60],[285,70],[305,125],[265,160],[210,155],[245,110]], label: [250,115], neighbors: ["northwest","quebec","california","greenland"], startingOwner: "faction_a", coastal: true },
-  { id: "quebec", name: "Quebec", continent: "North America", pts: [[285,70],[340,85],[345,140],[305,165],[265,160],[305,125]], label: [310,120], neighbors: ["ontario","greenland","iceland"], startingOwner: "faction_a", coastal: true },
-  { id: "california", name: "California", continent: "North America", pts: [[145,145],[210,155],[220,215],[180,250],[125,225],[120,175]], label: [165,195], neighbors: ["northwest","ontario","mexico"], startingOwner: "player", coastal: true },
-  { id: "mexico", name: "Mexico", continent: "North America", pts: [[125,225],[180,250],[200,290],[155,315],[110,285],[105,245]], label: [145,265], neighbors: ["california","venezuela"], startingOwner: "faction_a", coastal: true },
-  { id: "greenland", name: "Greenland", continent: "North America", pts: [[355,35],[430,30],[460,65],[445,105],[385,110],[350,75]], label: [400,65], neighbors: ["ontario","quebec","iceland"], startingOwner: "faction_b", coastal: true },
+const countries = feature(topo, topo.objects.countries).features;
+const byName = Object.fromEntries(countries.map((f) => [f.properties.name, f]));
 
-  // SA
-  { id: "venezuela", name: "Venezuela", continent: "South America", pts: [[185,320],[255,310],[280,360],[230,380],[185,355]], label: [230,345], neighbors: ["mexico","brazil","peru"], startingOwner: "faction_a", coastal: true },
-  { id: "peru", name: "Peru", continent: "South America", pts: [[185,355],[230,380],[235,440],[195,460],[170,410]], label: [205,410], neighbors: ["venezuela","brazil","argentina"], startingOwner: "faction_c", coastal: true },
-  { id: "brazil", name: "Brazil", continent: "South America", pts: [[255,310],[310,335],[320,425],[275,460],[235,440],[230,380],[280,360]], label: [275,385], neighbors: ["venezuela","peru","argentina","north_africa"], startingOwner: "faction_c", coastal: true },
-  { id: "argentina", name: "Argentina", continent: "South America", pts: [[195,460],[235,440],[275,460],[270,505],[230,510],[200,485]], label: [235,475], neighbors: ["peru","brazil"], startingOwner: "faction_c", coastal: true },
+function must(...names) {
+  const out = [];
+  for (const n of names) {
+    if (!byName[n]) {
+      console.warn("missing country:", n);
+      continue;
+    }
+    out.push(byName[n]);
+  }
+  return out;
+}
 
-  // Europe
-  { id: "iceland", name: "Iceland", continent: "Europe", pts: [[435,90],[470,82],[480,112],[455,125],[430,112]], label: [452,105], neighbors: ["greenland","quebec","britain","scandinavia"], startingOwner: "faction_b", coastal: true },
-  { id: "britain", name: "Britain", continent: "Europe", pts: [[448,138],[485,132],[495,172],[465,185],[440,162]], label: [465,155], neighbors: ["iceland","scandinavia","western_europe"], startingOwner: "faction_b", coastal: true },
-  { id: "scandinavia", name: "Scandinavia", continent: "Europe", pts: [[490,70],[550,65],[565,125],[530,145],[485,115],[475,110],[470,82],[490,70]], label: [520,100], neighbors: ["iceland","britain","northern_europe","ukraine"], startingOwner: "faction_b", coastal: true },
-  { id: "western_europe", name: "W. Europe", continent: "Europe", pts: [[450,188],[515,180],[530,235],[490,255],[445,235]], label: [485,215], neighbors: ["britain","northern_europe","southern_europe","north_africa"], startingOwner: "faction_b", coastal: true },
-  { id: "northern_europe", name: "N. Europe", continent: "Europe", pts: [[530,145],[565,150],[580,200],[540,220],[515,180],[530,145]], label: [545,180], neighbors: ["scandinavia","western_europe","southern_europe","ukraine"], startingOwner: "faction_b", coastal: true },
-  { id: "southern_europe", name: "S. Europe", continent: "Europe", pts: [[490,255],[540,220],[580,230],[585,275],[535,295],[490,275]], label: [535,255], neighbors: ["western_europe","northern_europe","ukraine","egypt","middle_east"], startingOwner: "faction_a", coastal: true },
-  { id: "ukraine", name: "Ukraine", continent: "Europe", pts: [[565,150],[645,135],[665,200],[615,235],[580,200],[565,150]], label: [610,180], neighbors: ["scandinavia","northern_europe","southern_europe","ural","middle_east","afghanistan"], startingOwner: "faction_a", coastal: false },
+function toMulti(geom) {
+  if (!geom) return { type: "MultiPolygon", coordinates: [] };
+  if (geom.type === "Polygon")
+    return { type: "MultiPolygon", coordinates: [geom.coordinates] };
+  if (geom.type === "MultiPolygon") return geom;
+  return { type: "MultiPolygon", coordinates: [] };
+}
 
-  // Africa
-  { id: "north_africa", name: "N. Africa", continent: "Africa", pts: [[445,255],[525,245],[550,310],[495,340],[430,320],[425,275]], label: [480,295], neighbors: ["western_europe","egypt","congo","brazil"], startingOwner: "faction_c", coastal: true },
-  { id: "egypt", name: "Egypt", continent: "Africa", pts: [[525,245],[580,250],[595,310],[550,330],[550,310],[525,245]], label: [555,285], neighbors: ["southern_europe","north_africa","east_africa","middle_east"], startingOwner: "faction_c", coastal: true },
-  { id: "congo", name: "Congo", continent: "Africa", pts: [[430,320],[495,340],[515,405],[465,435],[415,390]], label: [460,375], neighbors: ["north_africa","east_africa","south_africa"], startingOwner: "faction_c", coastal: true },
-  { id: "east_africa", name: "E. Africa", continent: "Africa", pts: [[550,330],[595,310],[620,375],[580,425],[515,405],[495,340],[550,330]], label: [560,365], neighbors: ["egypt","congo","south_africa","middle_east"], startingOwner: "faction_c", coastal: true },
-  { id: "south_africa", name: "S. Africa", continent: "Africa", pts: [[465,435],[515,405],[580,425],[565,480],[505,490],[455,460]], label: [515,450], neighbors: ["congo","east_africa"], startingOwner: "faction_c", coastal: true },
+/** Keep only polygons whose centroid falls in a lon/lat box (strip colonies). */
+function filterMetropole(geom, lonRange, latRange) {
+  const m = toMulti(geom);
+  const kept = [];
+  for (const poly of m.coordinates) {
+    const g = { type: "Polygon", coordinates: poly };
+    if (geoArea(g) < 1e-8) continue;
+    const b = geoBounds(g);
+    const cx = (b[0][0] + b[1][0]) / 2;
+    const cy = (b[0][1] + b[1][1]) / 2;
+    if (
+      cx >= lonRange[0] &&
+      cx <= lonRange[1] &&
+      cy >= latRange[0] &&
+      cy <= latRange[1]
+    ) {
+      kept.push(poly);
+    }
+  }
+  return { type: "MultiPolygon", coordinates: kept };
+}
 
-  // Asia
-  { id: "middle_east", name: "Middle East", continent: "Asia", pts: [[585,275],[655,265],[680,320],[630,345],[580,325],[585,275]], label: [625,305], neighbors: ["southern_europe","ukraine","egypt","east_africa","afghanistan","india"], startingOwner: "faction_a", coastal: true },
-  { id: "afghanistan", name: "Afghanistan", continent: "Asia", pts: [[645,200],[725,195],[745,250],[690,275],[655,265],[665,200]], label: [695,230], neighbors: ["ukraine","ural","china","india","middle_east"], startingOwner: "faction_a", coastal: false },
-  { id: "ural", name: "Ural", continent: "Asia", pts: [[645,135],[735,115],[760,175],[725,195],[645,200],[665,200],[645,135]], label: [695,160], neighbors: ["ukraine","siberia","china","afghanistan"], startingOwner: "faction_b", coastal: false },
-  { id: "siberia", name: "Siberia", continent: "Asia", pts: [[735,115],[860,90],[890,150],[825,180],[760,175],[735,115]], label: [805,135], neighbors: ["ural","yakutsk","irkutsk","china","mongolia"], startingOwner: "faction_b", coastal: true },
-  { id: "yakutsk", name: "Yakutsk", continent: "Asia", pts: [[860,90],[945,85],[965,140],[905,165],[890,150],[860,90]], label: [910,120], neighbors: ["siberia","kamchatka","irkutsk"], startingOwner: "faction_b", coastal: true },
-  { id: "kamchatka", name: "Kamchatka", continent: "Asia", pts: [[945,140],[990,135],[998,185],[960,205],[925,180],[905,165],[945,140]], label: [960,165], neighbors: ["yakutsk","irkutsk","japan","alaska"], startingOwner: "faction_b", coastal: true },
-  { id: "irkutsk", name: "Irkutsk", continent: "Asia", pts: [[825,180],[905,165],[925,180],[915,225],[845,235],[805,210],[825,180]], label: [865,200], neighbors: ["siberia","yakutsk","kamchatka","mongolia","japan"], startingOwner: "faction_b", coastal: false },
-  { id: "mongolia", name: "Mongolia", continent: "Asia", pts: [[765,210],[845,235],[855,275],[795,290],[745,260],[765,210]], label: [805,250], neighbors: ["siberia","irkutsk","china","japan"], startingOwner: "faction_a", coastal: false },
-  { id: "china", name: "China", continent: "Asia", pts: [[725,195],[805,210],[795,290],[745,320],[690,275],[725,195]], label: [750,255], neighbors: ["ural","siberia","mongolia","afghanistan","india","siam","japan"], startingOwner: "faction_a", coastal: true },
-  { id: "india", name: "India", continent: "Asia", pts: [[680,320],[745,320],[760,380],[715,400],[665,360],[680,320]], label: [715,355], neighbors: ["middle_east","afghanistan","china","siam"], startingOwner: "faction_c", coastal: true },
-  { id: "siam", name: "Siam", continent: "Asia", pts: [[745,320],[795,290],[825,340],[795,375],[760,380],[745,320]], label: [785,340], neighbors: ["china","india","indonesia"], startingOwner: "faction_c", coastal: true },
-  { id: "japan", name: "Japan", continent: "Asia", pts: [[905,210],[945,205],[955,250],[925,265],[895,240]], label: [925,235], neighbors: ["kamchatka","irkutsk","mongolia","china"], startingOwner: "faction_b", coastal: true },
+/** Concatenate features — avoid polygon-clipping.union (corrupts some NE rings). */
+function mergeFeatures(feats) {
+  const coords = [];
+  for (const f of feats) {
+    if (!f?.geometry) continue;
+    coords.push(...toMulti(f.geometry).coordinates);
+  }
+  return { type: "MultiPolygon", coordinates: coords };
+}
 
-  // Australia
-  { id: "indonesia", name: "Indonesia", continent: "Australia", pts: [[795,375],[875,365],[895,410],[835,430],[790,410]], label: [840,395], neighbors: ["siam","new_guinea","western_australia"], startingOwner: "faction_c", coastal: true },
-  { id: "new_guinea", name: "New Guinea", continent: "Australia", pts: [[895,390],[960,385],[975,425],[925,440],[885,420]], label: [930,410], neighbors: ["indonesia","eastern_australia"], startingOwner: "faction_c", coastal: true },
-  { id: "western_australia", name: "W. Australia", continent: "Australia", pts: [[805,435],[875,430],[890,485],[835,500],[795,470]], label: [845,465], neighbors: ["indonesia","eastern_australia"], startingOwner: "faction_c", coastal: true },
-  { id: "eastern_australia", name: "E. Australia", continent: "Australia", pts: [[875,430],[935,425],[950,480],[895,495],[890,485],[875,430]], label: [910,460], neighbors: ["new_guinea","western_australia"], startingOwner: "faction_c", coastal: true },
+/** Unwrap longitudes so a ring is continuous across ±180°. */
+function unwrapRing(ring) {
+  const out = [ring[0].slice()];
+  for (let i = 1; i < ring.length; i++) {
+    let [lon, lat] = ring[i];
+    const prev = out[i - 1][0];
+    while (lon - prev > 180) lon -= 360;
+    while (lon - prev < -180) lon += 360;
+    out.push([lon, lat]);
+  }
+  return out;
+}
+
+function rewrapRing(ring) {
+  return ring.map(([lon, lat]) => {
+    let x = lon;
+    while (x > 180) x -= 360;
+    while (x < -180) x += 360;
+    return [x, lat];
+  });
+}
+
+function splitRingAtLon(ring, cut) {
+  const left = [];
+  const right = [];
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[i + 1];
+    const c0 = x0 <= cut;
+    if (c0) left.push([x0, y0]);
+    else right.push([x0, y0]);
+    if (c0 !== x1 <= cut) {
+      const t = (cut - x0) / (x1 - x0 || 1e-12);
+      const y = y0 + (y1 - y0) * t;
+      left.push([cut, y]);
+      right.push([cut, y]);
+    }
+  }
+  const close = (pts) => {
+    if (pts.length < 3) return null;
+    const f = pts[0];
+    const l = pts[pts.length - 1];
+    if (f[0] !== l[0] || f[1] !== l[1]) pts.push(f.slice());
+    return pts;
+  };
+  return [close(left), close(right)];
+}
+
+/** Sequentially cut a MultiPolygon at longitude meridians (unwrapped). */
+function cutMultiAtLons(geom, cuts) {
+  let remaining = toMulti(geom).coordinates.map((poly) => ({
+    exterior: unwrapRing(poly[0]),
+  }));
+  const bands = [];
+  for (const cut of cuts) {
+    const band = [];
+    const next = [];
+    for (const piece of remaining) {
+      const [L, R] = splitRingAtLon(piece.exterior, cut);
+      if (L) band.push({ exterior: L });
+      if (R) next.push({ exterior: R });
+    }
+    bands.push(band);
+    remaining = next;
+  }
+  bands.push(remaining);
+  return bands.map((band) => ({
+    type: "MultiPolygon",
+    coordinates: band
+      .filter((p) => p.exterior && p.exterior.length >= 4)
+      .map((p) => [rewrapRing(p.exterior)]),
+  }));
+}
+
+function splitUsa() {
+  const usa = byName["United States of America"];
+  const m = toMulti(usa.geometry);
+  const alaska = [];
+  const mainland = [];
+  for (const poly of m.coordinates) {
+    const g = { type: "Polygon", coordinates: poly };
+    const b = geoBounds(g);
+    const west = b[0][0];
+    const north = b[1][1];
+    if (west < -129 && north > 50) alaska.push(poly);
+    else mainland.push(poly);
+  }
+  return {
+    alaska: { type: "MultiPolygon", coordinates: alaska },
+    usa: { type: "MultiPolygon", coordinates: mainland },
+  };
+}
+
+function splitRussia() {
+  const rus = byName["Russia"];
+  const [ural, siberia, yakutsk, kamchatka] = cutMultiAtLons(rus.geometry, [
+    60, 110, 145,
+  ]);
+  return { ural, siberia, yakutsk, kamchatka };
+}
+
+function splitAustralia() {
+  const aus = byName["Australia"];
+  const [western_australia, eastern_australia] = cutMultiAtLons(aus.geometry, [
+    135,
+  ]);
+  return { western_australia, eastern_australia };
+}
+
+const usaParts = splitUsa();
+const rusParts = splitRussia();
+const ausParts = splitAustralia();
+
+/** Country feature with overseas territories stripped. */
+function metro(name, lonRange, latRange) {
+  const f = byName[name];
+  if (!f) {
+    console.warn("missing", name);
+    return null;
+  }
+  return {
+    type: "Feature",
+    properties: f.properties,
+    geometry: filterMetropole(f.geometry, lonRange, latRange),
+  };
+}
+
+const DEFS = [
+  {
+    id: "alaska",
+    name: "Alaska",
+    continent: "North America",
+    geom: usaParts.alaska,
+    neighbors: ["canada", "kamchatka"],
+    startingOwner: "player",
+    coastal: true,
+  },
+  {
+    id: "canada",
+    name: "Canada",
+    continent: "North America",
+    geom: mergeFeatures(must("Canada")),
+    neighbors: ["alaska", "usa", "greenland"],
+    startingOwner: "player",
+    coastal: true,
+  },
+  {
+    id: "usa",
+    name: "United States",
+    continent: "North America",
+    geom: usaParts.usa,
+    neighbors: ["canada", "mexico"],
+    startingOwner: "player",
+    coastal: true,
+  },
+  {
+    id: "mexico",
+    name: "Mexico",
+    continent: "North America",
+    geom: mergeFeatures(must("Mexico")),
+    neighbors: ["usa", "central_america"],
+    startingOwner: "faction_a",
+    coastal: true,
+  },
+  {
+    id: "central_america",
+    name: "Central America",
+    continent: "North America",
+    geom: mergeFeatures(
+      must(
+        "Guatemala",
+        "Belize",
+        "Honduras",
+        "El Salvador",
+        "Nicaragua",
+        "Costa Rica",
+        "Panama",
+        "Cuba",
+        "Haiti",
+        "Dominican Rep.",
+        "Jamaica",
+      ),
+    ),
+    neighbors: ["mexico", "venezuela"],
+    startingOwner: "faction_a",
+    coastal: true,
+  },
+  {
+    id: "greenland",
+    name: "Greenland",
+    continent: "North America",
+    geom: mergeFeatures(must("Greenland")),
+    neighbors: ["canada", "iceland"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "venezuela",
+    name: "Gran Colombia",
+    continent: "South America",
+    geom: mergeFeatures(
+      must("Venezuela", "Colombia", "Ecuador", "Guyana", "Suriname"),
+    ),
+    neighbors: ["central_america", "brazil", "peru"],
+    startingOwner: "faction_a",
+    coastal: true,
+  },
+  {
+    id: "brazil",
+    name: "Brazil",
+    continent: "South America",
+    geom: mergeFeatures(must("Brazil")),
+    neighbors: ["venezuela", "peru", "argentina", "north_africa"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "peru",
+    name: "Andes",
+    continent: "South America",
+    geom: mergeFeatures(must("Peru", "Bolivia", "Chile")),
+    neighbors: ["venezuela", "brazil", "argentina"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "argentina",
+    name: "Southern Cone",
+    continent: "South America",
+    geom: mergeFeatures(must("Argentina", "Uruguay", "Paraguay")),
+    neighbors: ["peru", "brazil"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "iceland",
+    name: "Iceland",
+    continent: "Europe",
+    geom: mergeFeatures(must("Iceland")),
+    neighbors: ["greenland", "britain", "scandinavia"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "britain",
+    name: "Britain",
+    continent: "Europe",
+    geom: mergeFeatures(must("United Kingdom", "Ireland")),
+    neighbors: ["iceland", "scandinavia", "western_europe"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "scandinavia",
+    name: "Scandinavia",
+    continent: "Europe",
+    geom: mergeFeatures(
+      must(
+        "Norway",
+        "Sweden",
+        "Finland",
+        "Denmark",
+        "Estonia",
+        "Latvia",
+        "Lithuania",
+      ),
+    ),
+    neighbors: ["iceland", "britain", "germany", "ukraine", "ural"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "western_europe",
+    name: "W. Europe",
+    continent: "Europe",
+    geom: mergeFeatures(
+      [
+        metro("France", [-6, 10], [41, 52]),
+        metro("Spain", [-10, 5], [35, 44]),
+        metro("Portugal", [-10, -5], [36, 43]),
+        metro("Belgium", [2, 7], [49, 52]),
+        metro("Netherlands", [3, 8], [50, 54]),
+        metro("Luxembourg", [5, 7], [49, 51]),
+        metro("Switzerland", [5, 11], [45, 48]),
+      ].filter(Boolean),
+    ),
+    neighbors: ["britain", "germany", "southern_europe", "north_africa"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "germany",
+    name: "C. Europe",
+    continent: "Europe",
+    geom: mergeFeatures(
+      must(
+        "Germany",
+        "Poland",
+        "Czechia",
+        "Austria",
+        "Slovakia",
+        "Hungary",
+      ),
+    ),
+    neighbors: [
+      "scandinavia",
+      "western_europe",
+      "southern_europe",
+      "ukraine",
+    ],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "southern_europe",
+    name: "S. Europe",
+    continent: "Europe",
+    geom: mergeFeatures(
+      must(
+        "Italy",
+        "Greece",
+        "Albania",
+        "Serbia",
+        "Croatia",
+        "Bosnia and Herz.",
+        "Montenegro",
+        "Slovenia",
+        "Romania",
+        "Bulgaria",
+        "Kosovo",
+        "Macedonia",
+      ),
+    ),
+    neighbors: [
+      "western_europe",
+      "germany",
+      "ukraine",
+      "egypt",
+      "middle_east",
+      "north_africa",
+    ],
+    startingOwner: "faction_a",
+    coastal: true,
+  },
+  {
+    id: "ukraine",
+    name: "E. Europe",
+    continent: "Europe",
+    geom: mergeFeatures(must("Ukraine", "Belarus", "Moldova")),
+    neighbors: [
+      "scandinavia",
+      "germany",
+      "southern_europe",
+      "ural",
+      "middle_east",
+      "central_asia",
+    ],
+    startingOwner: "faction_a",
+    coastal: false,
+  },
+  {
+    id: "north_africa",
+    name: "North Africa",
+    continent: "Africa",
+    geom: mergeFeatures(
+      must(
+        "Morocco",
+        "Algeria",
+        "Tunisia",
+        "Libya",
+        "W. Sahara",
+        "Mauritania",
+        "Mali",
+        "Niger",
+        "Chad",
+      ),
+    ),
+    neighbors: [
+      "western_europe",
+      "southern_europe",
+      "egypt",
+      "west_africa",
+      "congo",
+      "brazil",
+    ],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "egypt",
+    name: "Egypt",
+    continent: "Africa",
+    geom: mergeFeatures(must("Egypt", "Sudan")),
+    neighbors: [
+      "southern_europe",
+      "north_africa",
+      "east_africa",
+      "middle_east",
+    ],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "west_africa",
+    name: "West Africa",
+    continent: "Africa",
+    geom: mergeFeatures(
+      must(
+        "Nigeria",
+        "Ghana",
+        "Côte d'Ivoire",
+        "Senegal",
+        "Guinea",
+        "Burkina Faso",
+        "Benin",
+        "Togo",
+        "Sierra Leone",
+        "Liberia",
+        "Guinea-Bissau",
+        "Gambia",
+      ),
+    ),
+    neighbors: ["north_africa", "congo"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "congo",
+    name: "Congo Basin",
+    continent: "Africa",
+    geom: mergeFeatures(
+      must(
+        "Dem. Rep. Congo",
+        "Congo",
+        "Cameroon",
+        "Central African Rep.",
+        "Gabon",
+        "Eq. Guinea",
+        "Angola",
+      ),
+    ),
+    neighbors: ["north_africa", "west_africa", "east_africa", "south_africa"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "east_africa",
+    name: "East Africa",
+    continent: "Africa",
+    geom: mergeFeatures(
+      must(
+        "Ethiopia",
+        "Kenya",
+        "Tanzania",
+        "Somalia",
+        "Uganda",
+        "Rwanda",
+        "Burundi",
+        "Eritrea",
+        "Djibouti",
+      ),
+    ),
+    neighbors: ["egypt", "congo", "south_africa", "middle_east"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "south_africa",
+    name: "Southern Africa",
+    continent: "Africa",
+    geom: mergeFeatures(
+      must(
+        "South Africa",
+        "Namibia",
+        "Botswana",
+        "Zimbabwe",
+        "Mozambique",
+        "Zambia",
+        "Malawi",
+        "eSwatini",
+        "Lesotho",
+      ),
+    ),
+    neighbors: ["congo", "east_africa"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "middle_east",
+    name: "Middle East",
+    continent: "Asia",
+    geom: mergeFeatures(
+      must(
+        "Turkey",
+        "Syria",
+        "Iraq",
+        "Iran",
+        "Saudi Arabia",
+        "Yemen",
+        "Oman",
+        "United Arab Emirates",
+        "Qatar",
+        "Kuwait",
+        "Jordan",
+        "Israel",
+        "Lebanon",
+        "Palestine",
+        "Cyprus",
+        "Georgia",
+        "Armenia",
+        "Azerbaijan",
+      ),
+    ),
+    neighbors: [
+      "southern_europe",
+      "ukraine",
+      "egypt",
+      "east_africa",
+      "central_asia",
+      "india",
+    ],
+    startingOwner: "faction_a",
+    coastal: true,
+  },
+  {
+    id: "central_asia",
+    name: "Central Asia",
+    continent: "Asia",
+    geom: mergeFeatures(
+      must(
+        "Afghanistan",
+        "Pakistan",
+        "Kazakhstan",
+        "Uzbekistan",
+        "Turkmenistan",
+        "Kyrgyzstan",
+        "Tajikistan",
+      ),
+    ),
+    neighbors: ["ukraine", "ural", "siberia", "china", "india", "middle_east"],
+    startingOwner: "faction_a",
+    coastal: false,
+  },
+  {
+    id: "ural",
+    name: "W. Russia",
+    continent: "Asia",
+    geom: rusParts.ural,
+    neighbors: ["scandinavia", "ukraine", "siberia", "central_asia"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "siberia",
+    name: "Siberia",
+    continent: "Asia",
+    geom: rusParts.siberia,
+    neighbors: ["ural", "yakutsk", "mongolia", "china", "central_asia"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "yakutsk",
+    name: "Yakutia",
+    continent: "Asia",
+    geom: rusParts.yakutsk,
+    neighbors: ["siberia", "kamchatka", "mongolia", "china"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "kamchatka",
+    name: "Far East",
+    continent: "Asia",
+    geom: rusParts.kamchatka,
+    neighbors: ["yakutsk", "japan", "alaska"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "mongolia",
+    name: "Mongolia",
+    continent: "Asia",
+    geom: mergeFeatures(must("Mongolia")),
+    neighbors: ["siberia", "yakutsk", "china"],
+    startingOwner: "faction_a",
+    coastal: false,
+  },
+  {
+    id: "china",
+    name: "China",
+    continent: "Asia",
+    geom: mergeFeatures(must("China", "Taiwan")),
+    neighbors: [
+      "central_asia",
+      "siberia",
+      "yakutsk",
+      "mongolia",
+      "india",
+      "southeast_asia",
+      "korea",
+    ],
+    startingOwner: "faction_a",
+    coastal: true,
+  },
+  {
+    id: "india",
+    name: "India",
+    continent: "Asia",
+    geom: mergeFeatures(
+      must("India", "Bangladesh", "Sri Lanka", "Nepal", "Bhutan"),
+    ),
+    neighbors: ["middle_east", "central_asia", "china", "southeast_asia"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "southeast_asia",
+    name: "SE Asia",
+    continent: "Asia",
+    geom: mergeFeatures(
+      must(
+        "Myanmar",
+        "Thailand",
+        "Vietnam",
+        "Laos",
+        "Cambodia",
+        "Malaysia",
+        "Philippines",
+        "Brunei",
+      ),
+    ),
+    neighbors: ["china", "india", "indonesia"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "korea",
+    name: "Korea",
+    continent: "Asia",
+    geom: mergeFeatures(must("North Korea", "South Korea")),
+    neighbors: ["china", "japan"],
+    startingOwner: "faction_a",
+    coastal: true,
+  },
+  {
+    id: "japan",
+    name: "Japan",
+    continent: "Asia",
+    geom: mergeFeatures(must("Japan")),
+    neighbors: ["kamchatka", "korea", "china"],
+    startingOwner: "faction_b",
+    coastal: true,
+  },
+  {
+    id: "indonesia",
+    name: "Indonesia",
+    continent: "Australia",
+    geom: mergeFeatures(must("Indonesia", "Timor-Leste")),
+    neighbors: ["southeast_asia", "new_guinea", "western_australia"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "new_guinea",
+    name: "New Guinea",
+    continent: "Australia",
+    geom: mergeFeatures(must("Papua New Guinea", "Solomon Is.", "Fiji")),
+    neighbors: ["indonesia", "eastern_australia"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "western_australia",
+    name: "W. Australia",
+    continent: "Australia",
+    geom: ausParts.western_australia,
+    neighbors: ["indonesia", "eastern_australia"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
+  {
+    id: "eastern_australia",
+    name: "E. Australia",
+    continent: "Australia",
+    geom: ausParts.eastern_australia,
+    neighbors: ["new_guinea", "western_australia"],
+    startingOwner: "faction_c",
+    coastal: true,
+  },
 ];
 
-let out = `import type { TerritoryDef } from "../types";
+const projection = geoEquirectangular()
+  .scale(OUT_W / (2 * Math.PI))
+  .translate([OUT_W / 2, OUT_H / 2])
+  .precision(0.35);
+const pathGen = geoPath(projection);
+
+function pathFromGeom(geom) {
+  if (!geom) return "";
+  return pathGen(geom) || "";
+}
+
+function labelFor(geom) {
+  try {
+    const c = pathGen.centroid(geom);
+    if (!c || Number.isNaN(c[0])) throw new Error("bad centroid");
+    // Prefer largest polygon centroid if multipoly centroid looks off-map
+    if (c[0] < 0 || c[0] > OUT_W || c[1] < 0 || c[1] > OUT_H) {
+      throw new Error("oob");
+    }
+    return { x: Math.round(c[0] * 10) / 10, y: Math.round(c[1] * 10) / 10 };
+  } catch {
+    // Fallback: largest-area polygon
+    const m = toMulti(geom);
+    let best = null;
+    let bestA = -1;
+    for (const poly of m.coordinates) {
+      const g = { type: "Polygon", coordinates: poly };
+      const a = geoArea(g);
+      if (a > bestA) {
+        bestA = a;
+        best = g;
+      }
+    }
+    const c = best ? pathGen.centroid(best) : [OUT_W / 2, OUT_H / 2];
+    return {
+      x: Math.round(c[0] * 10) / 10,
+      y: Math.round(c[1] * 10) / 10,
+    };
+  }
+}
+
+const territories = [];
+for (const d of DEFS) {
+  if (!d.geom || !toMulti(d.geom).coordinates.length) {
+    console.warn("empty geom:", d.id);
+    continue;
+  }
+  const area = geoArea(d.geom);
+  if (area < 1e-7) {
+    console.warn("tiny geom:", d.id, area);
+    continue;
+  }
+  const path = pathFromGeom(d.geom);
+  if (!path || path.length < 8) {
+    console.warn("no path:", d.id);
+    continue;
+  }
+  territories.push({
+    id: d.id,
+    name: d.name,
+    continent: d.continent,
+    path,
+    label: labelFor(d.geom),
+    neighbors: d.neighbors,
+    startingOwner: d.startingOwner,
+    coastal: d.coastal,
+  });
+}
+
+console.log("territories:", territories.length);
+for (const id of [
+  "alaska",
+  "britain",
+  "western_europe",
+  "brazil",
+  "egypt",
+  "china",
+  "japan",
+  "ural",
+  "siberia",
+  "kamchatka",
+  "western_australia",
+]) {
+  const t = territories.find((x) => x.id === id);
+  console.log(" ", id, t?.label, "path", t?.path?.length);
+}
+
+const landFeat = feature(landTopo, landTopo.objects.land);
+const landPath = pathGen(landFeat);
+
+const seaRoutes = [
+  { from: "alaska", to: "kamchatka" },
+  { from: "greenland", to: "iceland" },
+  { from: "brazil", to: "north_africa" },
+  { from: "britain", to: "iceland" },
+  { from: "japan", to: "kamchatka" },
+  { from: "indonesia", to: "western_australia" },
+  { from: "southern_europe", to: "north_africa" },
+  { from: "central_america", to: "venezuela" },
+];
+
+function routePath(a, b) {
+  const ta = territories.find((t) => t.id === a);
+  const tb = territories.find((t) => t.id === b);
+  if (!ta || !tb) return null;
+  const mx = (ta.label.x + tb.label.x) / 2;
+  const my = (ta.label.y + tb.label.y) / 2 - 16;
+  return `M ${ta.label.x},${ta.label.y} Q ${mx},${my} ${tb.label.x},${tb.label.y}`;
+}
+
+const SEA_ROUTES = seaRoutes
+  .map((r) => {
+    const d = routePath(r.from, r.to);
+    return d ? { d } : null;
+  })
+  .filter(Boolean);
+
+let ts = `import type { TerritoryDef } from "../types";
 
 /**
- * Risk-style Earth — territories partition stylized continents (viewBox 0 0 1000 520).
- * Generated for adjacent non-overlapping land tiles.
+ * Risk Force Earth theater — real Natural Earth country borders
+ * (world-atlas countries-50m simplified), equirectangular projection.
+ * Generated by scripts/gen-earth-map.mjs — do not hand-edit paths.
+ * viewBox 0 0 ${OUT_W} ${OUT_H}
  */
 export const TERRITORIES: TerritoryDef[] = [
 `;
 
 for (const t of territories) {
-  out += `  {
+  ts += `  {
     id: ${JSON.stringify(t.id)},
     name: ${JSON.stringify(t.name)},
     continent: ${JSON.stringify(t.continent)},
-    path: ${JSON.stringify(poly(t.pts))},
-    label: { x: ${t.label[0]}, y: ${t.label[1]} },
+    path: ${JSON.stringify(t.path)},
+    label: { x: ${t.label.x}, y: ${t.label.y} },
     neighbors: ${JSON.stringify(t.neighbors)},
     startingOwner: ${JSON.stringify(t.startingOwner)},
     coastal: ${t.coastal},
@@ -86,7 +931,7 @@ for (const t of territories) {
 `;
 }
 
-out += `];
+ts += `];
 
 export const TERRITORY_BY_ID = Object.fromEntries(
   TERRITORIES.map((t) => [t.id, t]),
@@ -99,5 +944,25 @@ export function getTerritory(id: string): TerritoryDef {
 }
 `;
 
-fs.writeFileSync(new URL("../src/data/map/territories.ts", import.meta.url), out);
-console.log("wrote", territories.length, "territories");
+writeFileSync(join(ROOT, "src/data/map/territories.ts"), ts);
+
+const earth = `/**
+ * Earth backdrop for the holographic theater map.
+ * Land silhouette from world-atlas land-110m (equirectangular).
+ * Generated by scripts/gen-earth-map.mjs
+ */
+export const OCEAN_VIEW = { w: ${OUT_W}, h: ${OUT_H} };
+
+/** Full landmass underlay — recognisable continents & coastlines. */
+export const LAND_PATH = ${JSON.stringify(landPath)};
+
+/** Kept for API compatibility with earlier silhouette array. */
+export const CONTINENT_SILHOUETTES: { id: string; d: string }[] = [
+  { id: "land", d: LAND_PATH },
+];
+
+export const SEA_ROUTES: { d: string }[] = ${JSON.stringify(SEA_ROUTES, null, 2)};
+`;
+
+writeFileSync(join(ROOT, "src/data/map/earthPaths.ts"), earth);
+console.log("wrote territories.ts + earthPaths.ts");

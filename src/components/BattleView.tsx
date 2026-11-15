@@ -145,11 +145,11 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             if (!d.alive && d.anim !== "destroyed") return null;
             const pos = worldToPct(d.x, d.y);
             let spriteId = "building-shield";
-            let size = 104;
+            let size = 112;
             try {
               const def = getBuilding(d.buildingId);
               spriteId = def.sprite.id;
-              size = def.size.w >= 2 ? 128 : 108;
+              size = def.size.w >= 2 ? 140 : 116;
             } catch {
               /* */
             }
@@ -197,21 +197,21 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             if (!u.alive && u.anim !== "destroyed") return null;
             const pos = worldToPct(u.x, u.y);
             let spriteId = "unit-trooper";
-            let size = 78;
+            let size = 84;
             try {
               const def = getUnit(u.unitId);
               spriteId = def.sprite.id;
               const isMech = /mech|walker|spider/i.test(u.unitId);
               size =
                 def.role === "armor" || def.role === "naval"
-                  ? 96
+                  ? 108
                   : isMech
-                    ? 100
+                    ? 118
                     : def.role === "air" || def.role === "orbital"
-                      ? 86
+                      ? 92
                       : def.role === "artillery"
-                        ? 90
-                        : 76;
+                        ? 100
+                        : 86;
             } catch {
               /* */
             }

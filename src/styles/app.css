@@ -452,14 +452,14 @@
 }
 
 .rf-map__label {
-  fill: rgba(230, 236, 242, 0.92);
-  font-size: 10px;
+  fill: rgba(236, 242, 246, 0.95);
+  font-size: 7.5px;
   font-family: var(--rf-font-body);
-  font-weight: 500;
-  letter-spacing: 0.03em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   paint-order: stroke;
-  stroke: rgba(8, 16, 24, 0.75);
-  stroke-width: 3px;
+  stroke: rgba(6, 12, 18, 0.85);
+  stroke-width: 2.4px;
 }
 
 .rf-map__detail {
@@ -628,8 +628,8 @@
   height: auto !important;
   max-height: 94%;
   object-fit: contain;
-  filter: brightness(1.18) contrast(1.12) saturate(1.1)
-    drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
+  filter: contrast(1.05) saturate(1.05)
+    drop-shadow(0 5px 8px rgba(0, 0, 0, 0.55));
 }
 
 .rf-base__accent {
@@ -878,36 +878,51 @@
   position: absolute;
   inset: 38% 0 0 0;
   background:
-    /* crater scars */
-    radial-gradient(ellipse 40px 18px at 22% 55%, #0a100c 0 40%, transparent 70%),
-    radial-gradient(ellipse 28px 14px at 48% 70%, #0a100c 0 35%, transparent 65%),
-    radial-gradient(ellipse 36px 16px at 75% 48%, #0a100c 0 40%, transparent 70%),
-    /* rubble / debris marks */
-    linear-gradient(120deg, transparent 20%, rgba(80, 90, 70, 0.25) 21%, transparent 23%),
-    linear-gradient(70deg, transparent 60%, rgba(70, 80, 65, 0.2) 61%, transparent 63%),
-    /* approach road */
+    /* impact craters */
+    radial-gradient(ellipse 44px 20px at 18% 58%, #0a0c08 0 38%, transparent 68%),
+    radial-gradient(ellipse 30px 14px at 42% 72%, #0c100a 0 40%, transparent 70%),
+    radial-gradient(ellipse 38px 16px at 68% 52%, #0a0e0a 0 35%, transparent 65%),
+    radial-gradient(ellipse 22px 10px at 85% 66%, #12140e 0 40%, transparent 70%),
+    /* debris streaks */
+    linear-gradient(118deg, transparent 18%, rgba(60, 55, 45, 0.35) 19%, transparent 21%),
+    linear-gradient(65deg, transparent 55%, rgba(55, 50, 40, 0.28) 56%, transparent 58%),
+    linear-gradient(200deg, transparent 30%, rgba(40, 38, 32, 0.3) 31%, transparent 33%),
+    /* packed dirt approach */
     linear-gradient(
       90deg,
       transparent 0%,
-      rgba(70, 78, 70, 0.35) 8%,
-      rgba(70, 78, 70, 0.35) 18%,
-      transparent 22%
+      rgba(62, 58, 48, 0.45) 6%,
+      rgba(62, 58, 48, 0.45) 16%,
+      transparent 20%
     ),
-    /* trench / cover line */
+    /* trench / berm */
     linear-gradient(
       0deg,
-      transparent 42%,
-      rgba(50, 62, 52, 0.55) 43%,
-      rgba(50, 62, 52, 0.55) 46%,
-      transparent 47%
+      transparent 40%,
+      rgba(42, 48, 38, 0.7) 41%,
+      rgba(42, 48, 38, 0.7) 45%,
+      transparent 46%
     ),
+    /* soil texture */
     repeating-linear-gradient(
-      95deg,
-      #152018 0px,
-      #1a2420 18px,
-      #121c16 36px
+      92deg,
+      #1a1e16 0px,
+      #22281c 14px,
+      #161a12 28px,
+      #1e2418 42px
     ),
-    linear-gradient(180deg, #1a2820 0%, #0e1612 100%);
+    linear-gradient(180deg, #243028 0%, #121610 55%, #0a0e0a 100%);
+}
+
+.rf-battle__ground::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 20px 8px at 30% 40%, rgba(40, 36, 28, 0.5) 0 40%, transparent 70%),
+    radial-gradient(ellipse 16px 6px at 55% 60%, rgba(30, 28, 22, 0.45) 0 40%, transparent 70%),
+    linear-gradient(180deg, rgba(20, 24, 18, 0.15), transparent 40%);
+  pointer-events: none;
 }
 
 .rf-battle__grid-overlay {
@@ -952,8 +967,8 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: brightness(1.2) contrast(1.12) saturate(1.15)
-    drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55));
+  filter: contrast(1.06) saturate(1.08)
+    drop-shadow(0 8px 10px rgba(0, 0, 0, 0.6));
 }
 
 .rf-battle__actor.is-firing img {

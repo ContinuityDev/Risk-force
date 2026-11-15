@@ -1,51 +1,90 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
   <defs>
-    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
-    </radialGradient>
-    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
-      <stop offset="0%" stop-color="#d4eef5"/>
-      <stop offset="45%" stop-color="#7eb6c9"/>
-      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
-    </radialGradient>
-    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2a3848"/>
-      <stop offset="50%" stop-color="#1c2733"/>
-      <stop offset="100%" stop-color="#121820"/>
-    </linearGradient>
-    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#b0bec8"/>
-      <stop offset="40%" stop-color="#8a9aac"/>
-      <stop offset="100%" stop-color="#5c6b7e"/>
-    </linearGradient>
-    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e0c9a0"/>
-      <stop offset="100%" stop-color="#8a7350"/>
-    </linearGradient>
-    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="1.2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    
-  </defs>
-
-  <ellipse cx="16" cy="30" rx="7" ry="2" fill="rgba(0,0,0,0.45)"/>
-  <!-- legs -->
-  <path d="M11 22 L9 29 L13 29 L14 22 Z" fill="#1c2733" stroke="#5c6b7e" stroke-width="0.4"/>
-  <path d="M18 22 L17 29 L21 29 L21 22 Z" fill="#2a3848" stroke="#5c6b7e" stroke-width="0.4"/>
+  <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#9aa7b4"/>
+    <stop offset="35%" stop-color="#6a7684"/>
+    <stop offset="70%" stop-color="#3e4854"/>
+    <stop offset="100%" stop-color="#1c222a"/>
+  </linearGradient>
+  <linearGradient id="steelSide" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#2a323c"/>
+    <stop offset="45%" stop-color="#5c6876"/>
+    <stop offset="100%" stop-color="#1a2028"/>
+  </linearGradient>
+  <linearGradient id="armor" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0%" stop-color="#5a6a58"/>
+    <stop offset="40%" stop-color="#3a4638"/>
+    <stop offset="100%" stop-color="#1e261c"/>
+  </linearGradient>
+  <linearGradient id="camo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#4a5640"/>
+    <stop offset="50%" stop-color="#2e382c"/>
+    <stop offset="100%" stop-color="#1a2218"/>
+  </linearGradient>
+  <linearGradient id="desert" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#8a7a5a"/>
+    <stop offset="100%" stop-color="#4a4030"/>
+  </linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#a8d0e0" stop-opacity="0.85"/>
+    <stop offset="55%" stop-color="#2a5060" stop-opacity="0.9"/>
+    <stop offset="100%" stop-color="#0a1820"/>
+  </linearGradient>
+  <linearGradient id="heat" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0%" stop-color="#ff6a20" stop-opacity="0.9"/>
+    <stop offset="50%" stop-color="#ffc060" stop-opacity="0.5"/>
+    <stop offset="100%" stop-color="#fff0c0" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="muzzle" x1="0" y1="0.5" x2="1" y2="0.5">
+    <stop offset="0%" stop-color="#fff8e0"/>
+    <stop offset="40%" stop-color="#ffb040"/>
+    <stop offset="100%" stop-color="#ff6020" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="#000" stop-opacity="0.55"/>
+    <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="0.6"/>
+  </filter>
+</defs>
+  <ellipse cx="32" cy="58" rx="14" ry="3.9200000000000004" fill="url(#shadow)"/>
+  <!-- boots -->
+  <path d="M22 50 L20 57 L28 57 L29 50 Z" fill="#1a1e24" stroke="#3a424c" stroke-width="0.5"/>
+  <path d="M35 50 L34 57 L42 57 L40 50 Z" fill="#222830" stroke="#3a424c" stroke-width="0.5"/>
+  <!-- legs / exo actuators -->
+  <path d="M24 36 L22 50 L29 50 L30 36 Z" fill="url(#armor)" stroke="#2a3228" stroke-width="0.6"/>
+  <path d="M34 36 L35 50 L42 50 L40 36 Z" fill="url(#camo)" stroke="#2a3228" stroke-width="0.6"/>
+  <rect x="25" y="40" width="3" height="8" rx="0.5" fill="#5c6876"/>
+  <rect x="37" y="40" width="3" height="8" rx="0.5" fill="#5c6876"/>
+  <!-- hip plate -->
+  <path d="M22 34 L32 37 L42 34 L40 38 L32 40 L24 38 Z" fill="url(#steel)" stroke="#1a2028" stroke-width="0.5"/>
   <!-- torso armor -->
-  <path d="M10 12 L10 22 L16 24 L22 22 L22 12 L16 10 Z" fill="url(#hullL)" stroke="#8a9aac" stroke-width="0.7"/>
-  <path d="M10 12 L16 10 L22 12 L16 15 Z" fill="#2a3848"/>
-  <path d="M13 14 L16 13 L19 14 L19 19 L16 20 L13 19 Z" fill="#1c2733" stroke="#5c6b7e" stroke-width="0.4"/>
-  <circle cx="16" cy="16" r="1.3" fill="#7eb6c9" opacity="0.7"/>
-  <!-- helmet -->
-  <ellipse cx="16" cy="7" rx="4.5" ry="4.5" fill="#1c2733" stroke="#8a9aac" stroke-width="0.6"/>
-  <ellipse cx="16" cy="6.5" rx="3" ry="2" fill="#0a0e14"/>
-  <rect x="13" y="5.5" width="6" height="1.8" rx="0.4" fill="#7eb6c9" opacity="0.8"/>
-  <rect x="22" y="14" width="7" height="1.3" rx="0.3" fill="url(#steelL)"/>
-  <rect x="21" y="13" width="2" height="2.5" fill="#2a3848"/>
-  <ellipse cx="10" cy="13" rx="2.2" ry="1.8" fill="#3d4a5a" stroke="#c4a574" stroke-width="0.4"/>
+  <path d="M23 18 L23 35 L32 38 L41 35 L41 18 L32 15 Z" fill="url(#camo)" stroke="#1a2218" stroke-width="0.7"/>
+    <line x1="29.333333333333332" y1="19" x2="29.333333333333332" y2="33" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="34.666666666666664" y1="19" x2="34.666666666666664" y2="33" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="25" y1="25.2" x2="39" y2="25.2" stroke="#8a96a4" stroke-width="0.3" opacity="0.25"/>
 
+    <path d="M25 29.9 L30.2 30.75 L35.6 29.560000000000002" stroke="#1a2218" stroke-width="1.2" opacity="0.35" stroke-linecap="round"/>
+  <path d="M26.6 23.1 L32.9 22.76" stroke="#8a96a4" stroke-width="0.4" opacity="0.2"/>
+  <!-- chest plate -->
+  <path d="M27 20 L32 18 L37 20 L37 28 L32 30 L27 28 Z" fill="url(#steel)" stroke="#0e1218" stroke-width="0.5"/>
+  <rect x="30" y="22" width="4" height="5" rx="0.4" fill="#1a3040" stroke="#4a8090" stroke-width="0.4"/>
+  <!-- arms -->
+  <path d="M18 20 L14 32 L19 34 L23 22 Z" fill="url(#armor)" stroke="#1a2218" stroke-width="0.5"/>
+  <path d="M41 20 L46 21 L48 34 L42 33 Z" fill="url(#armor)" stroke="#1a2218" stroke-width="0.5"/>
+  <!-- rifle -->
+  <rect x="46" y="28" width="14" height="2.2" rx="0.4" fill="#2a3038" stroke="#5c6876" stroke-width="0.4"/>
+  <rect x="58" y="27.2" width="4" height="1.2" fill="#1a1e24"/>
+  <rect x="47" y="30" width="3" height="4" fill="#3a424c"/>
+  <!-- helmet -->
+  <path d="M26 10 L32 7 L38 10 L39 17 L32 19 L25 17 Z" fill="url(#steel)" stroke="#1a2028" stroke-width="0.6"/>
+  <path d="M27 13 L32 12 L37 13 L36 16 L32 17 L28 16 Z" fill="url(#glass)"/>
+  <line x1="32" y1="7" x2="32" y2="4" stroke="#6a7684" stroke-width="0.8"/>
+  <circle cx="32" cy="3.5" r="1.1" fill="#3a8090" stroke="#7eb6c9" stroke-width="0.3"/>
+    <circle cx="25" cy="22" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
+  <circle cx="39" cy="22" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
+  <circle cx="28" cy="32" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
+  <circle cx="36" cy="32" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
 </svg>

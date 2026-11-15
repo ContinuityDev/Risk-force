@@ -1,74 +1,72 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none">
   <defs>
-    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
-    </radialGradient>
-    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
-      <stop offset="0%" stop-color="#d4eef5"/>
-      <stop offset="45%" stop-color="#7eb6c9"/>
-      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
-    </radialGradient>
-    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2a3848"/>
-      <stop offset="50%" stop-color="#1c2733"/>
-      <stop offset="100%" stop-color="#121820"/>
-    </linearGradient>
-    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#b0bec8"/>
-      <stop offset="40%" stop-color="#8a9aac"/>
-      <stop offset="100%" stop-color="#5c6b7e"/>
-    </linearGradient>
-    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e0c9a0"/>
-      <stop offset="100%" stop-color="#8a7350"/>
-    </linearGradient>
-    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="1.2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    
-  </defs>
+  <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#9aa7b4"/>
+    <stop offset="35%" stop-color="#6a7684"/>
+    <stop offset="70%" stop-color="#3e4854"/>
+    <stop offset="100%" stop-color="#1c222a"/>
+  </linearGradient>
+  <linearGradient id="steelSide" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#2a323c"/>
+    <stop offset="45%" stop-color="#5c6876"/>
+    <stop offset="100%" stop-color="#1a2028"/>
+  </linearGradient>
+  <linearGradient id="armor" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0%" stop-color="#5a6a58"/>
+    <stop offset="40%" stop-color="#3a4638"/>
+    <stop offset="100%" stop-color="#1e261c"/>
+  </linearGradient>
+  <linearGradient id="camo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#4a5640"/>
+    <stop offset="50%" stop-color="#2e382c"/>
+    <stop offset="100%" stop-color="#1a2218"/>
+  </linearGradient>
+  <linearGradient id="desert" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#8a7a5a"/>
+    <stop offset="100%" stop-color="#4a4030"/>
+  </linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#a8d0e0" stop-opacity="0.85"/>
+    <stop offset="55%" stop-color="#2a5060" stop-opacity="0.9"/>
+    <stop offset="100%" stop-color="#0a1820"/>
+  </linearGradient>
+  <linearGradient id="heat" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0%" stop-color="#ff6a20" stop-opacity="0.9"/>
+    <stop offset="50%" stop-color="#ffc060" stop-opacity="0.5"/>
+    <stop offset="100%" stop-color="#fff0c0" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="muzzle" x1="0" y1="0.5" x2="1" y2="0.5">
+    <stop offset="0%" stop-color="#fff8e0"/>
+    <stop offset="40%" stop-color="#ffb040"/>
+    <stop offset="100%" stop-color="#ff6020" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="#000" stop-opacity="0.55"/>
+    <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="0.6"/>
+  </filter>
+</defs>
+  <ellipse cx="64" cy="124" rx="53.76" ry="4" fill="url(#shadow)"/>
+  <rect x="10.24" y="92.16" width="107.52" height="15.36" fill="#1a2228" stroke="#3a4850" stroke-width="0.5"/>
+  <rect x="15.36" y="94.72" width="97.28" height="2" fill="#2a3840" opacity="0.5"/>
+  <path d="M32 90 L40 50 L64 30 L88 50 L96 90 L64 105 Z" fill="url(#steel)" stroke="#0e1218" stroke-width="1.2"/>
+    <line x1="53" y1="49" x2="53" y2="89" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="64" y1="49" x2="64" y2="89" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="75" y1="49" x2="75" y2="89" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="43" y1="66.9" x2="85" y2="66.9" stroke="#8a96a4" stroke-width="0.3" opacity="0.25"/>
 
-  <ellipse cx="32" cy="58" rx="28" ry="6" fill="url(#padG)"/>
-  <ellipse cx="32" cy="58" rx="25.76" ry="5.1" fill="none" stroke="#3d4a5a" stroke-width="0.6" opacity="0.5"/>
-  <!-- base footprint 2x2 -->
-  <path d="M10 52 L10 36 L32 28 L54 36 L54 52 L32 58 Z" fill="#121820" stroke="#5c6b7e" stroke-width="0.8"/>
-  <path d="M10 36 L32 28 L54 36 L32 44 Z" fill="#1c2733"/>
-  <path d="M10 36 L10 52 L32 58 L32 44 Z" fill="#121820"/>
-  <path d="M54 36 L54 52 L32 58 L32 44 Z" fill="#2a3848"/>
-  <!-- upper deck -->
-  <path d="M16 40 L16 26 L32 18 L48 26 L48 40 L32 48 Z" fill="url(#hullL)" stroke="#8a9aac" stroke-width="0.9"/>
-  <path d="M16 26 L32 18 L48 26 L32 34 Z" fill="#2a3848"/>
-  <path d="M16 26 L16 40 L32 48 L32 34 Z" fill="#1c2733"/>
-  <path d="M48 26 L48 40 L32 48 L32 34 Z" fill="#3d4a5a"/>
-  <line x1="25" y1="29" x2="25" y2="41" stroke="#121820" stroke-width="0.5" opacity="0.6"/>
-  <line x1="32" y1="29" x2="32" y2="41" stroke="#121820" stroke-width="0.5" opacity="0.6"/>
-  <line x1="39" y1="29" x2="39" y2="41" stroke="#121820" stroke-width="0.5" opacity="0.6"/>
-
-  <!-- central tower -->
-  <path d="M24 30 L24 16 L32 12 L40 16 L40 30 L32 34 Z" fill="#1c2733" stroke="#8a9aac" stroke-width="0.7"/>
-  <path d="M24 16 L32 12 L40 16 L32 20 Z" fill="#2a3848"/>
-  <!-- holo core -->
-  <ellipse cx="32" cy="24" rx="7" ry="6" fill="#0a0e14" stroke="#7eb6c9" stroke-width="1.2"/>
-  <ellipse cx="32" cy="24" rx="4.5" ry="3.8" fill="url(#coreG)" filter="url(#softGlow)" opacity="0.95"/>
-  <ellipse cx="32" cy="23" rx="2" ry="1.5" fill="#d4eef5" opacity="0.9"/>
-  <!-- brass vents -->
-  <rect x="18" y="42" width="5" height="3" rx="0.5" fill="url(#brassL)"/>
-  <rect x="41" y="42" width="5" height="3" rx="0.5" fill="url(#brassL)"/>
-  <rect x="28" y="46" width="8" height="2" rx="0.3" fill="#c4a574" opacity="0.7"/>
-  <line x1="32" y1="12" x2="32" y2="5" stroke="#8a9aac" stroke-width="1"/>
-  <circle cx="32" cy="5" r="1.4" fill="#7eb6c9" filter="url(#softGlow)"/>
-  <circle cx="32" cy="5" r="0.6" fill="#d4eef5"/>
-  <line x1="22" y1="18" x2="22" y2="13" stroke="#8a9aac" stroke-width="1"/>
-  <circle cx="22" cy="13" r="1.4" fill="#7eb6c9" filter="url(#softGlow)"/>
-  <circle cx="22" cy="13" r="0.6" fill="#d4eef5"/>
-  <line x1="42" y1="18" x2="42" y2="13" stroke="#8a9aac" stroke-width="1"/>
-  <circle cx="42" cy="13" r="1.4" fill="#7eb6c9" filter="url(#softGlow)"/>
-  <circle cx="42" cy="13" r="0.6" fill="#d4eef5"/>
-  <!-- corner lights -->
-  <circle cx="14" cy="48" r="1.2" fill="#7eb6c9" opacity="0.8"/>
-  <circle cx="50" cy="48" r="1.2" fill="#7eb6c9" opacity="0.8"/>
-
+    <path d="M38 75 L58.400000000000006 77.5 L75.19999999999999 74" stroke="#1a2218" stroke-width="1.2" opacity="0.35" stroke-linecap="round"/>
+  <path d="M47.2 55 L66.80000000000001 54" stroke="#8a96a4" stroke-width="0.4" opacity="0.2"/>
+  <path d="M52 48 L64 38 L76 48 L72 68 L64 74 L56 68 Z" fill="url(#glass)" stroke="#1a3040" stroke-width="0.6"/>
+  <circle cx="64" cy="56" r="6" fill="#1a4050" stroke="#4a8090" stroke-width="0.5"/>
+  <rect x="58" y="20" width="12" height="14" fill="url(#armor)" stroke="#1a2218" stroke-width="0.5"/>
+  <line x1="64" y1="20" x2="64" y2="10" stroke="#6a7684" stroke-width="1.5"/>
+  <circle cx="64" cy="8" r="3" fill="#3a8090" opacity="0.8"/>
+    <circle cx="44" cy="60" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
+  <circle cx="84" cy="60" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
+  <circle cx="50" cy="85" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
+  <circle cx="78" cy="85" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
 </svg>

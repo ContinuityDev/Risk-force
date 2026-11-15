@@ -1,54 +1,68 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32" width="48" height="32" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" width="96" height="64" fill="none">
   <defs>
-    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
-    </radialGradient>
-    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
-      <stop offset="0%" stop-color="#d4eef5"/>
-      <stop offset="45%" stop-color="#7eb6c9"/>
-      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
-    </radialGradient>
-    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2a3848"/>
-      <stop offset="50%" stop-color="#1c2733"/>
-      <stop offset="100%" stop-color="#121820"/>
-    </linearGradient>
-    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#b0bec8"/>
-      <stop offset="40%" stop-color="#8a9aac"/>
-      <stop offset="100%" stop-color="#5c6b7e"/>
-    </linearGradient>
-    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e0c9a0"/>
-      <stop offset="100%" stop-color="#8a7350"/>
-    </linearGradient>
-    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="1.2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    
-  </defs>
+  <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#9aa7b4"/>
+    <stop offset="35%" stop-color="#6a7684"/>
+    <stop offset="70%" stop-color="#3e4854"/>
+    <stop offset="100%" stop-color="#1c222a"/>
+  </linearGradient>
+  <linearGradient id="steelSide" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#2a323c"/>
+    <stop offset="45%" stop-color="#5c6876"/>
+    <stop offset="100%" stop-color="#1a2028"/>
+  </linearGradient>
+  <linearGradient id="armor" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0%" stop-color="#5a6a58"/>
+    <stop offset="40%" stop-color="#3a4638"/>
+    <stop offset="100%" stop-color="#1e261c"/>
+  </linearGradient>
+  <linearGradient id="camo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#4a5640"/>
+    <stop offset="50%" stop-color="#2e382c"/>
+    <stop offset="100%" stop-color="#1a2218"/>
+  </linearGradient>
+  <linearGradient id="desert" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#8a7a5a"/>
+    <stop offset="100%" stop-color="#4a4030"/>
+  </linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#a8d0e0" stop-opacity="0.85"/>
+    <stop offset="55%" stop-color="#2a5060" stop-opacity="0.9"/>
+    <stop offset="100%" stop-color="#0a1820"/>
+  </linearGradient>
+  <linearGradient id="heat" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0%" stop-color="#ff6a20" stop-opacity="0.9"/>
+    <stop offset="50%" stop-color="#ffc060" stop-opacity="0.5"/>
+    <stop offset="100%" stop-color="#fff0c0" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="muzzle" x1="0" y1="0.5" x2="1" y2="0.5">
+    <stop offset="0%" stop-color="#fff8e0"/>
+    <stop offset="40%" stop-color="#ffb040"/>
+    <stop offset="100%" stop-color="#ff6020" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="#000" stop-opacity="0.55"/>
+    <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="0.6"/>
+  </filter>
+</defs>
+  <ellipse cx="48" cy="58" rx="36" ry="5" fill="url(#shadow)"/>
+  <path d="M12 42 L16 54 L80 54 L84 42 L80 38 L16 38 Z" fill="#141820" stroke="#3a424c" stroke-width="0.6"/>
+  <g stroke="#4a5460" stroke-width="1"><line x1="20" y1="40" x2="20" y2="52"/><line x1="30" y1="40" x2="30" y2="52"/><line x1="40" y1="40" x2="40" y2="52"/><line x1="50" y1="40" x2="50" y2="52"/><line x1="60" y1="40" x2="60" y2="52"/><line x1="70" y1="40" x2="70" y2="52"/></g>
+  <path d="M18 24 L24 16 L72 16 L78 24 L74 40 L22 40 Z" fill="url(#armor)" stroke="#0e1218" stroke-width="0.8"/>
+    <line x1="37" y1="19" x2="37" y2="35" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="48" y1="19" x2="48" y2="35" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="59" y1="19" x2="59" y2="35" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="27" y1="26.1" x2="69" y2="26.1" stroke="#8a96a4" stroke-width="0.3" opacity="0.25"/>
 
-  <ellipse cx="24" cy="29" rx="16" ry="2.5" fill="rgba(0,0,0,0.45)"/>
-  <!-- tracks -->
-  <rect x="4" y="22" width="40" height="6" rx="2" fill="#121820" stroke="#5c6b7e" stroke-width="0.5"/>
-  <rect x="6" y="23" width="3" height="4" fill="#3d4a5a"/>
-  <rect x="12" y="23" width="3" height="4" fill="#3d4a5a"/>
-  <rect x="33" y="23" width="3" height="4" fill="#3d4a5a"/>
-  <rect x="39" y="23" width="3" height="4" fill="#3d4a5a"/>
-  <!-- hull -->
-  <path d="M6 22 L8 14 L24 10 L40 14 L42 22 Z" fill="url(#hullL)" stroke="#8a9aac" stroke-width="0.8"/>
-  <path d="M8 14 L24 10 L40 14 L24 16 Z" fill="#2a3848"/>
-  <!-- railgun barrel -->
-  <rect x="20" y="6" width="24" height="3.5" rx="0.5" fill="url(#steelL)" stroke="#5c6b7e" stroke-width="0.4"/>
-  <rect x="20" y="7" width="24" height="1" fill="#0a0e14" opacity="0.35"/>
-  <rect x="18" y="5" width="6" height="5.5" rx="0.5" fill="#1c2733" stroke="#8a9aac" stroke-width="0.4"/>
-  <circle cx="44" cy="7.75" r="1.5" fill="#7eb6c9" filter="url(#softGlow)"/>
-  <!-- capacitors -->
-  <rect x="12" y="16" width="4" height="4" fill="#0a0e14" stroke="#7eb6c9" stroke-width="0.5"/>
-  <rect x="13" y="17" width="2" height="2" fill="#7eb6c9" opacity="0.5"/>
-  <line x1="10" y1="20" x2="38" y2="20" stroke="#c4a574" stroke-width="0.6" opacity="0.6"/>
-
+  <rect x="40" y="12" width="48" height="6" rx="1" fill="#3a424c" stroke="#6a7684" stroke-width="0.5"/>
+  <rect x="86" y="10" width="8" height="10" fill="#1a1e24"/>
+  <path d="M28 18 L36 14 L44 18 L42 26 L30 26 Z" fill="url(#glass)"/>
+    <path d="M20 31.4 L42 32.5 L60 30.96" stroke="#1a2218" stroke-width="1.2" opacity="0.35" stroke-linecap="round"/>
+  <path d="M30 22.6 L51 22.16" stroke="#8a96a4" stroke-width="0.4" opacity="0.2"/>
+    <circle cx="26" cy="22" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
+  <circle cx="70" cy="22" r="0.7" fill="#1a2028" stroke="#6a7684" stroke-width="0.3"/>
 </svg>

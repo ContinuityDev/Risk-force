@@ -1,56 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 80" width="72" height="80" fill="none">
   <defs>
-    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
-    </radialGradient>
-    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
-      <stop offset="0%" stop-color="#d4eef5"/>
-      <stop offset="45%" stop-color="#7eb6c9"/>
-      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
-    </radialGradient>
-    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2a3848"/>
-      <stop offset="50%" stop-color="#1c2733"/>
-      <stop offset="100%" stop-color="#121820"/>
-    </linearGradient>
-    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#b0bec8"/>
-      <stop offset="40%" stop-color="#8a9aac"/>
-      <stop offset="100%" stop-color="#5c6b7e"/>
-    </linearGradient>
-    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e0c9a0"/>
-      <stop offset="100%" stop-color="#8a7350"/>
-    </linearGradient>
-    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="1.2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    
-  </defs>
-
-  <ellipse cx="32" cy="58" rx="28" ry="5" fill="url(#padG)"/>
-  <ellipse cx="32" cy="58" rx="25.76" ry="4.25" fill="none" stroke="#3d4a5a" stroke-width="0.6" opacity="0.5"/>
-  <!-- dock basin -->
-  <path d="M6 56 L6 44 L32 34 L58 44 L58 56 L32 62 Z" fill="#0a0e14" stroke="#5c6b7e" stroke-width="0.8"/>
-  <path d="M12 52 L12 44 L32 36 L52 44 L52 52 L32 58 Z" fill="#0d1520" stroke="#7eb6c9" stroke-width="0.5" opacity="0.85"/>
-  <!-- gantries -->
-  <rect x="8" y="16" width="5" height="36" fill="#1c2733" stroke="#8a9aac" stroke-width="0.6"/>
-  <rect x="51" y="16" width="5" height="36" fill="#1c2733" stroke="#8a9aac" stroke-width="0.6"/>
-  <rect x="8.5" y="16" width="1.5" height="36" fill="#121820" opacity="0.5"/>
-  <rect x="51.5" y="16" width="1.5" height="36" fill="#121820" opacity="0.5"/>
-  <!-- crane beam -->
-  <rect x="8" y="14" width="48" height="4" fill="url(#steelL)" stroke="#5c6b7e" stroke-width="0.5"/>
-  <rect x="28" y="8" width="4" height="10" fill="#5c6b7e"/>
-  <circle cx="30" cy="8" r="2" fill="#c4a574"/>
-  <line x1="30" y1="10" x2="30" y2="30" stroke="#8a9aac" stroke-width="1" opacity="0.5"/>
-  <!-- hull being worked -->
-  <ellipse cx="32" cy="46" rx="14" ry="4" fill="#2a3848" stroke="#8a9aac" stroke-width="0.6"/>
-  <rect x="20" y="38" width="24" height="8" rx="1.5" fill="#1c2733" stroke="#5c6b7e" stroke-width="0.5"/>
-  <rect x="28" y="40" width="8" height="3" fill="#7eb6c9" opacity="0.5"/>
-  <circle cx="22" cy="42" r="1" fill="#c4a574"/>
-  <circle cx="42" cy="42" r="1" fill="#c4a574"/>
-
+  <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#9aa7b4"/>
+    <stop offset="35%" stop-color="#6a7684"/>
+    <stop offset="70%" stop-color="#3e4854"/>
+    <stop offset="100%" stop-color="#1c222a"/>
+  </linearGradient>
+  <linearGradient id="steelSide" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#2a323c"/>
+    <stop offset="45%" stop-color="#5c6876"/>
+    <stop offset="100%" stop-color="#1a2028"/>
+  </linearGradient>
+  <linearGradient id="armor" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0%" stop-color="#5a6a58"/>
+    <stop offset="40%" stop-color="#3a4638"/>
+    <stop offset="100%" stop-color="#1e261c"/>
+  </linearGradient>
+  <linearGradient id="camo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#4a5640"/>
+    <stop offset="50%" stop-color="#2e382c"/>
+    <stop offset="100%" stop-color="#1a2218"/>
+  </linearGradient>
+  <linearGradient id="desert" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#8a7a5a"/>
+    <stop offset="100%" stop-color="#4a4030"/>
+  </linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#a8d0e0" stop-opacity="0.85"/>
+    <stop offset="55%" stop-color="#2a5060" stop-opacity="0.9"/>
+    <stop offset="100%" stop-color="#0a1820"/>
+  </linearGradient>
+  <linearGradient id="heat" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0%" stop-color="#ff6a20" stop-opacity="0.9"/>
+    <stop offset="50%" stop-color="#ffc060" stop-opacity="0.5"/>
+    <stop offset="100%" stop-color="#fff0c0" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="muzzle" x1="0" y1="0.5" x2="1" y2="0.5">
+    <stop offset="0%" stop-color="#fff8e0"/>
+    <stop offset="40%" stop-color="#ffb040"/>
+    <stop offset="100%" stop-color="#ff6020" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="#000" stop-opacity="0.55"/>
+    <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="0.6"/>
+  </filter>
+</defs>
+  <ellipse cx="36" cy="76" rx="30.24" ry="4" fill="url(#shadow)"/>
+  <rect x="5.76" y="57.599999999999994" width="60.48" height="9.6" fill="#1a2228" stroke="#3a4850" stroke-width="0.5"/>
+  <rect x="8.64" y="59.2" width="54.72" height="2" fill="#2a3840" opacity="0.5"/>
+  <rect x="7.2" y="36" width="57.6" height="24" fill="#1a2830" stroke="#3a4850" stroke-width="0.6"/>
+  <rect x="14.4" y="24" width="10.799999999999999" height="16" fill="url(#steel)"/>
+  <rect x="46.800000000000004" y="24" width="10.799999999999999" height="16" fill="url(#steel)"/>
 </svg>

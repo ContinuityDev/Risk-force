@@ -193,7 +193,7 @@ export function createInitialState(payload: NewGamePayload): GameState {
     };
   }
 
-  const preferredStarts = ["alaska", "northwest", "california", "mexico"];
+  const preferredStarts = ["alaska", "canada", "usa", "mexico"];
   humans.forEach((hid, i) => {
     const owns = Object.values(territories).some((ts) => ts.owner === hid);
     if (!owns) {

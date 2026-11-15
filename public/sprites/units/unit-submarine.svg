@@ -1,51 +1,61 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 28" width="56" height="28" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 40" width="96" height="40" fill="none">
   <defs>
-    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
-    </radialGradient>
-    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
-      <stop offset="0%" stop-color="#d4eef5"/>
-      <stop offset="45%" stop-color="#7eb6c9"/>
-      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
-    </radialGradient>
-    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2a3848"/>
-      <stop offset="50%" stop-color="#1c2733"/>
-      <stop offset="100%" stop-color="#121820"/>
-    </linearGradient>
-    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#b0bec8"/>
-      <stop offset="40%" stop-color="#8a9aac"/>
-      <stop offset="100%" stop-color="#5c6b7e"/>
-    </linearGradient>
-    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e0c9a0"/>
-      <stop offset="100%" stop-color="#8a7350"/>
-    </linearGradient>
-    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="1.2" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    
-  </defs>
-
-  <ellipse cx="28" cy="24" rx="20" ry="2.5" fill="rgba(0,0,0,0.45)" opacity="0.4"/>
-  <!-- hull -->
-  <ellipse cx="28" cy="16" rx="22" ry="7" fill="url(#hullL)" stroke="#8a9aac" stroke-width="0.8"/>
-  <ellipse cx="28" cy="14" rx="18" ry="4" fill="#2a3848" opacity="0.5"/>
-  <!-- bow -->
-  <path d="M6 16 L2 16 L8 12 L8 20 Z" fill="#1c2733" stroke="#5c6b7e" stroke-width="0.4"/>
-  <!-- sail / conning tower -->
-  <path d="M24 10 L24 4 L32 4 L34 10 Z" fill="#1c2733" stroke="#8a9aac" stroke-width="0.6"/>
-  <rect x="26" y="2" width="2" height="4" fill="#8a9aac"/>
-  <circle cx="27" cy="2" r="1" fill="#7eb6c9"/>
-  <!-- torpedo tubes -->
-  <circle cx="10" cy="14" r="1.2" fill="#0a0e14" stroke="#7eb6c9" stroke-width="0.4"/>
-  <circle cx="10" cy="18" r="1.2" fill="#0a0e14" stroke="#7eb6c9" stroke-width="0.4"/>
-  <!-- prop wash -->
-  <ellipse cx="50" cy="16" rx="3" ry="2" fill="#7eb6c9" opacity="0.3"/>
-  <line x1="16" y1="20" x2="40" y2="20" stroke="#c4a574" stroke-width="0.5" opacity="0.5"/>
+  <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#9aa7b4"/>
+    <stop offset="35%" stop-color="#6a7684"/>
+    <stop offset="70%" stop-color="#3e4854"/>
+    <stop offset="100%" stop-color="#1c222a"/>
+  </linearGradient>
+  <linearGradient id="steelSide" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#2a323c"/>
+    <stop offset="45%" stop-color="#5c6876"/>
+    <stop offset="100%" stop-color="#1a2028"/>
+  </linearGradient>
+  <linearGradient id="armor" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0%" stop-color="#5a6a58"/>
+    <stop offset="40%" stop-color="#3a4638"/>
+    <stop offset="100%" stop-color="#1e261c"/>
+  </linearGradient>
+  <linearGradient id="camo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#4a5640"/>
+    <stop offset="50%" stop-color="#2e382c"/>
+    <stop offset="100%" stop-color="#1a2218"/>
+  </linearGradient>
+  <linearGradient id="desert" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#8a7a5a"/>
+    <stop offset="100%" stop-color="#4a4030"/>
+  </linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#a8d0e0" stop-opacity="0.85"/>
+    <stop offset="55%" stop-color="#2a5060" stop-opacity="0.9"/>
+    <stop offset="100%" stop-color="#0a1820"/>
+  </linearGradient>
+  <linearGradient id="heat" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0%" stop-color="#ff6a20" stop-opacity="0.9"/>
+    <stop offset="50%" stop-color="#ffc060" stop-opacity="0.5"/>
+    <stop offset="100%" stop-color="#fff0c0" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="muzzle" x1="0" y1="0.5" x2="1" y2="0.5">
+    <stop offset="0%" stop-color="#fff8e0"/>
+    <stop offset="40%" stop-color="#ffb040"/>
+    <stop offset="100%" stop-color="#ff6020" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="shadow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" stop-color="#000" stop-opacity="0.55"/>
+    <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur stdDeviation="0.6"/>
+  </filter>
+</defs>
+  <ellipse cx="48" cy="36" rx="40.32" ry="3" fill="url(#shadow)"/>
+  <path d="M8 22 L14.399999999999999 14 L81.6 14 L88 22 L81.6 28.799999999999997 L14.399999999999999 28.799999999999997 Z" fill="url(#steel)" stroke="#1a2028" stroke-width="0.7"/>
+  <rect x="33.599999999999994" y="7.199999999999999" width="21.12" height="8" fill="url(#armor)" stroke="#0e1218" stroke-width="0.5"/>
+  <rect x="52.800000000000004" y="11.200000000000001" width="26.880000000000003" height="3" fill="#2a3038"/>
+    <line x1="32.400000000000006" y1="17" x2="32.400000000000006" y2="23" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="45.60000000000001" y1="17" x2="45.60000000000001" y2="23" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="58.800000000000004" y1="17" x2="58.800000000000004" y2="23" stroke="#0e1218" stroke-width="0.4" opacity="0.55"/>
+  <line x1="20.200000000000003" y1="19.6" x2="71" y2="19.6" stroke="#8a96a4" stroke-width="0.3" opacity="0.25"/>
 
 </svg>

@@ -19,13 +19,13 @@ const ALIASES: Record<string, string> = {
   "building-sensor-dome": "buildings/building-sonar.svg",
 
   // Units
-  "unit-power-trooper": "units/unit-trooper.svg",
+  "unit-power-trooper": "units/unit-power-trooper.svg",
   "unit-heavy-walker": "units/unit-walker.svg",
   "unit-stealth-op": "units/unit-stealth.svg",
   "unit-cyber-commando": "units/unit-commando.svg",
   "unit-shield-tank": "units/unit-hover.svg",
   "unit-spider-mech": "units/unit-spider.svg",
-  "unit-siege-mech": "units/unit-siege.svg",
+  "unit-siege-mech": "units/unit-siege-mech.svg",
   "unit-plasma-howitzer": "units/unit-howitzer.svg",
   "unit-cruise-launcher": "units/unit-siege.svg",
   "unit-stealth-bomber": "units/unit-bomber.svg",
