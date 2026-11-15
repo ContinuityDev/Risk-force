@@ -18,6 +18,7 @@ interface HudProps {
   dispatch: (action: GameAction) => void;
   onTutorial?: () => void;
   onOpenNews?: () => void;
+  onOpenMarket?: () => void;
 }
 
 const NAV: { screen: Screen; label: string }[] = [
@@ -35,6 +36,7 @@ export function Hud({
   dispatch,
   onTutorial,
   onOpenNews,
+  onOpenMarket,
 }: HudProps) {
   const r = activePlayer.resources;
   const color = factionColor(activePlayer.id);
@@ -300,6 +302,16 @@ export function Hud({
             {label}
           </button>
         ))}
+        {onOpenMarket && (
+          <button
+            type="button"
+            className="ghost"
+            onClick={onOpenMarket}
+            title={HELP.logistics}
+          >
+            Market
+          </button>
+        )}
         <button
           type="button"
           className="ghost"
@@ -389,6 +401,9 @@ export function Hud({
           <p>{HELP.invasion}</p>
           <p>{HELP.upkeep}</p>
           <p>{HELP.movement}</p>
+          <p>{HELP.terrain}</p>
+          <p>{HELP.logistics}</p>
+          <p>{HELP.stacking}</p>
           <p>{HELP.continents}</p>
           <p>{HELP.victory}</p>
           <p>{HELP.ai}</p>

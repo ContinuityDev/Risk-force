@@ -37,6 +37,11 @@ const EMPTY_MENU: GameState = {
   newsFeed: [],
   newsUnread: 0,
   newsDigest: null,
+  difficulty: "normal",
+  turnLimit: 0,
+  victoryPointsEnabled: false,
+  economySummary: null,
+  plannedRoute: null,
 };
 
 /**

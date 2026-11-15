@@ -6,8 +6,9 @@ import { RESEARCH_LIST } from "../data/research";
 import { UNIT_LIST } from "../data/units";
 import type { GameAction } from "./actions";
 import { canAfford } from "./economy";
+import { isSupplied } from "./logistics";
 import { canPlaceBuilding } from "./placement";
-import { canResearch, isUnlocked } from "./research";
+import { canResearch, isUnlocked, researchTurns } from "./research";
 import type { AiAttackPlan, GameState, StrikeForceSlot } from "./state";
 import {
   enqueueUnit,
@@ -71,19 +72,69 @@ export function planAiTurn(state: GameState): GameAction[] {
   actions.push({ type: "SET_CAMPAIGN_BUDGET", payload: { energy: budget } });
   simPlayer = { ...simPlayer, campaignBudget: budget };
 
-  // Research — prefer cheapest affordable unlocked node
+  // Research — start a multi-turn job (news "research started" is truthful)
   const researchable = RESEARCH_LIST.filter((n) =>
     canResearch(simPlayer, n.id),
   ).sort((a, b) => a.cost - b.cost);
-  if (researchable[0] && simPlayer.resources.research >= researchable[0].cost) {
-    actions.push({ type: "RESEARCH", payload: { nodeId: researchable[0].id } });
+  if (
+    researchable[0] &&
+    !simPlayer.researchJob &&
+    simPlayer.resources.research >= researchable[0].cost
+  ) {
+    const node = researchable[0];
+    const turns = researchTurns(node.id);
+    actions.push({ type: "RESEARCH", payload: { nodeId: node.id } });
     simPlayer = {
       ...simPlayer,
       resources: {
         ...simPlayer.resources,
-        research: simPlayer.resources.research - researchable[0].cost,
+        research: simPlayer.resources.research - node.cost,
       },
-      researched: [...simPlayer.researched, researchable[0].id],
+      researchJob: {
+        nodeId: node.id,
+        turnsRemaining: turns,
+        totalTurns: turns,
+      },
+    };
+  }
+
+  // Stabilize valuable occupied land
+  for (const t of TERRITORIES) {
+    const ts = simTerritories[t.id];
+    if (!ts || ts.owner !== pid || ts.control !== "occupied") continue;
+    if (ts.occupiedTurns >= 2 && simPlayer.resources.energy >= 35) {
+      actions.push({
+        type: "STABILIZE_TERRITORY",
+        payload: { territoryId: t.id },
+      });
+      simPlayer = {
+        ...simPlayer,
+        resources: {
+          ...simPlayer.resources,
+          energy: simPlayer.resources.energy - 35,
+          alloy: simPlayer.resources.alloy - 10,
+        },
+      };
+      break;
+    }
+  }
+
+  // Market: buy supply when global stock is critically low
+  if (
+    simPlayer.resources.supply < 15 &&
+    simPlayer.resources.energy > 80
+  ) {
+    actions.push({
+      type: "MARKET_TRADE",
+      payload: { from: "energy", to: "supply", amount: 30 },
+    });
+    simPlayer = {
+      ...simPlayer,
+      resources: {
+        ...simPlayer.resources,
+        energy: simPlayer.resources.energy - 30,
+        supply: simPlayer.resources.supply + 10,
+      },
     };
   }
 
@@ -290,14 +341,22 @@ export function planAiTurn(state: GameState): GameAction[] {
     persona,
   );
   if (plans.length) {
+    // Prefer supplied launch sites when possible
+    const supplied =
+      plans.find((p) =>
+        isSupplied(
+          { ...state, territories: simTerritories },
+          p.fromId,
+          pid,
+        ),
+      ) ?? plans[0]!;
     actions.push({ type: "SET_AI_ATTACK_PLANS", payload: { plans } });
-    const primary = plans[0]!;
     actions.push({
       type: "START_INVASION",
       payload: {
-        fromId: primary.fromId,
-        toId: primary.toId,
-        force: primary.force,
+        fromId: supplied.fromId,
+        toId: supplied.toId,
+        force: supplied.force,
       },
     });
     return actions;

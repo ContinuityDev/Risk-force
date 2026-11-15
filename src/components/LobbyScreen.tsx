@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { NewGamePayload } from "../engine/actions";
+import type { DifficultyId, NewGamePayload } from "../engine/actions";
 
 interface LobbyScreenProps {
   mode: "solo" | "hotseat" | "lan";
@@ -18,8 +18,16 @@ export function LobbyScreen({
 }: LobbyScreenProps) {
   const [humanCount, setHumanCount] = useState(mode === "solo" ? 1 : 2);
   const [aiCount, setAiCount] = useState(mode === "solo" ? 2 : 1);
-  const [names, setNames] = useState(["Commander", "Officer", "Captain", "Admiral"]);
+  const [names, setNames] = useState([
+    "Commander",
+    "Officer",
+    "Captain",
+    "Admiral",
+  ]);
   const [address, setAddress] = useState("localhost:3847");
+  const [difficulty, setDifficulty] = useState<DifficultyId>("normal");
+  const [vpEnabled, setVpEnabled] = useState(false);
+  const [turnLimit, setTurnLimit] = useState(40);
 
   const title =
     mode === "solo"
@@ -51,7 +59,9 @@ export function LobbyScreen({
             max={4}
             value={humanCount}
             onChange={(e) =>
-              setHumanCount(Math.min(4, Math.max(1, Number(e.target.value) || 1)))
+              setHumanCount(
+                Math.min(4, Math.max(1, Number(e.target.value) || 1)),
+              )
             }
           />
         </label>
@@ -67,6 +77,47 @@ export function LobbyScreen({
             }
           />
         </label>
+        <label className="rf-field">
+          <span className="rf-label">Difficulty</span>
+          <select
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value as DifficultyId)}
+          >
+            <option value="easy">Easy — lean AI budgets</option>
+            <option value="normal">Normal</option>
+            <option value="hard">Hard — richer AI + early tech</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="rf-lobby__vp">
+        <label className="rf-field rf-field--check">
+          <input
+            type="checkbox"
+            checked={vpEnabled}
+            onChange={(e) => setVpEnabled(e.target.checked)}
+          />
+          <span>
+            Victory points race (territories, cores, continents) — default win
+            remains total domination
+          </span>
+        </label>
+        {vpEnabled && (
+          <label className="rf-field">
+            <span className="rf-label">Turn limit (0 = no limit)</span>
+            <input
+              type="number"
+              min={0}
+              max={200}
+              value={turnLimit}
+              onChange={(e) =>
+                setTurnLimit(
+                  Math.min(200, Math.max(0, Number(e.target.value) || 0)),
+                )
+              }
+            />
+          </label>
+        )}
       </div>
 
       <div className="rf-lobby__names">
@@ -114,6 +165,9 @@ export function LobbyScreen({
               aiCount,
               humanNames: names.slice(0, humanCount),
               multiplayerMode: mode,
+              difficulty,
+              victoryPointsEnabled: vpEnabled,
+              turnLimit: vpEnabled ? turnLimit : 0,
             })
           }
         >

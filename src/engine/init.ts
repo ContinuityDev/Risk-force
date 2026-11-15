@@ -8,21 +8,52 @@ import { mulberry32, shuffleInPlace } from "./rng";
 import type { GameState, PlayerState, TerritoryState } from "./state";
 import { emptyResources } from "./state";
 
+const DIFFICULTY = {
+  easy: {
+    energy: 420,
+    alloy: 100,
+    research: 16,
+    supply: 55,
+    tech: ["infantry_doctrine"] as string[],
+  },
+  normal: {
+    energy: 480,
+    alloy: 120,
+    research: 24,
+    supply: 70,
+    tech: ["infantry_doctrine", "mech_corps"] as string[],
+  },
+  hard: {
+    energy: 560,
+    alloy: 150,
+    research: 40,
+    supply: 90,
+    tech: [
+      "infantry_doctrine",
+      "mech_corps",
+      "grav_armor",
+      "drone_swarm",
+    ] as string[],
+  },
+} as const;
+
 function makePlayer(
   id: FactionId,
   kind: "human" | "ai",
   displayName: string,
+  difficulty: "easy" | "normal" | "hard" = "normal",
 ): PlayerState {
+  const diff = DIFFICULTY[difficulty];
   return {
     id,
     kind,
     displayName,
     resources: {
       ...emptyResources(),
-      energy: kind === "human" ? 520 : 480,
-      alloy: kind === "human" ? 140 : 120,
-      research: kind === "human" ? 30 : 24,
-      supply: kind === "human" ? 80 : 70,
+      energy: kind === "human" ? 520 : diff.energy,
+      alloy: kind === "human" ? 140 : diff.alloy,
+      research: kind === "human" ? 30 : diff.research,
+      supply: kind === "human" ? 80 : diff.supply,
     },
     researched:
       kind === "human"
@@ -148,6 +179,7 @@ export function createInitialState(payload: NewGamePayload): GameState {
   const seed = payload.seed ?? Date.now() % 1_000_000;
   const humanCount = Math.max(1, Math.min(4, payload.humanCount));
   const aiCount = Math.max(0, Math.min(3, payload.aiCount));
+  const difficulty = payload.difficulty ?? "normal";
 
   const humanFactionPool: FactionId[] = [
     "player",
@@ -174,10 +206,10 @@ export function createInitialState(payload: NewGamePayload): GameState {
     const name =
       payload.humanNames?.[i] ??
       (humanCount === 1 ? FACTION_NAMES.player : `Player ${i + 1}`);
-    players[id] = makePlayer(id, "human", name);
+    players[id] = makePlayer(id, "human", name, difficulty);
   });
   ais.forEach((id) => {
-    players[id] = makePlayer(id, "ai", FACTION_NAMES[id]);
+    players[id] = makePlayer(id, "ai", FACTION_NAMES[id], difficulty);
   });
 
   const playerOrder = [...humans, ...ais];
@@ -269,6 +301,11 @@ export function createInitialState(payload: NewGamePayload): GameState {
     newsFeed: [],
     newsUnread: 0,
     newsDigest: null,
+    difficulty,
+    turnLimit: payload.turnLimit ?? 0,
+    victoryPointsEnabled: payload.victoryPointsEnabled ?? false,
+    economySummary: null,
+    plannedRoute: null,
   };
 }
 

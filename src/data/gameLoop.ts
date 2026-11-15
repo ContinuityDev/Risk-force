@@ -236,15 +236,21 @@ export const HELP = {
   workers:
     "Workers staff buildings (boosting output up to a cap) and speed construction. Assign them in the base view.",
   invasion:
-    "Attack from an adjacent territory using its garrison. You fight both enemy buildings and units stationed there. Capturing wipes buildings — you get bare land and a reduced local population. After a win, choose how many survivors occupy the new plot.",
+    "Attack from an adjacent territory using its garrison. You fight defending units and armed/command structures. After a win, choose Raze (cash bump, wipe buildings) or Keep (damaged buildings need repair), then how many survivors occupy. Captured land is occupied until stabilized.",
   ai:
-    "AI factions build real economies (reactors, refineries, staffing, research, training) with no free spawns, then defend borders and strike weak flanks. Their turns resolve instantly — the Orbital Wire summarizes what happened.",
+    "AI factions build real economies, respect supply, use the market, stabilize captures, and may retreat from losing battles. Their turns resolve instantly — the Orbital Wire summarizes what happened.",
   upkeep:
-    "Units and workers cost energy every turn. If energy goes negative you are insolvent: production stops, workers idle, and some garrison units desert until you recover.",
+    "Units and workers cost energy every turn. Energy floors at 0 (no debt spiral); insolvency still idles production and causes desertion. Disband units for a partial refund if payroll is too high.",
   movement:
-    "Move armies between adjacent territories. Travel takes multiple turns based on map distance and the slowest unit; sea crossings are slower. Armies in transit show ETA arrows. Arriving at an enemy territory starts a battle.",
+    "Move armies along multi-hop neighbor routes. Travel takes multiple turns based on distance, slowest unit, terrain, and sea crossings. Route lines show the path; arriving at an enemy starts a battle. Retreat sends survivors home.",
   continents:
     "Own every territory on a continent to earn bonus energy, alloy, and population each turn. Bonuses are listed on the map legend.",
   victory:
-    "Total domination: eliminate every rival by owning all territories. Eliminated factions are announced; the last faction standing wins.",
+    "Default: total domination. Optional VP race scores territories, cores, and continents; with a turn limit the VP leader wins if time expires.",
+  terrain:
+    "Each territory has a biome (plains, urban, mountain, desert, arctic, jungle, coastal) that modifies combat and travel. Units that did not move are fortified; shield walls and bunkers deepen the bonus.",
+  logistics:
+    "Depots stock local supply within a radius. Armies far from supply suffer attrition and fight worse. Global supply is separate — depot output is not double-counted. Trade energy/alloy/supply on the Orbital Market.",
+  stacking:
+    "Battles have a frontage cap; excess units fight at reduced efficiency. Invade preview shows stacking, win odds, and strong/weak counters.",
 } as const;

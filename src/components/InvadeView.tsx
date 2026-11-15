@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
+import { biomeLabel } from "../data/biomes";
 import { HELP } from "../data/gameLoop";
 import { getTerritory, TERRITORIES } from "../data/map/territories";
 import { getUnit, UNIT_LIST } from "../data/units";
 import type { GameAction } from "../engine/actions";
+import { stackingPreview } from "../engine/combatMods";
 import { forceSupplyCost } from "../engine/economy";
+import { forecastBattle } from "../engine/forecast";
 import { travelTurns } from "../engine/movement";
+import { findRoute } from "../engine/pathfinding";
 import type { GameState, PlayerState, StrikeForceSlot } from "../engine/state";
+import { CounterStrip } from "./CounterStrip";
 import { PickerList } from "./PickerList";
 import { Sprite } from "./Sprite";
 
@@ -38,6 +43,7 @@ export function InvadeView({
   );
   const [toId, setToId] = useState("");
   const [force, setForce] = useState<Record<string, number>>({});
+  const [mode, setMode] = useState<"invade" | "reinforce">("invade");
 
   const fromDef = fromId ? getTerritory(fromId) : null;
   const fromTs = fromId ? state.territories[fromId] : null;
@@ -45,10 +51,18 @@ export function InvadeView({
 
   const targets = useMemo(() => {
     if (!fromDef) return [];
+    if (mode === "reinforce") {
+      // Friendly destinations reachable by multi-hop
+      return TERRITORIES.filter(
+        (t) =>
+          t.id !== fromId &&
+          state.territories[t.id]?.owner === activePlayer.id,
+      ).map((t) => t.id);
+    }
     return fromDef.neighbors.filter(
       (nid) => state.territories[nid]?.owner !== activePlayer.id,
     );
-  }, [fromDef, state.territories, activePlayer.id]);
+  }, [fromDef, state.territories, activePlayer.id, mode, fromId]);
 
   const slots: StrikeForceSlot[] = Object.entries(force)
     .filter(([, c]) => c > 0)
@@ -58,9 +72,23 @@ export function InvadeView({
     slots,
     (id) => getUnit(id).supplyCost ?? 1,
   );
-  const eta =
+  const route =
     fromId && toId && slots.length
+      ? findRoute(fromId, toId, slots, {
+          avoidEnemy: mode === "reinforce",
+          owner: activePlayer.id,
+          territories: state.territories,
+        })
+      : null;
+  const eta =
+    route?.totalTurns ??
+    (fromId && toId && slots.length
       ? travelTurns(fromId, toId, slots)
+      : null);
+  const stack = stackingPreview(slots);
+  const forecast =
+    mode === "invade" && toId && slots.length
+      ? forecastBattle(state, toId, slots)
       : null;
 
   const garrisonUnits = UNIT_LIST.filter((u) => (garrison[u.id] ?? 0) > 0);
@@ -78,16 +106,39 @@ export function InvadeView({
       <header className="rf-view-header">
         <div>
           <span className="rf-label">Operations</span>
-          <h2>Invasion Planning</h2>
+          <h2>{mode === "invade" ? "Invasion Planning" : "Reinforce"}</h2>
           <p className="rf-hint" title={HELP.invasion}>
-            March from a local garrison — battle opens on arrival. Capture
-            razes buildings (bare land + reduced population).
+            Multi-hop marches along neighbors. Invade opens battle on arrival;
+            reinforce uses the same unit picker for friendly moves.
           </p>
+          <div className="rf-invade__modes">
+            <button
+              type="button"
+              className={mode === "invade" ? "primary" : "ghost"}
+              onClick={() => {
+                setMode("invade");
+                setToId("");
+              }}
+            >
+              Invade
+            </button>
+            <button
+              type="button"
+              className={mode === "reinforce" ? "primary" : "ghost"}
+              onClick={() => {
+                setMode("reinforce");
+                setToId("");
+              }}
+            >
+              Reinforce
+            </button>
+          </div>
         </div>
         <p className="rf-resource">
           <span className="rf-label">Supply</span>
           <strong>
-            {Math.floor(activePlayer.resources.supply)} / need {supplyNeed}
+            {Math.floor(activePlayer.resources.supply)} / need{" "}
+            {mode === "invade" ? supplyNeed : 0}
           </strong>
         </p>
       </header>
@@ -117,17 +168,55 @@ export function InvadeView({
           })}
         />
         <PickerList
-          label="Target (adjacent enemy)"
+          label={
+            mode === "invade"
+              ? "Target (adjacent enemy)"
+              : "Friendly destination"
+          }
           value={toId}
-          onChange={setToId}
-          emptyText="No adjacent enemies from this launch point"
+          onChange={(id) => {
+            setToId(id);
+            if (fromId && slots.length) {
+              const r = findRoute(fromId, id, slots);
+              dispatch({
+                type: "SET_PLANNED_ROUTE",
+                payload: { path: r?.path ?? null },
+              });
+            }
+          }}
+          emptyText={
+            mode === "invade"
+              ? "No adjacent enemies from this launch point"
+              : "No other friendly territories"
+          }
           options={targets.map((nid) => ({
             id: nid,
             label: getTerritory(nid).name,
-            meta: state.territories[nid]?.owner ?? "neutral",
+            meta:
+              mode === "invade"
+                ? `${biomeLabel(nid)} · ${state.territories[nid]?.owner ?? "neutral"}`
+                : biomeLabel(nid),
           }))}
         />
       </div>
+
+      {slots.length > 0 && (
+        <div className="rf-invade__forecast">
+          <p>
+            Frontage {stack.count}/{stack.cap}
+            {stack.overstack > 0
+              ? ` · −${Math.round((1 - stack.efficiency) * 100)}% eff`
+              : ""}
+            {route ? ` · Route ${route.path.length - 1} hops` : ""}
+          </p>
+          {forecast && (
+            <p>
+              Win odds <strong>{Math.round(forecast.winChance * 100)}%</strong>
+              {" · "}Exp. losses ~{forecast.expectedAttackerLosses}
+            </p>
+          )}
+        </div>
+      )}
 
       <section className="rf-invade__force">
         <span className="rf-label">Assemble strike force from local garrison</span>
@@ -145,6 +234,7 @@ export function InvadeView({
                   <small>
                     Garrison {reserve} · Supply {u.supplyCost}/ea
                   </small>
+                  <CounterStrip unitId={u.id} />
                 </div>
                 <div className="rf-invade__stepper">
                   <button
@@ -178,16 +268,31 @@ export function InvadeView({
             !fromId ||
             !toId ||
             slots.length === 0 ||
-            activePlayer.resources.supply < supplyNeed
+            (mode === "invade" &&
+              activePlayer.resources.supply < supplyNeed) ||
+            (mode === "reinforce" && !route)
           }
-          onClick={() =>
-            dispatch({
-              type: "START_INVASION",
-              payload: { fromId, toId, force: slots },
-            })
-          }
+          onClick={() => {
+            if (mode === "reinforce" && route) {
+              dispatch({
+                type: "ORDER_ROUTE",
+                payload: {
+                  fromId,
+                  toId,
+                  force: slots,
+                  path: route.path,
+                },
+              });
+            } else {
+              dispatch({
+                type: "START_INVASION",
+                payload: { fromId, toId, force: slots },
+              });
+            }
+          }}
         >
-          Launch Invasion{eta != null ? ` · ${eta} turn${eta === 1 ? "" : "s"}` : ""}
+          {mode === "invade" ? "Launch Invasion" : "March Reinforcements"}
+          {eta != null ? ` · ${eta} turn${eta === 1 ? "" : "s"}` : ""}
         </button>
       </footer>
     </div>

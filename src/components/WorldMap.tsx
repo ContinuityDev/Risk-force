@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { biomeLabel } from "../data/biomes";
 import { CONTINENT_LIST } from "../data/continents";
 import { factionColor } from "../data/factions";
 import { HELP } from "../data/gameLoop";
@@ -723,6 +724,29 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           ))}
         </g>
 
+        {(state.plannedRoute?.length ?? 0) > 1 && (
+          <g className="rf-map__planned-route" pointerEvents="none">
+            {state.plannedRoute!.slice(0, -1).map((id, i) => {
+              const from = TERRITORIES.find((t) => t.id === id);
+              const to = TERRITORIES.find(
+                (t) => t.id === state.plannedRoute![i + 1],
+              );
+              if (!from || !to) return null;
+              return (
+                <path
+                  key={`route-${id}-${to.id}`}
+                  d={`M ${from.label.x} ${from.label.y} L ${to.label.x} ${to.label.y}`}
+                  fill="none"
+                  stroke="#7ec8e8"
+                  strokeWidth={Math.max(1.3, 2.2 * zoomScale)}
+                  strokeDasharray="5 4"
+                  opacity="0.9"
+                />
+              );
+            })}
+          </g>
+        )}
+
         {state.aiAttackPlans.length > 0 && (
           <g className="rf-map__ai-plans" pointerEvents="none">
             {state.aiAttackPlans.map((plan, i) => {
@@ -1213,11 +1237,25 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 <span className="rf-label">Selected</span>
                 <h3 className="rf-map__sheet-title">{selected.name}</h3>
                 <p className="rf-text-dim">
-                  {selected.continent}
+                  {selected.continent} · {biomeLabel(selected.id)}
                   {selectedTs
-                    ? ` · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
+                    ? ` · ${selectedTs.control} · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
                     : ""}
                 </p>
+                {selectedTs?.control === "occupied" && humanId && selectedTs.owner === humanId && (
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() =>
+                      dispatch({
+                        type: "STABILIZE_TERRITORY",
+                        payload: { territoryId: selected.id },
+                      })
+                    }
+                  >
+                    Stabilize (35E / 10A)
+                  </button>
+                )}
               </>
             )}
 

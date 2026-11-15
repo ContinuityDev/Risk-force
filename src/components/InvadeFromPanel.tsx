@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { biomeLabel } from "../data/biomes";
 import { BUILDING_LIST } from "../data/buildings";
 import { getTerritory, TERRITORIES } from "../data/map/territories";
 import { getUnit, UNIT_LIST } from "../data/units";
 import type { GameAction } from "../engine/actions";
+import { stackingPreview } from "../engine/combatMods";
 import { forceSupplyCost } from "../engine/economy";
+import { forecastBattle } from "../engine/forecast";
 import { travelTurns } from "../engine/movement";
 import type { GameState, PlayerState, StrikeForceSlot } from "../engine/state";
+import { CounterStrip } from "./CounterStrip";
 import { Sprite } from "./Sprite";
 
 function garrisonCount(g: Record<string, number>): number {
@@ -110,6 +114,22 @@ export function InvadeFromPanel({
     0,
   );
 
+  const combinedForce: StrikeForceSlot[] = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of plans) {
+      for (const s of p.force) {
+        map[s.unitId] = (map[s.unitId] ?? 0) + s.count;
+      }
+    }
+    return Object.entries(map).map(([unitId, count]) => ({ unitId, count }));
+  }, [plans]);
+
+  const stack = stackingPreview(combinedForce);
+  const forecast = useMemo(
+    () => forecastBattle(state, targetId, combinedForce),
+    [state, targetId, combinedForce],
+  );
+
   function toggleOrigin(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -152,6 +172,7 @@ export function InvadeFromPanel({
           <h3>{target.name}</h3>
           <p className="rf-hint">
             Gar {preview.troops} · Def {preview.defense} ·{" "}
+            {biomeLabel(targetId)} ·{" "}
             {state.territories[targetId]?.owner ?? "neutral"}
           </p>
         </div>
@@ -159,6 +180,32 @@ export function InvadeFromPanel({
           Cancel
         </button>
       </header>
+
+      {combinedForce.length > 0 && (
+        <div className="rf-invade-from__forecast">
+          <p>
+            Win odds{" "}
+            <strong>{Math.round(forecast.winChance * 100)}%</strong>
+            {" · "}
+            Exp. losses ~{forecast.expectedAttackerLosses} / enemy ~
+            {forecast.expectedDefenderLosses}
+          </p>
+          <p className="rf-hint">
+            Frontage {stack.count}/{stack.cap}
+            {stack.overstack > 0
+              ? ` · overstack −${Math.round((1 - stack.efficiency) * 100)}% eff`
+              : " · full efficiency"}
+          </p>
+          <div className="rf-invade-from__counters">
+            {combinedForce.slice(0, 3).map((s) => (
+              <div key={s.unitId}>
+                <small>{getUnit(s.unitId).name}</small>
+                <CounterStrip unitId={s.unitId} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rf-invade-from__body">
         <span className="rf-label">Invade from</span>
@@ -247,6 +294,7 @@ export function InvadeFromPanel({
                             <small>
                               Avail {reserve} · Spd {u.speed}
                             </small>
+                            <CounterStrip unitId={u.id} />
                           </div>
                           <div className="rf-invade__stepper">
                             <button

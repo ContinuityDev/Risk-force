@@ -30,9 +30,11 @@ import {
 import { BaseView } from "./components/BaseView";
 import { BattleView } from "./components/BattleView";
 import { CaptureView } from "./components/CaptureView";
+import { EconomySummary } from "./components/EconomySummary";
 import { Hud } from "./components/Hud";
 import { InvadeView } from "./components/InvadeView";
 import { LobbyScreen } from "./components/LobbyScreen";
+import { MarketView } from "./components/MarketView";
 import { MenuScreen } from "./components/MenuScreen";
 import { MobileDock } from "./components/MobileDock";
 import { NewsFeed } from "./components/NewsFeed";
@@ -42,6 +44,7 @@ import { SaveScreen } from "./components/SaveScreen";
 import { TutorialOverlay } from "./components/TutorialOverlay";
 import { VictoryScreen } from "./components/VictoryScreen";
 import { WorldMap } from "./components/WorldMap";
+import { saveToSlot } from "./persistence/saves";
 
 type LobbyMode = "solo" | "hotseat" | "lan";
 
@@ -70,6 +73,8 @@ export default function App() {
   );
   const [newsOpen, setNewsOpen] = useState(false);
   const [digestOpen, setDigestOpen] = useState(false);
+  const [marketOpen, setMarketOpen] = useState(false);
+  const lastAutosaveTurn = useRef(0);
   const aiBusy = useRef(false);
   const { requestLandscape } = useLandscapeLock();
 
@@ -135,6 +140,15 @@ export default function App() {
     if (state.screen === "menu" || state.screen === "lobby") return;
     saveSession(state);
     setCanResume(true);
+    // Autosave each turn into slot 0
+    if (state.turn !== lastAutosaveTurn.current && state.turn > 0) {
+      lastAutosaveTurn.current = state.turn;
+      try {
+        saveToSlot(0, state, `Autosave · Turn ${state.turn}`);
+      } catch {
+        /* localStorage may be unavailable */
+      }
+    }
   }, [campaignActive, state]);
 
   useEffect(() => {
@@ -267,11 +281,30 @@ export default function App() {
       state.territories[state.battle.territoryId]?.owner ?? "faction_a";
     let s = transport.getState();
     let ticks = 0;
+    let retreated = false;
     while (s.battle?.status === "running" && ticks++ < 400) {
       transport.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.4 } });
       s = transport.getState();
+      if (!s.battle || s.battle.status !== "running") break;
+      const atkHp = s.battle.units
+        .filter((u) => u.alive && u.side === "attacker")
+        .reduce((a, u) => a + u.hp, 0);
+      const defHp =
+        s.battle.units
+          .filter((u) => u.alive && u.side === "defender")
+          .reduce((a, u) => a + u.hp, 0) +
+        s.battle.defenses
+          .filter((d) => d.alive)
+          .reduce((a, d) => a + d.hp, 0);
+      // Retreat when clearly losing after the opening exchange
+      if (ticks > 25 && atkHp > 0 && atkHp < defHp * 0.35) {
+        transport.dispatch({ type: "RETREAT_BATTLE" });
+        retreated = true;
+        s = transport.getState();
+        break;
+      }
     }
-    if (s.battle && s.battle.status !== "running") {
+    if (!retreated && s.battle && s.battle.status !== "running") {
       const captured = s.battle.status === "attacker_win";
       transport.dispatch({
         type: "APPEND_NEWS",
@@ -533,6 +566,7 @@ export default function App() {
             setNewsOpen(true);
             dispatch({ type: "MARK_NEWS_READ" });
           }}
+          onOpenMarket={() => setMarketOpen(true)}
         />
         <main className="rf-main">
           {state.screen === "map" && (
@@ -570,7 +604,21 @@ export default function App() {
           {state.screen === "save" && (
             <SaveScreen state={state} dispatch={dispatch} />
           )}
+          {marketOpen && (
+            <div className="rf-modal-layer">
+              <MarketView
+                state={state}
+                activePlayer={activePlayer}
+                dispatch={dispatch}
+                canAct={isHumanTurn && state.phase === "play"}
+                onClose={() => setMarketOpen(false)}
+              />
+            </div>
+          )}
         </main>
+        {state.economySummary && isHumanTurn && (
+          <EconomySummary state={state} dispatch={dispatch} />
+        )}
         <MobileDock
           state={state}
           isHumanTurn={isHumanTurn}
