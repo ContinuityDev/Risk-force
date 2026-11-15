@@ -2,12 +2,23 @@
 
 Near-future military sci-fi war simulator for the browser. **Earth, late 22nd century** — a Risk-style continental map where you fortify territories with laser turrets and reactors, research doctrine across a deep tech tree, and launch strike forces of mechs, hover tanks, and drones.
 
+## Play (mobile + desktop)
+
+**Live:** [https://continuitydev.github.io/Risk-force/](https://continuitydev.github.io/Risk-force/)
+
+Landscape-locked PWA — install to the home screen for fullscreen play. Scan to open:
+
+![QR code — play Risk Force](docs/play-qr.png)
+
+> **GitHub Pages:** after merge to `main`, the Actions workflow deploys automatically. If the site 404s, enable **Settings → Pages → Source: GitHub Actions** once (repo admins only).
+
 ## Stack
 
 - Vite + React 19 + TypeScript
 - Vitest for engine tests
 - Original SVG sprites (no copyrighted assets)
 - Pure serializable game state + action reducer (save/load, hot-seat, LAN-ready)
+- Installable PWA (service worker + landscape manifest)
 
 No Phaser/Pixi — React + SVG keeps the stack aligned with sibling projects and makes sprites trivial to edit. Battle animation uses the live battle state (projectiles, explosions, unit/structure anim flags).
 
@@ -16,7 +27,8 @@ No Phaser/Pixi — React + SVG keeps the stack aligned with sibling projects and
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm run build
+npm run build    # base=/Risk-force/ for GitHub Pages
+npm run preview  # http://localhost:4173/Risk-force/
 npm test
 ```
 
@@ -39,7 +51,7 @@ Others open the game → **LAN** → enter `host-ip:3847` → Connect → Start.
 5. **Recruit / Invade** — build a strike force from reserves, spend **supply**, attack an adjacent enemy territory.
 6. Watch the **battle** resolve with lasers, plasma, EMP, and explosions. Capture on victory.
 7. **End Turn** — income and construction advance; AI opponents act automatically.
-8. **Save** — five localStorage slots, plus JSON export/import.
+8. **Save** — five localStorage slots, plus JSON export/import. Session autosave resumes after the app is backgrounded (mobile PWA).
 
 Resources: **Energy**, **Alloy**, **Research**, **Supply**.
 

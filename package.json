@@ -30,11 +30,13 @@
     "esbuild": "^0.25.0",
     "playwright": "^1.65.1",
     "polylabel": "^1.1.0",
+    "qrcode": "^1.5.4",
     "three": "^0.187.0",
     "topojson-client": "^3.1.0",
     "topojson-simplify": "^3.0.3",
     "typescript": "~5.8.3",
     "vite": "^6.3.5",
+    "vite-plugin-pwa": "^2.0.0",
     "vitest": "^3.2.4",
     "world-atlas": "^2.0.2"
   }

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { CONTINENT_LIST } from "../data/continents";
 import { factionColor } from "../data/factions";
 import { HELP } from "../data/gameLoop";
@@ -170,15 +177,32 @@ function layoutLabels(
   return placed;
 }
 
+const PAN_SELECT_SLOP_PX = 10;
+
 export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const dragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
+  /** Active pointers for one-finger pan + two-finger pinch. */
+  const pointersRef = useRef<
+    Map<number, { x: number; y: number; onTerritory: boolean }>
+  >(new Map());
+  const gestureRef = useRef<{
+    mode: "none" | "pan" | "pinch";
     origin: Camera;
-  } | null>(null);
+    startDist: number;
+    startMid: { x: number; y: number };
+    moved: boolean;
+    pendingTerritoryId: string | null;
+  }>({
+    mode: "none",
+    origin: { x: 0, y: 0, w: WORLD_W, h: WORLD_H },
+    startDist: 0,
+    startMid: { x: 0, y: 0 },
+    moved: false,
+    pendingTerritoryId: null,
+  });
+  const cameraRef = useRef<Camera>({ x: 0, y: 0, w: WORLD_W, h: WORLD_H });
+  const rafRef = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
 
   const initialCam = useMemo(() => {
@@ -189,97 +213,229 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [camera, setCamera] = useState<Camera>(initialCam);
   useEffect(() => {
     setCamera(initialCam);
+    cameraRef.current = initialCam;
   }, [initialCam]);
 
   const zoomScale = camera.w / WORLD_W;
   const viewBox = camToViewBox(camera);
 
+  // Defer label layout during continuous gestures for mid-range phones.
+  const deferredCam = useDeferredValue(camera);
   const labels = useMemo(
-    () => layoutLabels(TERRITORIES, zoomScale, camera),
-    [zoomScale, camera],
+    () =>
+      layoutLabels(
+        TERRITORIES,
+        deferredCam.w / WORLD_W,
+        deferredCam,
+      ),
+    [deferredCam],
   );
   const labelById = useMemo(
     () => Object.fromEntries(labels.map((l) => [l.id, l])),
     [labels],
   );
 
-  const clientToWorld = useCallback(
-    (clientX: number, clientY: number) => {
+  const scheduleCamera = useCallback((next: Camera) => {
+    cameraRef.current = next;
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      setCamera(cameraRef.current);
+    });
+  }, []);
+
+  const clientToWorldAt = useCallback(
+    (clientX: number, clientY: number, cam: Camera) => {
       const el = svgRef.current;
-      if (!el) return { x: camera.x + camera.w / 2, y: camera.y + camera.h / 2 };
+      if (!el) return { x: cam.x + cam.w / 2, y: cam.y + cam.h / 2 };
       const rect = el.getBoundingClientRect();
       const px = (clientX - rect.left) / Math.max(1, rect.width);
       const py = (clientY - rect.top) / Math.max(1, rect.height);
       return {
-        x: camera.x + px * camera.w,
-        y: camera.y + py * camera.h,
+        x: cam.x + px * cam.w,
+        y: cam.y + py * cam.h,
       };
     },
-    [camera],
+    [],
   );
 
   const onWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
-      const pivot = clientToWorld(e.clientX, e.clientY);
-      setCamera((prev) => {
-        const nw = Math.min(WORLD_W, Math.max(MIN_VIEW_W, prev.w * factor));
-        const nh = nw * (WORLD_H / WORLD_W);
-        const nx = pivot.x - ((pivot.x - prev.x) / prev.w) * nw;
-        const ny = pivot.y - ((pivot.y - prev.y) / prev.h) * nh;
-        return clampCamera({ x: nx, y: ny, w: nw, h: nh });
-      });
+      const prev = cameraRef.current;
+      const pivot = clientToWorldAt(e.clientX, e.clientY, prev);
+      const nw = Math.min(WORLD_W, Math.max(MIN_VIEW_W, prev.w * factor));
+      const nh = nw * (WORLD_H / WORLD_W);
+      const nx = pivot.x - ((pivot.x - prev.x) / prev.w) * nw;
+      const ny = pivot.y - ((pivot.y - prev.y) / prev.h) * nh;
+      scheduleCamera(clampCamera({ x: nx, y: ny, w: nw, h: nh }));
     },
-    [clientToWorld],
+    [clientToWorldAt, scheduleCamera],
   );
+
+  const pointerDistance = () => {
+    const pts = [...pointersRef.current.values()];
+    if (pts.length < 2) return 0;
+    const a = pts[0]!;
+    const b = pts[1]!;
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  };
+
+  const pointerMid = () => {
+    const pts = [...pointersRef.current.values()];
+    if (pts.length === 0) return { x: 0, y: 0 };
+    if (pts.length === 1) return { x: pts[0]!.x, y: pts[0]!.y };
+    return {
+      x: (pts[0]!.x + pts[1]!.x) / 2,
+      y: (pts[0]!.y + pts[1]!.y) / 2,
+    };
+  };
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      // Middle button or left-drag on ocean / empty — pan only.
-      // Territory clicks still select via path onClick (no drag if click).
       if (e.button !== 0 && e.button !== 1) return;
       const target = e.target as Element;
-      // Don't start pan on territory paths — those are clicks for selection
-      if (target.closest?.(".rf-map__territory")) return;
-      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-      dragRef.current = {
-        pointerId: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        origin: camera,
-      };
-      setDragging(true);
-    },
-    [camera],
-  );
+      const onTerritory = Boolean(target.closest?.(".rf-map__territory"));
+      const territoryId =
+        target
+          .closest?.("[data-territory-id]")
+          ?.getAttribute("data-territory-id") ?? null;
 
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      const d = dragRef.current;
-      if (!d || d.pointerId !== e.pointerId) return;
-      const el = svgRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const dx = ((e.clientX - d.startX) / rect.width) * d.origin.w;
-      const dy = ((e.clientY - d.startY) / rect.height) * d.origin.h;
-      setCamera(
-        clampCamera({
-          ...d.origin,
-          x: d.origin.x - dx,
-          y: d.origin.y - dy,
-        }),
-      );
+      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      pointersRef.current.set(e.pointerId, {
+        x: e.clientX,
+        y: e.clientY,
+        onTerritory,
+      });
+
+      const g = gestureRef.current;
+      g.origin = { ...cameraRef.current };
+      g.moved = false;
+
+      if (pointersRef.current.size >= 2) {
+        g.mode = "pinch";
+        g.startDist = Math.max(1, pointerDistance());
+        g.startMid = pointerMid();
+        g.pendingTerritoryId = null;
+        setDragging(true);
+        return;
+      }
+
+      // One finger: allow pan from anywhere; suppress select if we drag.
+      g.mode = "pan";
+      g.pendingTerritoryId = onTerritory ? territoryId : null;
+      g.startMid = { x: e.clientX, y: e.clientY };
+      setDragging(true);
     },
     [],
   );
 
-  const endDrag = useCallback((e: React.PointerEvent) => {
-    if (dragRef.current?.pointerId === e.pointerId) {
-      dragRef.current = null;
-      setDragging(false);
-    }
-  }, []);
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!pointersRef.current.has(e.pointerId)) return;
+      pointersRef.current.set(e.pointerId, {
+        ...(pointersRef.current.get(e.pointerId) ?? {
+          onTerritory: false,
+        }),
+        x: e.clientX,
+        y: e.clientY,
+      });
+
+      const g = gestureRef.current;
+      const el = svgRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+
+      if (pointersRef.current.size >= 2) {
+        if (g.mode !== "pinch") {
+          g.mode = "pinch";
+          g.origin = { ...cameraRef.current };
+          g.startDist = Math.max(1, pointerDistance());
+          g.startMid = pointerMid();
+          g.pendingTerritoryId = null;
+        }
+        const dist = Math.max(1, pointerDistance());
+        const mid = pointerMid();
+        const factor = g.startDist / dist;
+        const nw = Math.min(
+          WORLD_W,
+          Math.max(MIN_VIEW_W, g.origin.w * factor),
+        );
+        const nh = nw * (WORLD_H / WORLD_W);
+        const pivot = clientToWorldAt(mid.x, mid.y, g.origin);
+        const nx = pivot.x - ((pivot.x - g.origin.x) / g.origin.w) * nw;
+        const ny = pivot.y - ((pivot.y - g.origin.y) / g.origin.h) * nh;
+        g.moved = true;
+        scheduleCamera(clampCamera({ x: nx, y: ny, w: nw, h: nh }));
+        return;
+      }
+
+      if (g.mode !== "pan") return;
+      const dxPx = e.clientX - g.startMid.x;
+      const dyPx = e.clientY - g.startMid.y;
+      if (
+        !g.moved &&
+        Math.hypot(dxPx, dyPx) >= PAN_SELECT_SLOP_PX
+      ) {
+        g.moved = true;
+        g.pendingTerritoryId = null;
+      }
+      if (!g.moved && g.pendingTerritoryId) {
+        // Still a potential tap — don't pan yet.
+        return;
+      }
+      const dx = (dxPx / rect.width) * g.origin.w;
+      const dy = (dyPx / rect.height) * g.origin.h;
+      scheduleCamera(
+        clampCamera({
+          ...g.origin,
+          x: g.origin.x - dx,
+          y: g.origin.y - dy,
+        }),
+      );
+    },
+    [clientToWorldAt, scheduleCamera],
+  );
+
+  const endDrag = useCallback(
+    (e: React.PointerEvent) => {
+      if (!pointersRef.current.has(e.pointerId)) return;
+      pointersRef.current.delete(e.pointerId);
+      const g = gestureRef.current;
+
+      if (pointersRef.current.size === 0) {
+        if (
+          g.mode === "pan" &&
+          !g.moved &&
+          g.pendingTerritoryId
+        ) {
+          dispatch({
+            type: "SELECT_TERRITORY",
+            payload: { territoryId: g.pendingTerritoryId },
+          });
+        }
+        g.mode = "none";
+        g.pendingTerritoryId = null;
+        g.moved = false;
+        setDragging(false);
+        // Commit any pending camera frame
+        setCamera(cameraRef.current);
+        return;
+      }
+
+      if (pointersRef.current.size === 1) {
+        // Drop from pinch to pan
+        g.mode = "pan";
+        g.origin = { ...cameraRef.current };
+        const rem = [...pointersRef.current.values()][0]!;
+        g.startMid = { x: rem.x, y: rem.y };
+        g.pendingTerritoryId = null;
+        g.moved = true;
+      }
+    },
+    [dispatch],
+  );
 
   const selected = state.selectedTerritoryId
     ? TERRITORIES.find((t) => t.id === state.selectedTerritoryId)
@@ -308,7 +464,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         className={`rf-map__svg${dragging ? " is-dragging" : ""}`}
         viewBox={viewBox}
         role="img"
-        aria-label="Earth theater strategic map — scroll to zoom, drag to pan"
+        aria-label="Earth theater strategic map — scroll or pinch to zoom, drag to pan, tap to select"
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -515,14 +671,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 strokeWidth={(isSelected ? 1.4 : 1.05) * zoomScale}
                 strokeLinejoin="round"
                 strokeLinecap="round"
-                onClick={(ev) => {
-                  ev.stopPropagation();
-                  // Selection only — never opens base / battle (those are explicit actions).
-                  dispatch({
-                    type: "SELECT_TERRITORY",
-                    payload: { territoryId: t.id },
-                  });
-                }}
               />
               {lbl && (
                 <text
@@ -552,8 +700,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       </svg>
 
       <div className="rf-map__hint rf-text-dim">
-        Scroll to zoom · drag empty ocean to pan · click territory to select ·
-        Open Base / Invade are explicit actions
+        Scroll or pinch to zoom · drag to pan · tap to select · Open Base /
+        Invade are explicit actions
       </div>
 
       <aside className="rf-map__legend" title={HELP.continents}>

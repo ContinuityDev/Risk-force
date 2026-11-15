@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { BUILDING_LIST, getBuilding } from "../data/buildings";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
@@ -19,7 +19,22 @@ interface BaseViewProps {
   canAct: boolean;
 }
 
-const CELL = 84;
+const CELL_DESKTOP = 84;
+const CELL_MOBILE = 52;
+
+function useBaseCellSize(): number {
+  const [cell, setCell] = useState(CELL_DESKTOP);
+  useEffect(() => {
+    const mq = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)",
+    );
+    const sync = () => setCell(mq.matches ? CELL_MOBILE : CELL_DESKTOP);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return cell;
+}
 
 export function BaseView({
   state,
@@ -27,13 +42,25 @@ export function BaseView({
   dispatch,
   canAct,
 }: BaseViewProps) {
+  const CELL = useBaseCellSize();
   const tid = state.selectedTerritoryId;
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(
     null,
   );
   const [demolishId, setDemolishId] = useState<string | null>(null);
+  /** Desktop hover preview cell. */
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
+  /**
+   * Touch / click-to-preview placement (green/red ghost) — confirm with the
+   * Place button instead of relying on hover.
+   */
+  const [pendingPlace, setPendingPlace] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [tooltip, setTooltip] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   if (!tid) {
     return (
@@ -86,26 +113,28 @@ export function BaseView({
     return cells;
   }, [ts.buildings]);
 
+  const previewCell = pendingPlace ?? hover;
+
   const ghost = useMemo(() => {
-    if (!selectedBuilding || !hover || !tid) return null;
+    if (!selectedBuilding || !previewCell || !tid) return null;
     const def = getBuilding(selectedBuilding);
     const check = canPlaceBuilding(
       ts,
       tid,
       selectedBuilding,
-      hover.x,
-      hover.y,
+      previewCell.x,
+      previewCell.y,
       activePlayer,
     );
     return {
-      ...hover,
+      ...previewCell,
       w: def.size.w,
       h: def.size.h,
       def,
       valid: check.ok,
       reason: check.ok ? null : check.reason,
     };
-  }, [selectedBuilding, hover, tid, ts, activePlayer]);
+  }, [selectedBuilding, previewCell, tid, ts, activePlayer]);
 
   function placeAt(x: number, y: number) {
     if (!canAct || !owned || !selectedBuilding || !tid) return;
@@ -122,6 +151,12 @@ export function BaseView({
       type: "PLACE_BUILDING",
       payload: { territoryId: tid, buildingId: selectedBuilding, x, y },
     });
+    setPendingPlace(null);
+  }
+
+  function confirmPendingPlace() {
+    if (!pendingPlace) return;
+    placeAt(pendingPlace.x, pendingPlace.y);
   }
 
   const gridW = tdef.grid.cols * CELL;
@@ -129,6 +164,15 @@ export function BaseView({
 
   return (
     <div className="rf-base rf-fade-in">
+      {tooltip && (
+        <div
+          className="rf-touch-tooltip"
+          role="tooltip"
+          onClick={() => setTooltip(null)}
+        >
+          {tooltip}
+        </div>
+      )}
       <header className="rf-view-header">
         <div>
           <span className="rf-label">{tdef.continent}</span>
@@ -172,7 +216,9 @@ export function BaseView({
                     height: CELL,
                   }}
                   disabled={!canAct || !owned}
-                  onMouseEnter={() => setHover({ x, y })}
+                  onMouseEnter={() => {
+                    if (!pendingPlace) setHover({ x, y });
+                  }}
                   onClick={() => {
                     const inst = ts.buildings.find((b) => {
                       const def = getBuilding(b.buildingId);
@@ -199,9 +245,22 @@ export function BaseView({
                     if (inst) {
                       setSelectedInstanceId(inst.instanceId);
                       setDemolishId(inst.instanceId);
+                      setPendingPlace(null);
                       return;
                     }
                     setSelectedInstanceId(null);
+                    setDemolishId(null);
+                    if (!selectedBuilding) return;
+                    // Touch: tap-to-preview + Confirm. Mouse: place immediately (desktop unchanged).
+                    const touch =
+                      typeof window !== "undefined" &&
+                      window.matchMedia("(hover: none) and (pointer: coarse)")
+                        .matches;
+                    if (touch) {
+                      setPendingPlace({ x, y });
+                      setHover({ x, y });
+                      return;
+                    }
                     placeAt(x, y);
                   }}
                 />
@@ -224,6 +283,30 @@ export function BaseView({
               title={ghost.reason ?? "Place here"}
             />
           )}
+          {pendingPlace && owned && selectedBuilding && (
+            <div className="rf-base__place-confirm">
+              <span>
+                {ghost?.valid
+                  ? `Place ${getBuilding(selectedBuilding).name}`
+                  : ghost?.reason ?? "Invalid cell"}
+              </span>
+              <button
+                type="button"
+                className="primary"
+                disabled={!canAct || !ghost?.valid}
+                onClick={confirmPendingPlace}
+              >
+                Confirm place
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setPendingPlace(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
 
           {/* Buildings */}
           {ts.buildings.map((inst) => {
@@ -237,6 +320,18 @@ export function BaseView({
                   : def.output
                     ? "working"
                     : "idle";
+            const tip = [
+              def.name,
+              `${def.size.w}×${def.size.h}`,
+              def.output
+                ? `Out E${def.output.energy ?? 0} A${def.output.alloy ?? 0}`
+                : null,
+              def.damage ? `Dmg ${def.damage}` : null,
+              `HP ${Math.ceil(inst.hp)}/${def.maxHp}`,
+              `Staff ${inst.workers ?? 0}/${workerCapForBuilding(inst.buildingId)}`,
+            ]
+              .filter(Boolean)
+              .join(" · ");
             return (
               <div
                 key={inst.instanceId}
@@ -248,6 +343,20 @@ export function BaseView({
                   top: inst.y * CELL,
                   width: def.size.w * CELL,
                   height: def.size.h * CELL,
+                }}
+                title={tip}
+                onPointerDown={(e) => {
+                  if (e.pointerType === "mouse") return;
+                  const t = window.setTimeout(() => setTooltip(tip), 480);
+                  const clear = () => {
+                    window.clearTimeout(t);
+                    window.removeEventListener("pointerup", clear);
+                    window.removeEventListener("pointercancel", clear);
+                  };
+                  window.addEventListener("pointerup", clear, { once: true });
+                  window.addEventListener("pointercancel", clear, {
+                    once: true,
+                  });
                 }}
               >
                 <Sprite
@@ -285,7 +394,17 @@ export function BaseView({
           })}
         </div>
 
-        <aside className="rf-base__catalog">
+        <button
+          type="button"
+          className="ghost rf-base__drawer-toggle"
+          aria-expanded={drawerOpen}
+          onClick={() => setDrawerOpen((v) => !v)}
+        >
+          {drawerOpen ? "Hide panels" : "Build · Staff · Train"}
+        </button>
+        <aside
+          className={`rf-base__catalog${drawerOpen ? " is-open" : ""}`}
+        >
           {owned && selectedInst && (
             <section className="rf-base__staff-panel" title={HELP.workers}>
               <span className="rf-label">Staffing</span>
@@ -358,6 +477,26 @@ export function BaseView({
                       <button
                         type="button"
                         disabled={!canAct || ts.population < 1}
+                        title={`${u.name} · HP ${u.maxHp} · Dmg ${u.damage}`}
+                        onPointerDown={(e) => {
+                          if (e.pointerType === "mouse") return;
+                          const tip = `${u.name} · HP ${u.maxHp} · Dmg ${u.damage} · Role ${u.role}`;
+                          const t = window.setTimeout(
+                            () => setTooltip(tip),
+                            480,
+                          );
+                          const clear = () => {
+                            window.clearTimeout(t);
+                            window.removeEventListener("pointerup", clear);
+                            window.removeEventListener("pointercancel", clear);
+                          };
+                          window.addEventListener("pointerup", clear, {
+                            once: true,
+                          });
+                          window.addEventListener("pointercancel", clear, {
+                            once: true,
+                          });
+                        }}
                         onClick={() =>
                           dispatch({
                             type: "TRAIN_UNIT",
@@ -456,8 +595,9 @@ export function BaseView({
             })}
           </ul>
           <p className="rf-hint">
-            Select a structure, then click an empty pad. Click a building twice
-            to demolish (HQ excluded).
+            Select a structure, then click an empty pad (on phones: tap to
+            preview, then Confirm). Click a building twice to demolish (HQ
+            excluded). Long-press a building for stats.
           </p>
         </aside>
       </div>

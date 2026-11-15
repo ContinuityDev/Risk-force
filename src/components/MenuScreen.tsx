@@ -1,8 +1,12 @@
+import { InstallPrompt } from "./InstallPrompt";
+
 interface MenuScreenProps {
   onNewCampaign: () => void;
   onHotSeat: () => void;
   onLan: () => void;
   onLoad: () => void;
+  onResume?: () => void;
+  canResume?: boolean;
 }
 
 export function MenuScreen({
@@ -10,6 +14,8 @@ export function MenuScreen({
   onHotSeat,
   onLan,
   onLoad,
+  onResume,
+  canResume = false,
 }: MenuScreenProps) {
   return (
     <div className="rf-menu">
@@ -19,7 +25,16 @@ export function MenuScreen({
         <h1 className="rf-menu__brand">RISK FORCE</h1>
         <p className="rf-menu__subtitle">Earth Theater · 22nd Century</p>
         <div className="rf-menu__actions">
-          <button type="button" className="primary" onClick={onNewCampaign}>
+          {canResume && onResume && (
+            <button type="button" className="primary" onClick={onResume}>
+              Resume Campaign
+            </button>
+          )}
+          <button
+            type="button"
+            className={canResume ? undefined : "primary"}
+            onClick={onNewCampaign}
+          >
             New Campaign
           </button>
           <button type="button" onClick={onHotSeat}>
@@ -32,6 +47,7 @@ export function MenuScreen({
             Load Game
           </button>
         </div>
+        <InstallPrompt />
       </div>
     </div>
   );

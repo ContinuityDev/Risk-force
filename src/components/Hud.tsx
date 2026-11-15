@@ -4,6 +4,7 @@ import { GAME_LOOP, HELP } from "../data/gameLoop";
 import type { GameAction } from "../engine/actions";
 import { computeEnergyLedger } from "../engine/economy";
 import type { GameState, PlayerState, Screen } from "../engine/state";
+import { useLongPress } from "../hooks/useLongPress";
 
 interface HudProps {
   state: GameState;
@@ -24,6 +25,8 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
   const r = activePlayer.resources;
   const color = factionColor(activePlayer.id);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [ledgerHeld, setLedgerHeld] = useState(false);
   const ledger = computeEnergyLedger(state, activePlayer.id);
   const netSign = ledger.net >= 0 ? "+" : "−";
   const netAbs = Math.abs(ledger.net);
@@ -34,6 +37,10 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
     `Net ${ledger.net >= 0 ? "+" : ""}${ledger.net}/t`,
     HELP.upkeep,
   ].join(" · ");
+  const longPress = useLongPress(
+    () => setLedgerHeld(true),
+    () => setLedgerHeld(false),
+  );
 
   return (
     <header className="rf-hud">
@@ -50,8 +57,11 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
 
       <div className="rf-hud__resources" aria-label="Resources">
         <span
-          className="rf-resource rf-tick rf-resource--energy"
+          className={`rf-resource rf-tick rf-resource--energy${
+            ledgerHeld ? " is-held" : ""
+          }`}
           title={energyTitle}
+          {...longPress}
         >
           <span className="rf-label">Energy</span>
           <strong>{Math.floor(r.energy)}</strong>
@@ -106,36 +116,47 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
         </label>
       </div>
 
-      <nav className="rf-hud__nav">
-        {NAV.map(({ screen, label }) => (
+      <nav className={`rf-hud__nav${navOpen ? " is-open" : ""}`}>
+        <button
+          type="button"
+          className="ghost rf-hud__nav-toggle"
+          aria-expanded={navOpen}
+          onClick={() => setNavOpen((v) => !v)}
+        >
+          Menu
+        </button>
+        <div className="rf-hud__nav-items">
+          {NAV.map(({ screen, label }) => (
+            <button
+              key={screen}
+              type="button"
+              className={state.screen === screen ? "primary" : "ghost"}
+              disabled={!isHumanTurn && screen !== "map" && screen !== "save"}
+              onClick={() => {
+                setNavOpen(false);
+                dispatch({ type: "SET_SCREEN", payload: { screen } });
+              }}
+            >
+              {label}
+            </button>
+          ))}
           <button
-            key={screen}
             type="button"
-            className={state.screen === screen ? "primary" : "ghost"}
-            disabled={!isHumanTurn && screen !== "map" && screen !== "save"}
-            onClick={() =>
-              dispatch({ type: "SET_SCREEN", payload: { screen } })
-            }
+            className="ghost"
+            onClick={() => setHelpOpen((v) => !v)}
+            title="Game loop help"
           >
-            {label}
+            Help
           </button>
-        ))}
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => setHelpOpen((v) => !v)}
-          title="Game loop help"
-        >
-          Help
-        </button>
-        <button
-          type="button"
-          className="primary"
-          disabled={!isHumanTurn || state.phase !== "play"}
-          onClick={() => dispatch({ type: "END_TURN" })}
-        >
-          End Turn
-        </button>
+          <button
+            type="button"
+            className="primary"
+            disabled={!isHumanTurn || state.phase !== "play"}
+            onClick={() => dispatch({ type: "END_TURN" })}
+          >
+            End Turn
+          </button>
+        </div>
       </nav>
 
       {helpOpen && (

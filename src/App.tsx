@@ -4,9 +4,16 @@ import { planAiTurn } from "./engine/ai";
 import { describeAiAction } from "./engine/aiLog";
 import { createMenuState } from "./engine/reducer";
 import { useGame } from "./hooks/useGame";
+import { useLandscapeLock } from "./hooks/useLandscapeLock";
 import { createLanTransport } from "./net/lanTransport";
 import { createLocalTransport } from "./net/localTransport";
 import type { Transport } from "./net/transport";
+import {
+  clearSession,
+  hasSession,
+  loadSession,
+  saveSession,
+} from "./persistence/session";
 import { BaseView } from "./components/BaseView";
 import { BattleView } from "./components/BattleView";
 import { CaptureView } from "./components/CaptureView";
@@ -15,6 +22,7 @@ import { InvadeView } from "./components/InvadeView";
 import { LobbyScreen } from "./components/LobbyScreen";
 import { MenuScreen } from "./components/MenuScreen";
 import { ResearchView } from "./components/ResearchView";
+import { RotateOverlay } from "./components/RotateOverlay";
 import { SaveScreen } from "./components/SaveScreen";
 import { VictoryScreen } from "./components/VictoryScreen";
 import { WorldMap } from "./components/WorldMap";
@@ -35,9 +43,42 @@ export default function App() {
   const [lanStatus, setLanStatus] = useState<string | null>(null);
   const [menuSave, setMenuSave] = useState(false);
   const [campaignActive, setCampaignActive] = useState(false);
+  const [canResume, setCanResume] = useState(() => hasSession());
   const aiBusy = useRef(false);
+  const { requestLandscape } = useLandscapeLock();
 
   const { state, dispatch, activePlayer, isHumanTurn } = useGame(transport);
+
+  useEffect(() => {
+    document.documentElement.classList.remove("rf-booting");
+  }, []);
+
+  // Persist session so mobile backgrounding / PWA relaunch can resume.
+  useEffect(() => {
+    if (!campaignActive) return;
+    if (state.screen === "menu" || state.screen === "lobby") return;
+    saveSession(state);
+    setCanResume(true);
+  }, [campaignActive, state]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (!campaignActive) return;
+      const snap = transport.getState();
+      if (snap.screen !== "menu" && snap.screen !== "lobby") {
+        saveSession(snap);
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [campaignActive, transport]);
 
   // Playwright / debug harness — map zoom never opens battle/base.
   useEffect(() => {
@@ -69,7 +110,21 @@ export default function App() {
     setMenuSave(false);
     setCampaignActive(false);
     aiBusy.current = false;
+    setCanResume(hasSession());
     setTransport(createLocalTransport(menuWithScreen("menu")));
+  }
+
+  function resumeSession() {
+    const session = loadSession();
+    if (!session) {
+      setCanResume(false);
+      return;
+    }
+    setLobbyMode(null);
+    setMenuSave(false);
+    setCampaignActive(true);
+    aiBusy.current = false;
+    setTransport(createLocalTransport(session.state));
   }
 
   function openLobby(mode: LobbyMode) {
@@ -212,9 +267,14 @@ export default function App() {
     }
   }, [state.phase, state.screen]);
 
+  const rotate = (
+    <RotateOverlay onRequestLandscape={requestLandscape} />
+  );
+
   if (menuSave) {
     return (
       <div className="rf-app">
+        {rotate}
         <div className="rf-shell">
           <button type="button" className="ghost rf-back" onClick={resetToMenu}>
             ← Menu
@@ -236,11 +296,18 @@ export default function App() {
   if (state.screen === "menu" || (!campaignActive && !lobbyMode)) {
     return (
       <div className="rf-app">
+        {rotate}
         <MenuScreen
-          onNewCampaign={() => openLobby("solo")}
+          onNewCampaign={() => {
+            clearSession();
+            setCanResume(false);
+            openLobby("solo");
+          }}
           onHotSeat={() => openLobby("hotseat")}
           onLan={() => openLobby("lan")}
           onLoad={() => setMenuSave(true)}
+          canResume={canResume}
+          onResume={resumeSession}
         />
       </div>
     );
@@ -249,6 +316,7 @@ export default function App() {
   if (lobbyMode && (state.screen === "lobby" || !campaignActive)) {
     return (
       <div className="rf-app">
+        {rotate}
         <LobbyScreen
           mode={lobbyMode}
           onBack={resetToMenu}
@@ -265,6 +333,7 @@ export default function App() {
       Object.values(state.players).find((p) => p.kind === "human")?.id ?? null;
     return (
       <div className="rf-app">
+        {rotate}
         <VictoryScreen
           winner={state.winner}
           message={state.message}
@@ -278,11 +347,14 @@ export default function App() {
   if (!activePlayer) {
     return (
       <div className="rf-app">
+        {rotate}
         <MenuScreen
           onNewCampaign={() => openLobby("solo")}
           onHotSeat={() => openLobby("hotseat")}
           onLan={() => openLobby("lan")}
           onLoad={() => setMenuSave(true)}
+          canResume={canResume}
+          onResume={resumeSession}
         />
       </div>
     );
@@ -290,6 +362,7 @@ export default function App() {
 
   return (
     <div className="rf-app">
+      <RotateOverlay onRequestLandscape={requestLandscape} />
       <div className="rf-shell">
         <Hud
           state={state}
