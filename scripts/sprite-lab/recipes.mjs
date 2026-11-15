@@ -37,6 +37,17 @@ export const UNIT_RECIPES = {
   "unit-hydrofoil": { kind: "ship", palette: "navy", file: "units/unit-hydrofoil.png", small: true, directions: 8 },
   "unit-submarine": { kind: "sub", palette: "navy", file: "units/unit-submarine.png", directions: 8 },
   "unit-orbital": { kind: "orbital", palette: "urban", file: "units/unit-orbital.png", directions: 8 },
+
+  // Expansion set — distinct silhouettes via builder flags
+  "unit-jumpjet": { kind: "infantry", palette: "urban", file: "units/unit-jumpjet.png", jumpjet: true, elite: true, directions: 8 },
+  "unit-rail-walker": { kind: "mech", palette: "urban", file: "units/unit-rail-walker.png", scale: 1.25, heavy: true, rail: true, directions: 8 },
+  "unit-emp-disruptor": { kind: "hover", palette: "navy", file: "units/unit-emp-disruptor.png", ew: true, directions: 8, turreted: true },
+  "unit-heavy-siege": { kind: "mech", palette: "desert", file: "units/unit-heavy-siege.png", scale: 1.35, heavy: true, siege: true, directions: 8 },
+  "unit-recon-drone": { kind: "drone", palette: "navy", file: "units/unit-recon-drone.png", stealth: true, ew: true, directions: 8 },
+  "unit-aa-tank": { kind: "tank", palette: "olive", file: "units/unit-aa-tank.png", aa: true, directions: 8, turreted: true },
+  "unit-airlift": { kind: "aircraft", palette: "desert", file: "units/unit-airlift.png", wide: true, directions: 8 },
+  "unit-orbital-uplink": { kind: "orbital", palette: "navy", file: "units/unit-orbital-uplink.png", directions: 8 },
+  "unit-elite-commando": { kind: "infantry", palette: "desert", file: "units/unit-elite-commando.png", stealth: true, elite: true, directions: 8 },
 };
 
 export const BUILDING_RECIPES = {

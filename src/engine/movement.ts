@@ -49,17 +49,32 @@ export function isSeaLink(fromId: string, toId: string): boolean {
   return false;
 }
 
+/** Units that airlift mixed forces — raise march pace toward transport speed. */
+const AIRLIFT_IDS = new Set([
+  "dropship",
+  "assault_dropship",
+  "airlift_dropship",
+]);
+
 export function slowestSpeed(force: StrikeForceSlot[]): number {
   let slow = Infinity;
+  let airlift = 0;
   for (const slot of force) {
     if (slot.count <= 0) continue;
     try {
-      slow = Math.min(slow, getUnit(slot.unitId).speed);
+      const u = getUnit(slot.unitId);
+      slow = Math.min(slow, u.speed);
+      if (AIRLIFT_IDS.has(u.id)) {
+        airlift = Math.max(airlift, u.speed);
+      }
     } catch {
       slow = Math.min(slow, 1);
     }
   }
-  return Number.isFinite(slow) ? slow : 1;
+  if (!Number.isFinite(slow)) return 1;
+  // Escorting transports pull the column toward their cruise speed.
+  if (airlift > 0) return Math.max(slow, airlift * 0.88);
+  return slow;
 }
 
 /** Turns required to march from → to with this force. */

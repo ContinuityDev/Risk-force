@@ -704,6 +704,49 @@
   stroke: var(--rf-accent);
 }
 
+.rf-map__units {
+  pointer-events: none;
+}
+
+.rf-map__unit-hit {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.rf-map__unit image {
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.rf-map__unit.is-compact {
+  filter: drop-shadow(0 0 0.55px rgba(242, 247, 250, 0.3));
+}
+
+.rf-map__unit.is-transit {
+  filter: drop-shadow(0 0 0.8px rgba(224, 176, 96, 0.45));
+}
+
+.rf-map__bldgs {
+  pointer-events: auto;
+}
+
+.rf-map__bldg-hit {
+  cursor: pointer;
+}
+
+.rf-map__bldg image {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+.rf-map__bldg.is-compact {
+  filter: drop-shadow(0 0 0.6px rgba(242, 247, 250, 0.35));
+}
+
+.rf-map__bldg-more-txt {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .rf-map__label {
   fill: rgba(248, 252, 255, 0.96);
   font-family: var(--rf-font-body);
@@ -1305,6 +1348,137 @@
   margin-top: 1rem;
   display: flex;
   justify-content: flex-end;
+}
+
+.rf-invade-from {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.rf-invade-from__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.rf-invade-from__head h3 {
+  margin: 0.05rem 0 0.1rem;
+  font-size: 1.05rem;
+}
+
+.rf-invade-from__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rf-invade-from__origins {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.rf-invade-from__origins > li {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.45rem 0.5rem 0.55rem;
+}
+
+.rf-invade-from__origins > li > button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+}
+
+.rf-invade-from__minis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.rf-invade-from__adjust {
+  margin-top: 0.3rem;
+}
+
+.rf-invade-from__adjust .ghost {
+  min-height: 1.8rem;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.72rem;
+}
+
+.rf-invade-from__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: rgba(8, 14, 20, 0.55);
+  border: 1px solid var(--rf-border-soft);
+  padding: 0.1rem 0.3rem 0.1rem 0.15rem;
+}
+
+.rf-invade-from__chip em {
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--rf-text);
+}
+
+.rf-invade-from__force {
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-invade-from__force li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.rf-invade-from__force small {
+  display: block;
+  color: var(--rf-text-faint);
+  font-size: 0.7rem;
+}
+
+.rf-invade-from__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  flex: 0 0 auto;
+  padding-top: 0.25rem;
+  border-top: var(--rf-hairline);
+  background: rgba(12, 16, 22, 0.92);
+}
+
+.rf-invade-from__footer .primary {
+  width: 100%;
+}
+
+.rf-map__invade-plans path {
+  filter: drop-shadow(0 0 1.2px rgba(224, 112, 96, 0.55));
 }
 
 /* ── Battle ─────────────────────────────────────────────── */
@@ -2892,15 +3066,58 @@
     top: var(--rf-hud-h);
     bottom: 3.1rem;
     width: min(46vw, 16rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .rf-drawer--right > .rf-drawer__handle {
+    flex: 0 0 auto;
   }
 
   .rf-map__territory-drawer {
     max-height: calc(100dvh - var(--rf-hud-h) - 3.1rem);
     padding-top: 0.45rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .rf-map__territory-drawer .rf-picker__list {
     max-height: min(22vh, 6.5rem);
+  }
+
+  .rf-map__territory-drawer:has(.rf-invade-from) {
+    max-height: calc(100dvh - var(--rf-hud-h) - 3.1rem);
+    padding-bottom: 0.35rem;
+  }
+
+  .rf-map__territory-drawer:has(.rf-invade-from) > .rf-label,
+  .rf-map__territory-drawer:has(.rf-invade-from) > .rf-map__sheet-title,
+  .rf-map__territory-drawer:has(.rf-invade-from) > .rf-text-dim {
+    flex: 0 0 auto;
+  }
+
+  .rf-map__territory-drawer .rf-invade-from {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .rf-invade-from__head h3 {
+    font-size: 0.92rem;
+  }
+
+  .rf-invade-from__head .rf-hint {
+    font-size: 0.68rem;
+    margin: 0;
+  }
+
+  .rf-invade-from__force li {
+    gap: 0.35rem;
+  }
+
+  .rf-invade-from__footer .primary {
+    min-height: var(--rf-tap);
   }
 
   .rf-map__sheet-title {

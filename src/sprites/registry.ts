@@ -40,6 +40,17 @@ const ALIASES: Record<string, string> = {
   "unit-sat-relay": "units/unit-orbital.png",
   "unit-virus-probe": "units/unit-commando.png",
   "unit-data-spike": "units/unit-ew-drone.png",
+
+  // Expansion set — prefer baked PNGs when present; aliases cover gaps
+  "unit-jumpjet": "units/unit-jumpjet.png",
+  "unit-rail-walker": "units/unit-rail-walker.png",
+  "unit-emp-disruptor": "units/unit-emp-disruptor.png",
+  "unit-heavy-siege": "units/unit-heavy-siege.png",
+  "unit-recon-drone": "units/unit-recon-drone.png",
+  "unit-aa-tank": "units/unit-aa-tank.png",
+  "unit-airlift": "units/unit-airlift.png",
+  "unit-orbital-uplink": "units/unit-orbital-uplink.png",
+  "unit-elite-commando": "units/unit-elite-commando.png",
 };
 
 /** Sprite ids that rotate to face targets (turrets / all units). */
@@ -83,6 +94,15 @@ const DIRECTION_COUNTS: Record<string, number> = {
   "unit-sat-relay": 8,
   "unit-virus-probe": 8,
   "unit-data-spike": 8,
+  "unit-jumpjet": 8,
+  "unit-rail-walker": 8,
+  "unit-emp-disruptor": 8,
+  "unit-heavy-siege": 8,
+  "unit-recon-drone": 8,
+  "unit-aa-tank": 8,
+  "unit-airlift": 8,
+  "unit-orbital-uplink": 8,
+  "unit-elite-commando": 8,
   // Rotating defense turrets
   "building-laser": 8,
   "building-flak": 8,

@@ -19,7 +19,21 @@ import { TERRITORIES } from "../data/map/territories";
 import type { TerritoryDef } from "../data/types";
 import type { GameAction } from "../engine/actions";
 import type { GameState } from "../engine/state";
+import {
+  buildingsFingerprint,
+  layoutBuildingMinis,
+} from "../map/buildingMinis";
+import {
+  garrisonFingerprint,
+  layoutTransitUnitMinis,
+  layoutUnitMinis,
+  transitFingerprint,
+} from "../map/unitMinis";
 import { Drawer } from "./Drawer";
+import {
+  InvadeFromPanel,
+  type InvadeOriginPlan,
+} from "./InvadeFromPanel";
 
 interface WorldMapProps {
   state: GameState;
@@ -187,6 +201,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   /** Selected-territory right sheet (always used on short landscape). */
   const [detailOpen, setDetailOpen] = useState(false);
   const [shortLandscape, setShortLandscape] = useState(false);
+  const [invadeOpen, setInvadeOpen] = useState(false);
+  const [invadePlans, setInvadePlans] = useState<InvadeOriginPlan[]>([]);
+  const onInvadePlans = useCallback((plans: InvadeOriginPlan[]) => {
+    setInvadePlans(plans);
+  }, []);
   useEffect(() => {
     const mq = window.matchMedia(
       "(orientation: landscape) and (max-height: 500px)",
@@ -283,6 +302,61 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     [labels],
   );
 
+  const bldgFp = useMemo(
+    () => buildingsFingerprint(state.territories),
+    [state.territories],
+  );
+  const buildingMinis = useMemo(
+    () =>
+      layoutBuildingMinis(
+        TERRITORIES,
+        state.territories,
+        deferredCam.w / WORLD_W,
+        deferredCam,
+        labels,
+      ),
+    // bldgFp tracks building mutations without deep-comparing territory state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deferredCam, labels, bldgFp],
+  );
+
+  const garFp = useMemo(
+    () => garrisonFingerprint(state.territories),
+    [state.territories],
+  );
+  const transitFp = useMemo(
+    () => transitFingerprint(state.armiesInTransit),
+    [state.armiesInTransit],
+  );
+  const unitMinis = useMemo(() => {
+    const occupied = buildingMinis.map((m) => ({
+      x: m.x,
+      y: m.y,
+      w: m.size,
+      h: m.size,
+    }));
+    return layoutUnitMinis(
+      TERRITORIES,
+      state.territories,
+      deferredCam.w / WORLD_W,
+      deferredCam,
+      labels,
+      occupied,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredCam, labels, buildingMinis, garFp]);
+  const transitMinis = useMemo(
+    () =>
+      layoutTransitUnitMinis(
+        state.armiesInTransit ?? [],
+        TERRITORIES,
+        deferredCam.w / WORLD_W,
+        deferredCam,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deferredCam, transitFp],
+  );
+
   const scheduleCamera = useCallback((next: Camera) => {
     cameraRef.current = next;
     if (rafRef.current != null) return;
@@ -344,7 +418,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     (e: React.PointerEvent) => {
       if (e.button !== 0 && e.button !== 1) return;
       const target = e.target as Element;
-      const onTerritory = Boolean(target.closest?.(".rf-map__territory"));
+      const onTerritory = Boolean(
+        target.closest?.(
+          ".rf-map__territory, .rf-map__bldg-hit, .rf-map__unit-hit",
+        ),
+      );
       const territoryId =
         target
           .closest?.("[data-territory-id]")
@@ -491,9 +569,20 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const selectedTs = state.selectedTerritoryId
     ? state.territories[state.selectedTerritoryId]
     : null;
+  const selectedIsEnemy = Boolean(
+    selected &&
+      selectedTs &&
+      humanId &&
+      selectedTs.owner !== humanId,
+  );
   const hovered = hoveredId
     ? TERRITORIES.find((t) => t.id === hoveredId)
     : null;
+
+  useEffect(() => {
+    setInvadeOpen(false);
+    setInvadePlans([]);
+  }, [state.selectedTerritoryId]);
 
   // Friendly neighbors for march UI
   const marchTargets = useMemo(() => {
@@ -590,6 +679,17 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           >
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#9fd4e4" />
           </marker>
+          <marker
+            id="rf-invade-arrow"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="5.5"
+            markerHeight="5.5"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e07060" />
+          </marker>
         </defs>
 
         <rect width={WORLD_W} height={WORLD_H} fill="url(#rf-ocean)" />
@@ -645,6 +745,34 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     strokeDasharray="4 3"
                     opacity="0.9"
                     markerEnd="url(#rf-ai-arrow)"
+                  />
+                </g>
+              );
+            })}
+          </g>
+        )}
+
+        {invadeOpen && invadePlans.length > 0 && selected && (
+          <g className="rf-map__invade-plans" pointerEvents="none">
+            {invadePlans.map((plan) => {
+              const from = TERRITORIES.find((t) => t.id === plan.fromId);
+              if (!from) return null;
+              const x1 = from.label.x;
+              const y1 = from.label.y;
+              const x2 = selected.label.x;
+              const y2 = selected.label.y;
+              const mx = (x1 + x2) / 2;
+              const my = (y1 + y2) / 2 - 10;
+              return (
+                <g key={`invade-${plan.fromId}`}>
+                  <path
+                    d={`M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`}
+                    fill="none"
+                    stroke="#e07060"
+                    strokeWidth={Math.max(1.4, 2.4 * zoomScale)}
+                    strokeDasharray="6 4"
+                    opacity="0.95"
+                    markerEnd="url(#rf-invade-arrow)"
                   />
                 </g>
               );
@@ -746,6 +874,274 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           opacity="0.22"
           pointerEvents="none"
         />
+
+        {(unitMinis.length > 0 || transitMinis.length > 0) && (
+          <g className="rf-map__units">
+            {[...unitMinis, ...transitMinis].map((m) => {
+              const col = factionColor(m.owner ?? "neutral");
+              const half = m.size / 2;
+              const strokeW = Math.max(0.35, 0.85 * zoomScale);
+              if (m.more != null) {
+                if (m.more <= 0) return null;
+                return (
+                  <g
+                    key={m.key}
+                    className="rf-map__unit-more"
+                    transform={`translate(${m.x}, ${m.y})`}
+                  >
+                    <circle
+                      className="rf-map__unit-hit"
+                      data-territory-id={m.territoryId}
+                      r={half}
+                      fill="rgba(8,14,20,0.82)"
+                      stroke={col}
+                      strokeWidth={strokeW}
+                    />
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize={Math.max(3.5, m.size * 0.45)}
+                      fill="#e8eef4"
+                      pointerEvents="none"
+                    >
+                      +{m.more}
+                    </text>
+                  </g>
+                );
+              }
+              // Circular chrome so troop markers never read as empty building pads.
+              const r = half;
+              return (
+                <g
+                  key={m.key}
+                  className={`rf-map__unit${m.compact ? " is-compact" : ""}${
+                    m.transit ? " is-transit" : ""
+                  }`}
+                  transform={`translate(${m.x}, ${m.y})`}
+                  opacity={m.transit ? 0.92 : 1}
+                >
+                  <circle
+                    className="rf-map__unit-hit"
+                    data-territory-id={m.territoryId}
+                    r={r + strokeW}
+                    fill="transparent"
+                  />
+                  <circle
+                    r={r}
+                    fill={
+                      m.compact
+                        ? "rgba(10,16,24,0.94)"
+                        : "rgba(6,10,16,0.8)"
+                    }
+                    stroke={col}
+                    strokeWidth={
+                      m.compact
+                        ? Math.max(strokeW * 1.3, 1.25 * zoomScale)
+                        : Math.max(strokeW, 1.05 * zoomScale)
+                    }
+                    strokeDasharray={m.transit ? "2 1.5" : undefined}
+                    pointerEvents="none"
+                  />
+                  <circle
+                    r={Math.max(0.4, r * (m.compact ? 0.16 : 0.1))}
+                    cx={-r * 0.62}
+                    cy={-r * 0.62}
+                    fill={col}
+                    opacity={0.95}
+                    pointerEvents="none"
+                  />
+                  {m.spriteUrl ? (
+                    <image
+                      href={m.spriteUrl}
+                      x={-half * 0.82}
+                      y={-half * (m.compact ? 0.72 : 0.78)}
+                      width={m.size * 0.82}
+                      height={m.size * (m.compact ? 0.78 : 0.88)}
+                      preserveAspectRatio="xMidYMid meet"
+                      pointerEvents="none"
+                    />
+                  ) : null}
+                  {m.count > 0 && (
+                    <g className="rf-map__unit-badge" pointerEvents="none">
+                      <circle
+                        cx={half * 0.68}
+                        cy={half * 0.68}
+                        r={
+                          m.compact
+                            ? Math.max(0.95, m.size * 0.14)
+                            : Math.max(0.55, m.size * 0.085)
+                        }
+                        fill={col}
+                        stroke="#f2f7fa"
+                        strokeWidth={Math.max(0.15, 0.3 * zoomScale)}
+                      />
+                      <text
+                        x={half * 0.68}
+                        y={half * 0.68}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={
+                          m.compact
+                            ? Math.max(1.9, m.size * 0.15)
+                            : Math.max(1.45, m.size * 0.1)
+                        }
+                        fill="#0a1218"
+                        fontWeight="700"
+                      >
+                        {m.count > 9 ? "9+" : m.count}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        )}
+
+        {buildingMinis.length > 0 && (
+          <g className="rf-map__bldgs">
+            {buildingMinis.map((m) => {
+              // Belt-and-suspenders: never paint empty compact / +0 leftovers.
+              if (m.compact && (m.count == null || m.count <= 0)) return null;
+              if (m.more != null && m.more <= 0) return null;
+              const owner =
+                state.territories[m.territoryId]?.owner ?? "neutral";
+              const col = factionColor(owner);
+              const half = m.size / 2;
+              const strokeW = Math.max(0.35, 0.9 * zoomScale);
+              if (m.more != null) {
+                return (
+                  <g
+                    key={m.key}
+                    className="rf-map__bldg-more"
+                    transform={`translate(${m.x}, ${m.y})`}
+                  >
+                    <rect
+                      className="rf-map__bldg-hit"
+                      data-territory-id={m.territoryId}
+                      x={-half}
+                      y={-half}
+                      width={m.size}
+                      height={m.size}
+                      rx={Math.max(0.4, 1.2 * zoomScale)}
+                      fill="rgba(8,14,20,0.82)"
+                      stroke={col}
+                      strokeWidth={strokeW}
+                    />
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="rf-map__bldg-more-txt"
+                      fontSize={Math.max(4, m.size * 0.48)}
+                      fill="#e8eef4"
+                      pointerEvents="none"
+                    >
+                      +{m.more}
+                    </text>
+                  </g>
+                );
+              }
+              const r = half + strokeW;
+              const circ = 2 * Math.PI * r;
+              const dash = Math.max(0.01, m.progress) * circ;
+              return (
+                <g
+                  key={m.key}
+                  className={`rf-map__bldg${m.constructing ? " is-building" : ""}${
+                    m.compact ? " is-compact" : ""
+                  }`}
+                  transform={`translate(${m.x}, ${m.y})`}
+                  opacity={m.constructing ? 0.62 : 1}
+                >
+                  <rect
+                    className="rf-map__bldg-hit"
+                    data-territory-id={m.territoryId}
+                    x={-half - strokeW}
+                    y={-half - strokeW}
+                    width={m.size + strokeW * 2}
+                    height={m.size + strokeW * 2}
+                    fill="transparent"
+                  />
+                  <rect
+                    x={-half}
+                    y={-half}
+                    width={m.size}
+                    height={m.size}
+                    rx={Math.max(0.35, 1.1 * zoomScale)}
+                    fill={
+                      m.compact ? "rgba(10,16,24,0.94)" : "rgba(6,10,16,0.82)"
+                    }
+                    stroke={col}
+                    strokeWidth={
+                      m.compact
+                        ? Math.max(strokeW * 1.35, 1.4 * zoomScale)
+                        : Math.max(strokeW, 1.15 * zoomScale)
+                    }
+                    pointerEvents="none"
+                  />
+                  <rect
+                    x={-half}
+                    y={-half}
+                    width={m.size}
+                    height={Math.max(0.55, m.size * (m.compact ? 0.2 : 0.12))}
+                    rx={Math.max(0.35, 1.1 * zoomScale)}
+                    fill={col}
+                    opacity={m.compact ? 1 : 0.9}
+                    pointerEvents="none"
+                  />
+                  {m.spriteUrl ? (
+                    <image
+                      href={m.spriteUrl}
+                      x={-half * 0.9}
+                      y={-half * (m.compact ? 0.72 : 0.78)}
+                      width={m.size * 0.9}
+                      height={m.size * (m.compact ? 0.72 : 0.82)}
+                      preserveAspectRatio="xMidYMid meet"
+                      pointerEvents="none"
+                    />
+                  ) : null}
+                  {m.constructing && (
+                    <circle
+                      className="rf-map__bldg-ring"
+                      r={r}
+                      fill="none"
+                      stroke={col}
+                      strokeWidth={Math.max(0.45, 1.2 * zoomScale)}
+                      strokeDasharray={`${dash} ${circ}`}
+                      strokeLinecap="round"
+                      transform="rotate(-90)"
+                      pointerEvents="none"
+                      opacity="0.95"
+                    />
+                  )}
+                  {m.compact && m.count != null && m.count > 0 && (
+                    <g pointerEvents="none">
+                      <circle
+                        cx={half * 0.78}
+                        cy={-half * 0.78}
+                        r={Math.max(2.6, m.size * 0.36)}
+                        fill={col}
+                        stroke="#f2f7fa"
+                        strokeWidth={Math.max(0.35, 0.7 * zoomScale)}
+                      />
+                      <text
+                        x={half * 0.78}
+                        y={-half * 0.78}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={Math.max(4, m.size * 0.38)}
+                        fill="#0a1218"
+                        fontWeight="700"
+                      >
+                        {m.count > 9 ? "9+" : m.count}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        )}
       </svg>
 
       <div className="rf-map__hint rf-text-dim">
@@ -812,109 +1208,161 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       >
         {selected && (
           <>
-            <span className="rf-label">Selected</span>
-            <h3 className="rf-map__sheet-title">{selected.name}</h3>
-            <p className="rf-text-dim">
-              {selected.continent}
-              {selectedTs
-                ? ` · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
-                : ""}
-            </p>
+            {!(invadeOpen && selectedIsEnemy) && (
+              <>
+                <span className="rf-label">Selected</span>
+                <h3 className="rf-map__sheet-title">{selected.name}</h3>
+                <p className="rf-text-dim">
+                  {selected.continent}
+                  {selectedTs
+                    ? ` · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
+                    : ""}
+                </p>
+              </>
+            )}
 
-            <div className="rf-map__sheet-actions">
-              <button
-                type="button"
-                className="primary"
-                onClick={() =>
-                  dispatch({
-                    type: "SET_SCREEN",
-                    payload: { screen: "base" },
-                  })
+            {invadeOpen && selectedIsEnemy && humanId ? (
+              <InvadeFromPanel
+                state={state}
+                activePlayer={state.players[humanId]!}
+                targetId={selected.id}
+                canAct={
+                  state.phase === "play" &&
+                  state.players[state.playerOrder[state.activePlayerIndex]!]
+                    ?.kind === "human"
                 }
-              >
-                Open Base
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  dispatch({
-                    type: "SET_SCREEN",
-                    payload: { screen: "invade" },
-                  })
-                }
-              >
-                Army
-              </button>
-            </div>
-
-            <span className="rf-label">Your territories</span>
-            <ul className="rf-picker__list rf-map__owned-list">
-              {ownedTerritories.map((t) => {
-                const ts = state.territories[t.id]!;
-                const g = Object.values(ts.garrison).reduce((a, b) => a + b, 0);
-                return (
-                  <li key={t.id}>
+                dispatch={dispatch}
+                onCancel={() => {
+                  setInvadeOpen(false);
+                  setInvadePlans([]);
+                }}
+                onPlansChange={onInvadePlans}
+              />
+            ) : (
+              <>
+                <div className="rf-map__sheet-actions">
+                  {!selectedIsEnemy && (
                     <button
                       type="button"
-                      className={
-                        t.id === selected.id ? "primary" : "ghost"
-                      }
+                      className="primary"
                       onClick={() =>
                         dispatch({
-                          type: "SELECT_TERRITORY",
-                          payload: { territoryId: t.id },
+                          type: "SET_SCREEN",
+                          payload: { screen: "base" },
                         })
                       }
                     >
-                      <strong>{t.name}</strong>
-                      <small>
-                        {t.continent} · Gar {g}
-                      </small>
+                      Open Base
                     </button>
-                  </li>
-                );
-              })}
-            </ul>
+                  )}
+                  {selectedIsEnemy ? (
+                    <button
+                      type="button"
+                      className="primary"
+                      data-tutorial="invade-btn"
+                      onClick={() => setInvadeOpen(true)}
+                    >
+                      Invade
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        dispatch({
+                          type: "SET_SCREEN",
+                          payload: { screen: "invade" },
+                        })
+                      }
+                    >
+                      Army
+                    </button>
+                  )}
+                </div>
 
-            {marchTargets.length > 0 && (
-              <div className="rf-map__march">
-                <span className="rf-label">March to (friendly)</span>
-                <ul className="rf-picker__list">
-                  {marchTargets.map((nid) => {
-                    const nName =
-                      TERRITORIES.find((t) => t.id === nid)?.name ?? nid;
-                    const g = selectedTs?.garrison ?? {};
-                    const force = Object.entries(g)
-                      .filter(([, c]) => c > 0)
-                      .map(([unitId, count]) => ({
-                        unitId,
-                        count: Math.max(1, Math.floor(count / 2)),
-                      }));
-                    return (
-                      <li key={nid}>
-                        <button
-                          type="button"
-                          className="ghost"
-                          disabled={!force.length}
-                          onClick={() =>
-                            dispatch({
-                              type: "ORDER_MOVE",
-                              payload: {
-                                fromId: selected.id,
-                                toId: nid,
-                                force,
-                              },
-                            })
-                          }
-                        >
-                          <strong>→ {nName}</strong>
-                          <small>Half garrison marches</small>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
+                {!selectedIsEnemy && (
+                  <>
+                    <span className="rf-label">Your territories</span>
+                    <ul className="rf-picker__list rf-map__owned-list">
+                      {ownedTerritories.map((t) => {
+                        const ts = state.territories[t.id]!;
+                        const g = Object.values(ts.garrison).reduce(
+                          (a, b) => a + b,
+                          0,
+                        );
+                        return (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              className={
+                                t.id === selected.id ? "primary" : "ghost"
+                              }
+                              onClick={() =>
+                                dispatch({
+                                  type: "SELECT_TERRITORY",
+                                  payload: { territoryId: t.id },
+                                })
+                              }
+                            >
+                              <strong>{t.name}</strong>
+                              <small>
+                                {t.continent} · Gar {g}
+                              </small>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
+                )}
+
+                {selectedIsEnemy && (
+                  <p className="rf-hint">
+                    Enemy territory — tap Invade to plan a multi-front strike
+                    using the march system.
+                  </p>
+                )}
+
+                {marchTargets.length > 0 && (
+                  <div className="rf-map__march">
+                    <span className="rf-label">March to (friendly)</span>
+                    <ul className="rf-picker__list">
+                      {marchTargets.map((nid) => {
+                        const nName =
+                          TERRITORIES.find((t) => t.id === nid)?.name ?? nid;
+                        const g = selectedTs?.garrison ?? {};
+                        const force = Object.entries(g)
+                          .filter(([, c]) => c > 0)
+                          .map(([unitId, count]) => ({
+                            unitId,
+                            count: Math.max(1, Math.floor(count / 2)),
+                          }));
+                        return (
+                          <li key={nid}>
+                            <button
+                              type="button"
+                              className="ghost"
+                              disabled={!force.length}
+                              onClick={() =>
+                                dispatch({
+                                  type: "ORDER_MOVE",
+                                  payload: {
+                                    fromId: selected.id,
+                                    toId: nid,
+                                    force,
+                                  },
+                                })
+                              }
+                            >
+                              <strong>→ {nName}</strong>
+                              <small>Half garrison marches</small>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

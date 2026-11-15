@@ -163,21 +163,32 @@ export default function App() {
         getState: () => ReturnType<Transport["getState"]>;
         dispatch: Transport["dispatch"];
         neighbors: Record<string, string[]>;
+        createBattle?: typeof import("./engine/combat").createBattle;
       };
     };
-    void import("./data/map/territories").then((mod) => {
-      w.__RF__ = {
-        getState: () => transport.getState(),
-        dispatch: (a) => transport.dispatch(a),
-        neighbors: Object.fromEntries(
-          mod.TERRITORIES.map((t) => [t.id, t.neighbors]),
-        ),
-      };
+    // Sync core ASAP so capture scripts don't race the dynamic import.
+    w.__RF__ = {
+      getState: () => transport.getState(),
+      dispatch: (a) => transport.dispatch(a),
+      neighbors: w.__RF__?.neighbors ?? {},
+      createBattle: w.__RF__?.createBattle,
+    };
+    let cancelled = false;
+    void Promise.all([
+      import("./data/map/territories"),
+      import("./engine/combat"),
+    ]).then(([mod, combat]) => {
+      if (cancelled || !w.__RF__) return;
+      w.__RF__.neighbors = Object.fromEntries(
+        mod.TERRITORIES.map((t) => [t.id, t.neighbors]),
+      );
+      w.__RF__.createBattle = combat.createBattle;
     });
     return () => {
-      delete w.__RF__;
+      cancelled = true;
+      // Keep harness alive across re-renders; only clear on unmount of App.
     };
-  }, [transport, dispatch]);
+  }, [transport]);
 
   function resetToMenu() {
     transport.disconnect?.();
@@ -244,6 +255,44 @@ export default function App() {
     }
   }
 
+  // AI-led arrival battles (march system) auto-resolve — no player battle UI.
+  useEffect(() => {
+    if (!campaignActive) return;
+    if (state.phase !== "battle" || !state.battle) return;
+    const atk = state.players[state.battle.attacker];
+    if (!atk || atk.kind !== "ai") return;
+    if (aiBusy.current) return;
+    aiBusy.current = true;
+    const prevOwner =
+      state.territories[state.battle.territoryId]?.owner ?? "faction_a";
+    let s = transport.getState();
+    let ticks = 0;
+    while (s.battle?.status === "running" && ticks++ < 400) {
+      transport.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.4 } });
+      s = transport.getState();
+    }
+    if (s.battle && s.battle.status !== "running") {
+      const captured = s.battle.status === "attacker_win";
+      transport.dispatch({
+        type: "APPEND_NEWS",
+        payload: {
+          items: [
+            newsFromBattleResult(s.turn, s.battle, prevOwner, captured),
+          ],
+          showDigest: true,
+        },
+      });
+      transport.dispatch({ type: "RESOLVE_BATTLE" });
+    }
+    aiBusy.current = false;
+  }, [
+    campaignActive,
+    state.phase,
+    state.battle?.attacker,
+    state.battle?.territoryId,
+    transport,
+  ]);
+
   // AI turns resolve instantly; battles fast-forward; news digest at the end.
   useEffect(() => {
     if (!campaignActive) return;
@@ -285,38 +334,12 @@ export default function App() {
         );
         if (news) batch.push(news);
 
+        // Invasions march via the travel system; battle resolves on arrival.
+        transport.dispatch(action);
         if (action.type === "START_INVASION") {
-          const before = transport.getState();
-          const prevOwner =
-            before.territories[action.payload.toId]?.owner ?? "faction_a";
-          transport.dispatch(action);
-          // Instant resolve — no player-facing battle UI for AI fights
-          let s = transport.getState();
-          let ticks = 0;
-          while (s.battle?.status === "running" && ticks++ < 400) {
-            transport.dispatch({
-              type: "BATTLE_TICK",
-              payload: { dt: 0.4 },
-            });
-            s = transport.getState();
-          }
-          if (s.battle && s.battle.status !== "running") {
-            const captured = s.battle.status === "attacker_win";
-            batch.push(
-              newsFromBattleResult(
-                s.turn,
-                s.battle,
-                prevOwner,
-                captured,
-              ),
-            );
-            transport.dispatch({ type: "RESOLVE_BATTLE" });
-          }
-          // AI still active after auto-occupy — continue outer loop to END_TURN
+          // Primary strike launched — finish the turn after other queued acts.
           break;
         }
-
-        transport.dispatch(action);
         if (action.type === "END_TURN") {
           ended = true;
           break;

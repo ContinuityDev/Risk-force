@@ -212,12 +212,27 @@ function buildTank(recipe, palette) {
   g.add(cyl(0.42, 0.46, 0.36, hullM, 0, 0.92, 0, 0, 0, 20));
   g.add(rbox(0.62, 0.26, 0.62, hullM, 0, 1.1, 0, 0.06));
   g.add(rbox(0.28, 0.14, 0.4, darkM, -0.18, 1.22, 0, 0.03));
-  // Mantlet + long barrel + muzzle brake
+  // Mantlet + armament
   g.add(rbox(0.36, 0.26, 0.36, metalM, 0.48, 1.02, 0, 0.04));
-  const barrelLen = recipe.rail ? 1.75 : 1.45;
-  g.add(cyl(0.05, 0.065, barrelLen, metalM, 0.48 + barrelLen / 2, 1.02, 0, 0, Math.PI / 2, 14));
-  g.add(cyl(0.085, 0.07, 0.16, darkM, 0.48 + barrelLen - 0.02, 1.02, 0, 0, Math.PI / 2));
-  g.add(cyl(0.025, 0.025, 0.5, metalM, 0.7, 1.1, 0.14, 0, Math.PI / 2));
+  if (recipe.aa) {
+    // Twin elevated CIWS barrels
+    for (const z of [-0.14, 0.14]) {
+      const elev = rbox(0.7, 0.1, 0.1, metalM, 0.75, 1.25, z, 0.02);
+      elev.rotation.z = -0.55;
+      g.add(elev);
+      g.add(cyl(0.035, 0.04, 0.85, metalM, 1.05, 1.45, z, 0, Math.PI / 2, 12));
+    }
+    g.add(rbox(0.35, 0.22, 0.55, darkM, 0.35, 1.2, 0, 0.04));
+    // Radar dish
+    const radar = cyl(0.28, 0.28, 0.05, metalM, -0.05, 1.4, 0);
+    radar.rotation.x = Math.PI / 2.6;
+    g.add(radar);
+  } else {
+    const barrelLen = recipe.rail ? 1.75 : 1.45;
+    g.add(cyl(0.05, 0.065, barrelLen, metalM, 0.48 + barrelLen / 2, 1.02, 0, 0, Math.PI / 2, 14));
+    g.add(cyl(0.085, 0.07, 0.16, darkM, 0.48 + barrelLen - 0.02, 1.02, 0, 0, Math.PI / 2));
+    g.add(cyl(0.025, 0.025, 0.5, metalM, 0.7, 1.1, 0.14, 0, Math.PI / 2));
+  }
   addAntenna(g, palette, -0.22, 1.12, 0.2);
   addAntenna(g, palette, -0.08, 1.12, -0.22);
   addFactionStripe(g, palette, 0.58, 0.52);
@@ -247,7 +262,22 @@ function buildHover(recipe, palette) {
   g.add(cyl(0.36, 0.4, 0.32, hullM, -0.05, 0.92, 0));
   g.add(rbox(0.42, 0.2, 0.42, hullM, -0.05, 1.1, 0, 0.05));
   g.add(rbox(0.28, 0.2, 0.28, metalM, 0.38, 0.98, 0, 0.03));
-  g.add(cyl(0.05, 0.065, 1.3, metalM, 1.0, 0.98, 0, 0, Math.PI / 2));
+  if (recipe.ew) {
+    // EMP dish + jammer mast instead of a kinetic barrel
+    const dish = cyl(0.42, 0.42, 0.06, metalM, 0.55, 1.15, 0);
+    dish.rotation.x = Math.PI / 2.4;
+    g.add(dish);
+    g.add(cyl(0.04, 0.04, 0.7, metalM, 0.2, 1.35, -0.1));
+    const pulse = mat(0x40c8ff, {
+      emissive: 0x2080ff,
+      emissiveIntensity: 0.9,
+      roughness: 0.2,
+      weather: false,
+    });
+    g.add(sphere(0.12, pulse, 0.55, 1.15, 0.05));
+  } else {
+    g.add(cyl(0.05, 0.065, 1.3, metalM, 1.0, 0.98, 0, 0, Math.PI / 2));
+  }
   addFactionStripe(g, palette, 0.55, 0.54);
   addAntenna(g, palette, -0.3, 1.0, 0.2);
   return g;
@@ -278,18 +308,36 @@ function buildMech(recipe, palette) {
   // Shoulder pads
   g.add(rbox(0.38, 0.28, 0.4, hullM, -0.58, 2.0, 0, 0.05));
   g.add(rbox(0.38, 0.28, 0.4, hullM, 0.58, 2.0, 0, 0.05));
-  // Weapon arms
-  g.add(rbox(0.6, 0.18, 0.18, metalM, -0.95, 1.85, 0.2, 0.03));
-  g.add(rbox(0.6, 0.18, 0.18, metalM, 0.95, 1.85, 0.2, 0.03));
-  g.add(cyl(0.07, 0.09, 0.75, metalM, -1.25, 1.85, 0.45, 0, Math.PI / 2));
-  g.add(cyl(0.07, 0.09, 0.75, metalM, 1.25, 1.85, 0.45, 0, Math.PI / 2));
+  // Weapon arms — rail walkers get a shoulder mass-driver; siege gets demo claws
+  if (recipe.rail) {
+    g.add(rbox(0.55, 0.32, 0.45, darkM, 0.75, 2.05, -0.05, 0.05));
+    g.add(rbox(0.35, 0.28, 0.35, metalM, 0.95, 2.05, 0.15, 0.04));
+    const railLen = 1.85;
+    g.add(cyl(0.08, 0.1, railLen, metalM, 0.95 + railLen / 2, 2.08, 0.15, 0, Math.PI / 2, 14));
+    g.add(cyl(0.12, 0.1, 0.22, darkM, 0.95 + railLen - 0.05, 2.08, 0.15, 0, Math.PI / 2));
+    g.add(rbox(0.45, 0.16, 0.16, metalM, -0.9, 1.85, 0.15, 0.03));
+  } else if (recipe.siege) {
+    g.add(rbox(0.55, 0.35, 0.35, darkM, -1.0, 1.75, 0.15, 0.05));
+    g.add(rbox(0.55, 0.35, 0.35, darkM, 1.0, 1.75, 0.15, 0.05));
+    g.add(rbox(0.22, 0.55, 0.22, metalM, -1.25, 1.55, 0.35, 0.03));
+    g.add(rbox(0.22, 0.55, 0.22, metalM, 1.25, 1.55, 0.35, 0.03));
+    // Demo charge pods
+    for (const sx of [-0.35, 0.35]) {
+      g.add(cyl(0.14, 0.14, 0.32, darkM, sx, 1.55, 0.35, 0, Math.PI / 2));
+    }
+  } else {
+    g.add(rbox(0.6, 0.18, 0.18, metalM, -0.95, 1.85, 0.2, 0.03));
+    g.add(rbox(0.6, 0.18, 0.18, metalM, 0.95, 1.85, 0.2, 0.03));
+    g.add(cyl(0.07, 0.09, 0.75, metalM, -1.25, 1.85, 0.45, 0, Math.PI / 2));
+    g.add(cyl(0.07, 0.09, 0.75, metalM, 1.25, 1.85, 0.45, 0, Math.PI / 2));
+  }
   addFactionStripe(g, palette, 1.65, 0.28);
   addAntenna(g, palette, 0.22, 2.15, -0.1);
   g.scale.setScalar((recipe.scale ?? 1) * 0.68);
   return g;
 }
 
-function buildOneSoldier(palette, stealth, elite) {
+function buildOneSoldier(palette, stealth, elite, jumpjet) {
   const g = new THREE.Group();
   const hullM = mat(palette.hull, { roughness: 0.6 });
   const darkM = mat(palette.dark);
@@ -303,6 +351,20 @@ function buildOneSoldier(palette, stealth, elite) {
   g.add(rbox(0.38, 0.48, 0.26, hullM, 0, 0.72, 0, 0.04));
   g.add(rbox(0.28, 0.32, 0.14, darkM, 0, 0.75, -0.18, 0.03));
   if (elite) g.add(rbox(0.3, 0.2, 0.1, metalM, 0, 0.78, 0.15, 0.02));
+  if (jumpjet) {
+    // Twin thruster pack + nozzle glow
+    g.add(rbox(0.42, 0.36, 0.22, darkM, 0, 0.78, -0.28, 0.04));
+    for (const sx of [-0.14, 0.14]) {
+      g.add(cyl(0.08, 0.1, 0.28, metalM, sx, 0.62, -0.38));
+      const jet = mat(0xff9030, {
+        emissive: 0xff6010,
+        emissiveIntensity: 1.1,
+        roughness: 0.25,
+        weather: false,
+      });
+      g.add(cyl(0.07, 0.02, 0.22, jet, sx, 0.42, -0.38));
+    }
+  }
   // Arms
   g.add(rbox(0.1, 0.36, 0.1, hullM, -0.28, 0.7, 0.02, 0.02));
   g.add(rbox(0.1, 0.36, 0.1, hullM, 0.28, 0.68, 0.08, 0.02));
@@ -323,12 +385,19 @@ function buildOneSoldier(palette, stealth, elite) {
 function buildInfantry(recipe, palette) {
   const g = new THREE.Group();
   groundShadow(g, 1.1, 0.8);
-  const offsets = recipe.elite
-    ? [[0, 0], [-0.55, 0.32], [0.55, 0.28]]
-    : [[-0.48, 0.32], [0.12, 0], [0.55, 0.38], [-0.12, 0.55]];
+  const offsets = recipe.jumpjet
+    ? [[0, 0], [-0.5, 0.28], [0.5, 0.24]]
+    : recipe.elite
+      ? [[0, 0], [-0.55, 0.32], [0.55, 0.28]]
+      : [[-0.48, 0.32], [0.12, 0], [0.55, 0.38], [-0.12, 0.55]];
   for (const [x, z] of offsets) {
-    const s = buildOneSoldier(palette, recipe.stealth, recipe.elite);
-    s.position.set(x, 0, z);
+    const s = buildOneSoldier(
+      palette,
+      recipe.stealth,
+      recipe.elite,
+      recipe.jumpjet,
+    );
+    s.position.set(x, recipe.jumpjet ? 0.12 : 0, z);
     s.rotation.y = -0.4 + x * 0.12;
     g.add(s);
   }

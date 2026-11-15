@@ -4,6 +4,7 @@ import { getTerritory, TERRITORIES } from "../data/map/territories";
 import { getUnit, UNIT_LIST } from "../data/units";
 import type { GameAction } from "../engine/actions";
 import { forceSupplyCost } from "../engine/economy";
+import { travelTurns } from "../engine/movement";
 import type { GameState, PlayerState, StrikeForceSlot } from "../engine/state";
 import { PickerList } from "./PickerList";
 import { Sprite } from "./Sprite";
@@ -57,6 +58,10 @@ export function InvadeView({
     slots,
     (id) => getUnit(id).supplyCost ?? 1,
   );
+  const eta =
+    fromId && toId && slots.length
+      ? travelTurns(fromId, toId, slots)
+      : null;
 
   const garrisonUnits = UNIT_LIST.filter((u) => (garrison[u.id] ?? 0) > 0);
 
@@ -75,8 +80,8 @@ export function InvadeView({
           <span className="rf-label">Operations</span>
           <h2>Invasion Planning</h2>
           <p className="rf-hint" title={HELP.invasion}>
-            Launch from a local garrison. Capturing razes buildings — bare land
-            + reduced population.
+            March from a local garrison — battle opens on arrival. Capture
+            razes buildings (bare land + reduced population).
           </p>
         </div>
         <p className="rf-resource">
@@ -182,7 +187,7 @@ export function InvadeView({
             })
           }
         >
-          Launch Invasion
+          Launch Invasion{eta != null ? ` · ${eta} turn${eta === 1 ? "" : "s"}` : ""}
         </button>
       </footer>
     </div>
