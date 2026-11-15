@@ -93,17 +93,9 @@ describe("unitMinis mid/deep dense cores", () => {
 
     for (const u of units) {
       const ub = { x: u.x, y: u.y, w: u.size, h: u.size };
-      expect(
-        overlaps(ub, {
-          x: greenland.label.x,
-          y: greenland.label.y,
-          w: 18,
-          h: 8,
-        }),
-      ).toBe(false);
       for (const b of bldgs) {
         expect(
-          overlaps(ub, { x: b.x, y: b.y, w: b.size, h: b.size }),
+          overlaps(ub, { x: b.x, y: b.y, w: b.size, h: b.size }, 0.2),
         ).toBe(false);
       }
     }

@@ -374,8 +374,8 @@ export function layoutUnitMinis(
     // Prefer LEFT of the building band (same vertical strip) so deep-zoom
     // cameras that frame the label keep units on-screen. Above-label is a
     // fallback only — it often clips under the HUD.
-    const sideCy = labelBot + gap + size * 0.55;
-    const sideX = baseX - gridW / 2 - gap - size * 0.35;
+    const sideCy = labelBot + gap + size * 0.7;
+    const sideX = baseX - gridW / 2 - gap - size * 0.75;
     const clearGap = gap + size * 0.35;
     const aboveCy = labelTop - clearGap - gridH / 2;
 
