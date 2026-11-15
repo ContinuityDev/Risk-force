@@ -882,20 +882,17 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               const half = m.size / 2;
               const strokeW = Math.max(0.35, 0.85 * zoomScale);
               if (m.more != null) {
+                if (m.more <= 0) return null;
                 return (
                   <g
                     key={m.key}
                     className="rf-map__unit-more"
                     transform={`translate(${m.x}, ${m.y})`}
                   >
-                    <rect
+                    <circle
                       className="rf-map__unit-hit"
                       data-territory-id={m.territoryId}
-                      x={-half}
-                      y={-half}
-                      width={m.size}
-                      height={m.size}
-                      rx={Math.max(0.35, 1 * zoomScale)}
+                      r={half}
                       fill="rgba(8,14,20,0.82)"
                       stroke={col}
                       strokeWidth={strokeW}
@@ -912,6 +909,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   </g>
                 );
               }
+              // Circular chrome so troop markers never read as empty building pads.
+              const r = half;
               return (
                 <g
                   key={m.key}
@@ -921,21 +920,14 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   transform={`translate(${m.x}, ${m.y})`}
                   opacity={m.transit ? 0.92 : 1}
                 >
-                  <rect
+                  <circle
                     className="rf-map__unit-hit"
                     data-territory-id={m.territoryId}
-                    x={-half - strokeW}
-                    y={-half - strokeW}
-                    width={m.size + strokeW * 2}
-                    height={m.size + strokeW * 2}
+                    r={r + strokeW}
                     fill="transparent"
                   />
-                  <rect
-                    x={-half}
-                    y={-half}
-                    width={m.size}
-                    height={m.size}
-                    rx={Math.max(0.3, 0.95 * zoomScale)}
+                  <circle
+                    r={r}
                     fill={
                       m.compact
                         ? "rgba(10,16,24,0.94)"
@@ -950,12 +942,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     strokeDasharray={m.transit ? "2 1.5" : undefined}
                     pointerEvents="none"
                   />
-                  <rect
-                    x={-half}
-                    y={-half}
-                    width={m.size}
-                    height={Math.max(0.5, m.size * (m.compact ? 0.2 : 0.12))}
-                    rx={Math.max(0.3, 0.95 * zoomScale)}
+                  <circle
+                    r={Math.max(0.55, r * (m.compact ? 0.22 : 0.14))}
+                    cy={-r * 0.72}
                     fill={col}
                     opacity={0.95}
                     pointerEvents="none"
@@ -963,10 +952,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   {m.spriteUrl ? (
                     <image
                       href={m.spriteUrl}
-                      x={-half * 0.88}
-                      y={-half * (m.compact ? 0.7 : 0.76)}
-                      width={m.size * 0.88}
-                      height={m.size * (m.compact ? 0.7 : 0.8)}
+                      x={-half * 0.78}
+                      y={-half * (m.compact ? 0.55 : 0.62)}
+                      width={m.size * 0.78}
+                      height={m.size * (m.compact ? 0.7 : 0.78)}
                       preserveAspectRatio="xMidYMid meet"
                       pointerEvents="none"
                     />
@@ -974,16 +963,16 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   {m.count > 0 && (
                     <g pointerEvents="none">
                       <circle
-                        cx={half * 0.78}
-                        cy={-half * 0.78}
+                        cx={half * 0.72}
+                        cy={-half * 0.72}
                         r={Math.max(2.4, m.size * 0.34)}
                         fill={col}
                         stroke="#f2f7fa"
                         strokeWidth={Math.max(0.3, 0.65 * zoomScale)}
                       />
                       <text
-                        x={half * 0.78}
-                        y={-half * 0.78}
+                        x={half * 0.72}
+                        y={-half * 0.72}
                         textAnchor="middle"
                         dominantBaseline="middle"
                         fontSize={Math.max(3.5, m.size * 0.36)}
@@ -1003,6 +992,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         {buildingMinis.length > 0 && (
           <g className="rf-map__bldgs">
             {buildingMinis.map((m) => {
+              // Belt-and-suspenders: never paint empty compact / +0 leftovers.
+              if (m.compact && (m.count == null || m.count <= 0)) return null;
+              if (m.more != null && m.more <= 0) return null;
               const owner =
                 state.territories[m.territoryId]?.owner ?? "neutral";
               const col = factionColor(owner);
