@@ -283,6 +283,20 @@ export function layoutBuildingMinis(
     }
 
     const sorted = sortBuildings(buildings);
+    // Mid on small Europe plots: one compact pad, not a 3-icon stack.
+    if (tier === "mid" && t.area < 0.012) {
+      const compact = tryPlaceCompact(
+        t,
+        buildings,
+        baseX,
+        belowY,
+        Math.max(size * 0.85, 1.6),
+        gap,
+        occupied,
+      );
+      if (compact) out.push(compact);
+      continue;
+    }
     const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;

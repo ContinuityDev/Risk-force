@@ -371,21 +371,21 @@ export function layoutUnitMinis(
     const rows = Math.ceil(slotCount / cols);
     const gridH = rows * size + (rows - 1) * gap;
     const gridW = cols * size + (cols - 1) * gap;
-    // Prefer LEFT of the building band (same vertical strip) so deep-zoom
-    // cameras that frame the label keep units on-screen. Above-label is a
-    // fallback only — it often clips under the HUD.
-    const sideCy = labelBot + gap + size * 0.7;
-    const sideX = baseX - gridW / 2 - gap - size * 0.75;
-    const clearGap = gap + size * 0.35;
+    // Prefer LEFT/RIGHT of the label at label height — buildings sit BELOW
+    // the label, so this lane stays clear and on-camera at deep zoom.
+    const sideCy = lbl?.y ?? ay;
+    const sideX = baseX - gridW / 2 - gap - size * 1.1;
+    const rightX = baseX + gridW / 2 + gap + size * 1.1;
+    const clearGap = gap + size * 0.4;
     const aboveCy = labelTop - clearGap - gridH / 2;
 
     const anchors = [
       { cx: sideX, cy: sideCy },
-      { cx: sideX, cy: sideCy + size * 0.7 },
-      { cx: sideX - size * 0.6, cy: sideCy },
-      { cx: baseX + gridW / 2 + gap + size * 0.35, cy: sideCy },
+      { cx: sideX - size * 0.5, cy: sideCy },
+      { cx: rightX, cy: sideCy },
+      { cx: sideX, cy: sideCy - size * 0.55 },
       { cx: baseX, cy: aboveCy },
-      { cx: baseX - size * 0.6, cy: aboveCy },
+      { cx: baseX - size * 0.5, cy: aboveCy },
     ];
 
     let placed = false;
