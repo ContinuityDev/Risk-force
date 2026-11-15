@@ -6,17 +6,12 @@
 import { geoArea, geoBounds } from "d3-geo";
 import { feature, merge as topoMerge } from "topojson-client";
 
+/** Only polar / disputed non-playable land stays out of the theater. */
 const SKIP = new Set([
   "Antarctica",
   "Fr. S. Antarctic Lands",
   "N. Cyprus",
   "Somaliland",
-  "Falkland Is.",
-  "New Caledonia",
-  "Puerto Rico",
-  "Vanuatu",
-  "Trinidad and Tobago",
-  "Bahamas",
 ]);
 
 /** Tiny → host country name (Natural Earth). */
@@ -77,6 +72,14 @@ const MERGE_INTO = {
   Ireland: "United Kingdom",
   "Solomon Is.": "Papua New Guinea",
   Fiji: "Papua New Guinea",
+  // Former SKIP islands — every non-Antarctica landmass must belong somewhere
+  "Falkland Is.": "Argentina",
+  "New Caledonia": "Australia",
+  "Puerto Rico": "Cuba",
+  Vanuatu: "Papua New Guinea",
+  "Trinidad and Tobago": "Venezuela",
+  Bahamas: "Cuba",
+  Taiwan: "China",
 };
 
 const CONTINENT_OF = {
@@ -354,10 +357,9 @@ export function buildTerritoryDefs(topo, byName) {
   }
 
   function mergeNames(names) {
-    const ids = new Set(
-      names.map((n) => byName[n]?.id).filter((id) => id != null),
-    );
-    const g = geoms.filter((x) => ids.has(x.id));
+    // Match by name (not id) so id-less features like Kosovo still merge.
+    const nameSet = new Set(names);
+    const g = geoms.filter((x) => nameSet.has(x.properties.name));
     if (!g.length) return { type: "MultiPolygon", coordinates: [] };
     return toMulti(topoMerge(topo, g));
   }
@@ -754,6 +756,7 @@ export function buildTerritoryDefs(topo, byName) {
         neighbors,
         startingOwner: "faction_c",
         coastal: p.coastal !== false,
+        sourceNames: p.sourceNames ?? [],
       };
     });
 

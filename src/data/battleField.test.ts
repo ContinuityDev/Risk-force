@@ -36,4 +36,21 @@ describe("battleField ground plane", () => {
     expect(p.y).toBeGreaterThanOrEqual(z.y0);
     expect(isOnGround(p.x, p.y)).toBe(true);
   });
+
+  it("keeps garrison inside defender zone, clear of NML and deploy", () => {
+    expect(BATTLE_FIELD.garrisonZone.x0).toBeGreaterThanOrEqual(
+      BATTLE_FIELD.defenderZone.x0,
+    );
+    expect(BATTLE_FIELD.garrisonZone.x0).toBeGreaterThanOrEqual(
+      BATTLE_FIELD.noMansLand.x1 - 0.01,
+    );
+    expect(BATTLE_FIELD.garrisonZone.x1).toBeLessThan(
+      BATTLE_FIELD.defenderZone.x1,
+    );
+    expect(BATTLE_FIELD.attackerDeploy.x1).toBeLessThanOrEqual(
+      BATTLE_FIELD.noMansLand.x0 + 0.01,
+    );
+  });
 });
+
+

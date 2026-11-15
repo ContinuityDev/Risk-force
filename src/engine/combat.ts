@@ -108,20 +108,24 @@ export function createBattle(
   const lanes = Math.min(5, Math.max(3, Math.ceil(Math.sqrt(total))));
   const deployH = deploy.y1 - deploy.y0;
   const deployW = deploy.x1 - deploy.x0;
+  const maxDepth = Math.max(1, Math.ceil(total / lanes) - 1);
+  const depthStep = Math.min(0.55, (deployW - 0.7) / Math.max(1, maxDepth));
   forceSlots.forEach((slot, i) => {
     const { unitId, udef } = slot;
     const lane = i % lanes;
     const depth = Math.floor(i / lanes);
     const y =
       deploy.y0 +
-      0.15 +
-      (lane / Math.max(1, lanes - 1)) * (deployH - 0.3);
-    let x = deploy.x0 + 0.2 + depth * (deployW * 0.28);
-    if (udef.role === "artillery") x = deploy.x0 + 0.15 + depth * 0.35;
+      0.25 +
+      (lane / Math.max(1, lanes - 1)) * (deployH - 0.5);
+    let x = deploy.x0 + 0.25 + depth * depthStep;
+    if (udef.role === "artillery") x = deploy.x0 + 0.2 + depth * Math.min(0.4, depthStep);
     else if (udef.role === "air" || udef.role === "orbital")
-      x = deploy.x0 + deployW * 0.45 + (lane % 2) * 0.35;
-    else if (udef.role === "armor" || /hover|tank|rail/i.test(unitId)) x += 0.2;
-    if (lane === 0 || lane === lanes - 1) x += 0.35;
+      x = deploy.x0 + Math.min(deployW * 0.4, 0.9) + (lane % 2) * 0.25;
+    else if (udef.role === "armor" || /hover|tank|rail/i.test(unitId))
+      x = Math.min(x + 0.15, deploy.x1 - 0.35);
+    // Keep every attacker strictly inside the deploy strip (never spill into NML/base).
+    x = Math.min(x, deploy.x1 - 0.3);
     const pos = clampToZone(x, y, deploy);
     units.push({
       id: uid("u", n++),
