@@ -1,6 +1,7 @@
 import { getBuilding } from "../data/buildings";
 import { GAME_LOOP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
+import { getResearch } from "../data/research";
 import { getUnit } from "../data/units";
 import type { GameAction } from "./actions";
 import {
@@ -11,6 +12,8 @@ import {
 import {
   applyEconomyTick,
   canAfford,
+  computeEnergyLedger,
+  computeIncome,
   forceSupplyCost,
   spend,
 } from "./economy";
@@ -29,7 +32,9 @@ import {
   spendCampaignBudget,
 } from "./population";
 import { applyResearch, tickResearchForPlayer } from "./research";
-import type { GameState } from "./state";
+import { disbandUnits } from "./solvency";
+import type { FactionId } from "../data/types";
+import type { GameState, TurnEconomySummary } from "./state";
 import {
   assignBuildingWorkers,
   enqueueUnit,
@@ -37,7 +42,7 @@ import {
   tickTraining,
 } from "./training";
 import { checkEliminationsAndVictory } from "./victory";
-import { disbandUnits } from "./solvency";
+import { checkTurnLimitVictory } from "./victoryPoints";
 
 export { createMenuState };
 
@@ -127,6 +132,12 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "DISMISS_NEWS_DIGEST":
       return { ...state, newsDigest: null };
+
+    case "DISMISS_ECONOMY_SUMMARY":
+      return { ...state, economySummary: null };
+
+    case "SET_PLANNED_ROUTE":
+      return { ...state, plannedRoute: action.payload.path };
 
     case "SET_CAMPAIGN_BUDGET": {
       const pid = activePlayerId(state);
@@ -376,7 +387,12 @@ export function reduce(state: GameState, action: GameAction): GameState {
       const { fromId, toId, force, path } = action.payload;
       const route =
         path.length >= 2
-          ? { path, hops: [] as { fromId: string; toId: string; turns: number }[], totalTurns: 0 }
+          ? findRoute(fromId, toId, force) && path[0] === fromId
+            ? {
+                path,
+                totalTurns: 0,
+              }
+            : { path, totalTurns: 0 }
           : findRoute(fromId, toId, force, {
               avoidEnemy: true,
               owner: pid,
@@ -385,9 +401,21 @@ export function reduce(state: GameState, action: GameAction): GameState {
       if (!route || route.path.length < 2) {
         return { ...state, message: "No route to destination." };
       }
-      // March first hop now; remaining path stored on army via successive orders later.
       const firstTo = route.path[1]!;
-      return startArmyMove(state, pid, fromId, firstTo, force);
+      const marched = startArmyMove(state, pid, fromId, firstTo, force);
+      const army = marched.armiesInTransit?.[marched.armiesInTransit.length - 1];
+      if (!army) return { ...state, message: marched.message ?? "Cannot march." };
+      const withPath = {
+        ...marched,
+        plannedRoute: route.path,
+        armiesInTransit: marched.armiesInTransit!.map((a, i, arr) =>
+          i === arr.length - 1
+            ? { ...a, pathRemaining: route.path.slice(2) }
+            : a,
+        ),
+        message: `Multi-hop march · ${route.path.length - 1} legs.`,
+      };
+      return withPath;
     }
 
     case "START_INVASION": {
@@ -455,6 +483,8 @@ export function reduce(state: GameState, action: GameAction): GameState {
       const pid = activePlayerId(state);
       let cur = state;
       const ending = cur.players[pid];
+      const finishedTraining: string[] = [];
+      const finishedResearch: string[] = [];
       if (!ending || ending.eliminated) {
         // Skip — advance pointer only
       } else {
@@ -464,13 +494,40 @@ export function reduce(state: GameState, action: GameAction): GameState {
           pid,
           spent,
         );
+        // Capture training completions
+        for (const ts of Object.values(territories)) {
+          if (ts.owner !== pid) continue;
+          for (const job of ts.trainingQueue) {
+            if (job.turnsRemaining === 1) {
+              if (job.kind === "worker") {
+                finishedTraining.push(`${job.count}× worker`);
+              } else if (job.unitId) {
+                try {
+                  finishedTraining.push(
+                    `${job.count}× ${getUnit(job.unitId).name}`,
+                  );
+                } catch {
+                  finishedTraining.push(`${job.count}× ${job.unitId}`);
+                }
+              }
+            }
+          }
+        }
         const trained = tickTraining(territories, pid);
         cur = {
           ...cur,
           players: { ...cur.players, [pid]: afterSpend },
           territories: trained,
         };
+        const beforeJob = cur.players[pid]?.researchJob?.nodeId;
         cur = tickResearchForPlayer(cur, pid);
+        if (beforeJob && !cur.players[pid]?.researchJob) {
+          try {
+            finishedResearch.push(getResearch(beforeJob).name);
+          } catch {
+            finishedResearch.push(beforeJob);
+          }
+        }
       }
 
       // Advance to next non-eliminated player (humans first in playerOrder)
@@ -497,9 +554,27 @@ export function reduce(state: GameState, action: GameAction): GameState {
           cur.players[pid]?.kind === "ai"
             ? cur.turnLog
             : [],
+        economySummary: null,
       };
       const nextPid = next.playerOrder[idx]!;
+
+      // Track buildings that will complete this economy tick
+      const finishedBuildings: string[] = [];
+      for (const ts of Object.values(next.territories)) {
+        if (ts.owner !== nextPid) continue;
+        for (const b of ts.buildings) {
+          if (b.buildRemaining === 1) {
+            try {
+              finishedBuildings.push(getBuilding(b.buildingId).name);
+            } catch {
+              finishedBuildings.push(b.buildingId);
+            }
+          }
+        }
+      }
+
       next = applyEconomyTick(next, nextPid);
+      next = checkTurnLimitVictory(next);
       if (next.phase === "ended") return next;
       next = tickArmiesForPlayer(next, nextPid);
       if (next.phase === "battle" || next.phase === "ended") return next;
@@ -508,9 +583,28 @@ export function reduce(state: GameState, action: GameAction): GameState {
       const owned = Object.entries(next.territories).find(
         ([, ts]) => ts.owner === nextPid,
       );
+
+      let economySummary: TurnEconomySummary | null = null;
+      if (p.kind === "human") {
+        const income = computeIncome(next, nextPid);
+        const ledger = computeEnergyLedger(next, nextPid);
+        economySummary = {
+          turn,
+          playerId: nextPid as FactionId,
+          income,
+          upkeep: ledger.upkeep,
+          net: ledger.net,
+          finishedBuildings,
+          // Training/research finished on the previous player's end; show for self only when looping
+          finishedTraining: nextPid === pid ? finishedTraining : [],
+          finishedResearch: nextPid === pid ? finishedResearch : [],
+        };
+      }
+
       return {
         ...next,
         selectedTerritoryId: owned?.[0] ?? null,
+        economySummary,
         message:
           p.kind === "human"
             ? `${p.displayName}'s turn (Turn ${turn}).`

@@ -75,7 +75,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: "move",
     title: "Move troops",
-    body: "From a selected territory, March to a friendly neighbor. Travel takes turns based on the slowest unit in the force — plan ahead.",
+    body: "Army → Reinforce plans multi-hop routes along neighbors. Travel takes turns from distance, slowest unit, and terrain — the map draws your route line.",
     target: "territory-sheet",
     screen: "map",
     needSelection: true,
@@ -83,20 +83,26 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: "army",
     title: "Attack",
-    body: "Army assembles a strike force from a local garrison against an adjacent enemy. Large tappable lists pick origin and target — no tiny dropdowns.",
+    body: "Invade shows stacking/frontage, win odds, expected losses, and strong/weak counters. March from a local garrison; battle opens on arrival.",
     target: "dock-invade",
     screen: "invade",
   },
   {
     id: "battle",
-    title: "Battle deploy zones",
-    body: "In battle, attackers spawn in the left deploy strip, fight across no-man's-land, and hit the defender base on the right. Watch muzzle flashes, tracers, hit sparks, and collapsing wrecks on both sides.",
+    title: "Battle & retreat",
+    body: "Units keep HP between fights. Damaged troops hit softer. Use Retreat to fall back toward your origin if the assault collapses.",
     screen: "map",
   },
   {
     id: "capture",
     title: "After capture",
-    body: "Winning lets you choose how many surviving units occupy the captured land. Buildings are razed — you rebuild on bare ground with reduced population.",
+    body: "Choose Raze (energy bump, wipe buildings) or Keep (damaged structures need repair), then occupation strength. Captured land is occupied until stabilized.",
+    screen: "map",
+  },
+  {
+    id: "logistics",
+    title: "Supply & market",
+    body: "Depots feed local supply stock in a radius — unsupplied armies attrit. Trade energy/alloy/supply on the Orbital Market from the HUD.",
     screen: "map",
   },
   {

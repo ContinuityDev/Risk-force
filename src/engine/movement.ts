@@ -208,6 +208,23 @@ export function tickArmiesForPlayer(
     const dest = territories[army.toId];
     if (!dest) continue;
     if (dest.owner === playerId) {
+      const rest = army.pathRemaining ?? [];
+      if (rest.length > 0) {
+        const nextHop = rest[0]!;
+        const turns = travelTurns(army.toId, nextHop, army.force);
+        remaining.push({
+          ...army,
+          fromId: army.toId,
+          toId: nextHop,
+          turnsRemaining: turns,
+          totalTurns: turns,
+          pathRemaining: rest.slice(1),
+        });
+        log.push(
+          `Column continues ${getTerritory(army.toId).name} → ${getTerritory(nextHop).name}.`,
+        );
+        continue;
+      }
       territories = {
         ...territories,
         [army.toId]: mergeIntoGarrison(dest, army.force),

@@ -104,7 +104,11 @@ export type GameAction =
       };
     }
   | { type: "MARK_NEWS_READ" }
-  | { type: "DISMISS_NEWS_DIGEST" };
+  | { type: "DISMISS_NEWS_DIGEST" }
+  | { type: "DISMISS_ECONOMY_SUMMARY" }
+  | { type: "SET_PLANNED_ROUTE"; payload: { path: string[] | null } };
+
+export type DifficultyId = "easy" | "normal" | "hard";
 
 export interface NewGamePayload {
   humanCount: number;
@@ -114,4 +118,13 @@ export interface NewGamePayload {
   seed?: number;
   /** Optional explicit faction assignment for humans (defaults to player, faction_a...). */
   humanFactions?: FactionId[];
+  /** AI budget / starting tech / aggression. Default normal. */
+  difficulty?: DifficultyId;
+  /**
+   * Optional turn limit for VP race (0 = off). Default win remains total domination
+   * unless turnLimit > 0, in which case highest VP at limit also wins.
+   */
+  turnLimit?: number;
+  /** When true (and turnLimit > 0), VP race is active alongside domination. */
+  victoryPointsEnabled?: boolean;
 }

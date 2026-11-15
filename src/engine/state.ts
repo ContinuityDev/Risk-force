@@ -88,6 +88,8 @@ export interface ArmyTransit {
   force: StrikeForceSlot[];
   turnsRemaining: number;
   totalTurns: number;
+  /** Remaining multi-hop waypoints after `toId` (friendly transit). */
+  pathRemaining?: string[];
 }
 
 /** After a successful attack, choose how many survivors occupy. */
@@ -246,6 +248,17 @@ export interface NewsItem {
   timestamp: number;
 }
 
+export interface TurnEconomySummary {
+  turn: number;
+  playerId: FactionId;
+  income: Record<ResourceId, number>;
+  upkeep: number;
+  net: number;
+  finishedBuildings: string[];
+  finishedTraining: string[];
+  finishedResearch: string[];
+}
+
 export interface GameState {
   version: 1;
   seed: number;
@@ -278,6 +291,13 @@ export interface GameState {
   newsUnread: number;
   /** Auto-shown digest after an AI phase (null when dismissed). */
   newsDigest: NewsItem[] | null;
+  difficulty: "easy" | "normal" | "hard";
+  turnLimit: number;
+  victoryPointsEnabled: boolean;
+  /** Shown at start of human turn. */
+  economySummary: TurnEconomySummary | null;
+  /** Planned multi-hop route polyline (territory ids) for map overlay. */
+  plannedRoute: string[] | null;
 }
 
 export function emptyResources(): Record<ResourceId, number> {
