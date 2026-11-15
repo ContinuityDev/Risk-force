@@ -108,11 +108,13 @@ export function createInitialState(payload: NewGamePayload): GameState {
   const active = new Set(playerOrder);
 
   const territories: Record<string, TerritoryState> = {};
+  // Round-robin orphans (inactive startingOwner) so one faction isn't flooded.
+  let orphanIdx = 0;
   for (const t of TERRITORIES) {
     let owner = t.startingOwner;
     if (!active.has(owner)) {
-      const idx = Math.abs(hash(`${seed}:${t.id}`)) % playerOrder.length;
-      owner = playerOrder[idx]!;
+      owner = playerOrder[orphanIdx % playerOrder.length]!;
+      orphanIdx++;
     }
     territories[t.id] = {
       owner,
@@ -154,10 +156,4 @@ export function createInitialState(payload: NewGamePayload): GameState {
         : "Earth, late 22nd century. Build, research, and reclaim the theater.",
     nextInstanceId: nextId.n,
   };
-}
-
-function hash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
 }

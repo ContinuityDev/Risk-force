@@ -13,7 +13,7 @@ export function WorldMap({ state, dispatch }: WorldMapProps) {
     <div className="rf-map rf-fade-in">
       <svg
         className="rf-map__svg"
-        viewBox="0 0 1000 560"
+        viewBox="0 0 1040 580"
         role="img"
         aria-label="Earth theater map"
       >
@@ -29,8 +29,8 @@ export function WorldMap({ state, dispatch }: WorldMapProps) {
           </radialGradient>
         </defs>
 
-        <rect width="1000" height="560" fill="url(#rf-ocean)" />
-        <rect width="1000" height="560" fill="url(#rf-ocean-glow)" />
+        <rect width="1040" height="580" fill="url(#rf-ocean)" />
+        <rect width="1040" height="580" fill="url(#rf-ocean-glow)" />
 
         {/* subtle latitude lines */}
         {[120, 220, 320, 420].map((y) => (
