@@ -17,8 +17,10 @@ import type {
   BattleState,
   BattleUnit,
   GameState,
+  PendingCapture,
   StrikeForceSlot,
 } from "./state";
+import { checkEliminationsAndVictory } from "./victory";
 
 function dist(ax: number, ay: number, bx: number, by: number): number {
   return Math.hypot(ax - bx, ay - by);
@@ -611,24 +613,33 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
   };
 }
 
+function tallySurvivors(
+  battle: BattleState,
+  side: "attacker" | "defender",
+): StrikeForceSlot[] {
+  const map: Record<string, number> = {};
+  for (const u of battle.units) {
+    if (!u.alive || u.side !== side) continue;
+    map[u.unitId] = (map[u.unitId] ?? 0) + 1;
+  }
+  return Object.entries(map).map(([unitId, count]) => ({ unitId, count }));
+}
+
 export function applyBattleResult(state: GameState): GameState {
   const battle = state.battle;
   if (!battle || battle.status === "running") return state;
 
   const tid = battle.territoryId;
   const ts = state.territories[tid]!;
-  // Surviving defender units → garrison
-  const survivors: Record<string, number> = {};
-  for (const u of battle.units) {
-    if (!u.alive || u.side !== "defender") continue;
-    survivors[u.unitId] = (survivors[u.unitId] ?? 0) + 1;
+  const defSurvivors: Record<string, number> = {};
+  for (const slot of tallySurvivors(battle, "defender")) {
+    defSurvivors[slot.unitId] = slot.count;
   }
 
-  // Map defense HP back by instanceId.
   const hpByInstance = new Map(
     battle.defenses.map((d) => [d.instanceId, d] as const),
   );
-  let buildings = ts.buildings
+  const buildings = ts.buildings
     .map((b) => {
       const match = hpByInstance.get(b.instanceId);
       if (!match) return b;
@@ -638,15 +649,14 @@ export function applyBattleResult(state: GameState): GameState {
 
   let territories = { ...state.territories };
   let message = battle.log[battle.log.length - 1] ?? null;
-  const players = state.players;
-  const nextInstanceId = state.nextInstanceId;
+  const previousOwner = ts.owner;
 
   if (battle.status === "attacker_win") {
-    // Bare land — buildings destroyed; local population remains (reduced)
     const pop = Math.max(
       1,
       Math.floor(ts.population * GAME_LOOP.population.captureRetain),
     );
+    const workers = Math.floor(ts.workers * 0.35);
     territories = {
       ...territories,
       [tid]: {
@@ -654,43 +664,132 @@ export function applyBattleResult(state: GameState): GameState {
         buildings: [],
         supplyStock: Math.floor(ts.supplyStock * 0.2),
         population: pop,
-        workers: Math.floor(ts.workers * 0.35),
+        workers,
         garrison: {},
         trainingQueue: [],
       },
     };
-    message = `${tid} captured — structures razed. Population ${pop} remains.`;
-  } else {
-    territories = {
-      ...territories,
-      [tid]: {
-        ...ts,
-        buildings,
-        garrison: survivors,
-      },
+    const atkSurvivors = tallySurvivors(battle, "attacker");
+    const total = atkSurvivors.reduce((s, x) => s + x.count, 0);
+    const pending: PendingCapture = {
+      territoryId: tid,
+      attacker: battle.attacker,
+      fromId: null,
+      survivors: atkSurvivors,
+      population: pop,
+      workers,
     };
-    message = `Defense of ${tid} holds.`;
+    const attacker = state.players[battle.attacker];
+    // AI auto-occupies; humans get a capture screen
+    if (attacker?.kind === "ai" || total === 0) {
+      const occupied = confirmCaptureOccupation(
+        {
+          ...state,
+          territories,
+          battle: null,
+          pendingCapture: pending,
+        },
+        total,
+      );
+      return checkEliminationsAndVictory(occupied, previousOwner);
+    }
+    return {
+      ...state,
+      territories,
+      battle: null,
+      pendingCapture: pending,
+      phase: "capture",
+      screen: "capture",
+      message: `${tid} captured — choose occupation strength.`,
+    };
   }
 
-  const owners = new Set(Object.values(territories).map((t) => t.owner));
-  let winner = state.winner;
-  let phase: GameState["phase"] = "play";
-  let screen: GameState["screen"] = "map";
-  if (owners.size === 1) {
-    winner = [...owners][0]!;
-    phase = "ended";
-    screen = "victory";
-    message = `${players[winner]?.displayName ?? winner} controls the theater.`;
+  territories = {
+    ...territories,
+    [tid]: {
+      ...ts,
+      buildings,
+      garrison: defSurvivors,
+    },
+  };
+  message = `Defense of ${tid} holds.`;
+
+  return checkEliminationsAndVictory(
+    {
+      ...state,
+      territories,
+      battle: null,
+      phase: "play",
+      screen: "map",
+      message,
+      pendingCapture: null,
+    },
+    previousOwner,
+  );
+}
+
+/** Place `occupyCount` survivors into the captured territory; rest return/home. */
+export function confirmCaptureOccupation(
+  state: GameState,
+  occupyCount: number,
+): GameState {
+  const pending = state.pendingCapture;
+  if (!pending) return state;
+  const total = pending.survivors.reduce((s, x) => s + x.count, 0);
+  const take = Math.max(0, Math.min(total, Math.floor(occupyCount)));
+  const garrison: Record<string, number> = {};
+  const returning: Record<string, number> = {};
+  let left = take;
+  for (const slot of pending.survivors) {
+    const occ = Math.min(slot.count, left);
+    left -= occ;
+    if (occ > 0) garrison[slot.unitId] = (garrison[slot.unitId] ?? 0) + occ;
+    const ret = slot.count - occ;
+    if (ret > 0) returning[slot.unitId] = (returning[slot.unitId] ?? 0) + ret;
+  }
+
+  const tid = pending.territoryId;
+  const ts = state.territories[tid]!;
+  let territories = {
+    ...state.territories,
+    [tid]: { ...ts, garrison },
+  };
+
+  // Return leftover to a friendly origin if possible, else reserves
+  const players = { ...state.players };
+  const attacker = players[pending.attacker]!;
+  if (Object.keys(returning).length) {
+    const homeId =
+      pending.fromId &&
+      territories[pending.fromId]?.owner === pending.attacker
+        ? pending.fromId
+        : Object.entries(territories).find(
+            ([id, t]) => t.owner === pending.attacker && id !== tid,
+          )?.[0];
+    if (homeId) {
+      const home = territories[homeId]!;
+      const g = { ...home.garrison };
+      for (const [id, n] of Object.entries(returning)) {
+        g[id] = (g[id] ?? 0) + n;
+      }
+      territories = { ...territories, [homeId]: { ...home, garrison: g } };
+    } else {
+      const reserves = { ...attacker.reserves };
+      for (const [id, n] of Object.entries(returning)) {
+        reserves[id] = (reserves[id] ?? 0) + n;
+      }
+      players[pending.attacker] = { ...attacker, reserves };
+    }
   }
 
   return {
     ...state,
+    players,
     territories,
+    pendingCapture: null,
     battle: null,
-    phase,
-    winner,
-    screen,
-    message,
-    nextInstanceId,
+    phase: "play",
+    screen: "map",
+    message: `${tid} occupied with ${take} survivors.`,
   };
 }

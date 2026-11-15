@@ -3,7 +3,12 @@ import { isOnGround } from "../data/battleField";
 import { damageMultiplier } from "../data/combatMatrix";
 import { getTerritory } from "../data/map/territories";
 import { createInitialState } from "./init";
-import { applyBattleResult, createBattle, tickBattle } from "./combat";
+import {
+  applyBattleResult,
+  confirmCaptureOccupation,
+  createBattle,
+  tickBattle,
+} from "./combat";
 import { reduce } from "./reducer";
 
 describe("combat matrix", () => {
@@ -87,6 +92,14 @@ describe("battle simulation", () => {
     expect(state.territories[enemy]!.owner).toBe("player");
     expect(state.territories[enemy]!.buildings.length).toBe(0);
     expect(state.battle).toBeNull();
+    // Human attacker gets capture occupation screen
+    expect(state.phase).toBe("capture");
+    expect(state.pendingCapture).toBeTruthy();
+    const total =
+      state.pendingCapture!.survivors.reduce((s, x) => s + x.count, 0) || 0;
+    state = confirmCaptureOccupation(state, total);
+    expect(state.phase).toBe("play");
+    expect(state.pendingCapture).toBeNull();
   });
 
   it("all spawned units and buildings lie on the ground plane", () => {

@@ -28,6 +28,7 @@ export type GameAction =
   | { type: "RESOLVE_BATTLE" }
   | { type: "END_TURN" }
   | { type: "DISMISS_MESSAGE" }
+  | { type: "DISMISS_TURN_LOG" }
   | { type: "LOAD_STATE"; payload: { state: import("./state").GameState } }
   | { type: "SET_CAMPAIGN_BUDGET"; payload: { energy: number } }
   | {
@@ -51,7 +52,17 @@ export type GameAction =
         count: number;
       };
     }
-  | { type: "SET_AI_ATTACK_PLANS"; payload: { plans: AiAttackPlan[] } };
+  | {
+      type: "ORDER_MOVE";
+      payload: {
+        fromId: string;
+        toId: string;
+        force: StrikeForceSlot[];
+      };
+    }
+  | { type: "CONFIRM_CAPTURE"; payload: { occupyCount: number } }
+  | { type: "SET_AI_ATTACK_PLANS"; payload: { plans: AiAttackPlan[] } }
+  | { type: "APPEND_TURN_LOG"; payload: { lines: string[] } };
 
 export interface NewGamePayload {
   humanCount: number;

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CONTINENT_LIST } from "../data/continents";
 import { factionColor } from "../data/factions";
+import { HELP } from "../data/gameLoop";
 import { territoryAbbrev } from "../data/map/abbreviations";
 import {
   LAND_PATH,
@@ -245,6 +247,17 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           >
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#e8b060" />
           </marker>
+          <marker
+            id="rf-march-arrow"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#9fd4e4" />
+          </marker>
         </defs>
 
         <rect width={w} height={h} fill="url(#rf-ocean)" />
@@ -339,6 +352,52 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </g>
         )}
 
+        {/* Armies in transit with ETA */}
+        {(state.armiesInTransit ?? []).length > 0 && (
+          <g className="rf-map__marches" pointerEvents="none">
+            {state.armiesInTransit.map((army) => {
+              const from = TERRITORIES.find((t) => t.id === army.fromId);
+              const to = TERRITORIES.find((t) => t.id === army.toId);
+              if (!from || !to) return null;
+              const progress =
+                1 - army.turnsRemaining / Math.max(1, army.totalTurns);
+              const x1 = from.label.x;
+              const y1 = from.label.y;
+              const x2 = to.label.x;
+              const y2 = to.label.y;
+              const mx = x1 + (x2 - x1) * Math.min(0.85, 0.15 + progress * 0.7);
+              const my =
+                y1 + (y2 - y1) * Math.min(0.85, 0.15 + progress * 0.7) - 6;
+              const col = factionColor(army.owner);
+              const headCount = army.force.reduce((s, f) => s + f.count, 0);
+              return (
+                <g key={army.id}>
+                  <path
+                    d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${(y1 + y2) / 2 - 10} ${x2} ${y2}`}
+                    fill="none"
+                    stroke={col}
+                    strokeWidth={Math.max(1.1, 2 * zoomScale)}
+                    strokeDasharray="5 4"
+                    opacity="0.85"
+                    markerEnd="url(#rf-march-arrow)"
+                  />
+                  <circle cx={mx} cy={my} r={5 * zoomScale} fill={col} />
+                  <text
+                    x={mx}
+                    y={my - 7 * zoomScale}
+                    textAnchor="middle"
+                    className="rf-map__eta"
+                    fontSize={Math.max(7, 9 * zoomScale)}
+                    fill="#e8eef4"
+                  >
+                    ETA {army.turnsRemaining} · {headCount}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        )}
+
         {TERRITORIES.map((t) => {
           const ts = state.territories[t.id];
           const owner = ts?.owner ?? t.startingOwner;
@@ -411,6 +470,23 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           EARTH THEATER · NATURAL EARTH / EQUIRECTANGULAR
         </text>
       </svg>
+
+      <aside className="rf-map__legend" title={HELP.continents}>
+        <span className="rf-label">Continent bonuses</span>
+        <ul>
+          {CONTINENT_LIST.map((c) => (
+            <li key={c.id}>
+              <i style={{ background: c.color }} />
+              <span>
+                {c.name}
+                <small>
+                  +E{c.energy} A{c.alloy} Pop{c.population}
+                </small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </aside>
 
       {state.selectedTerritoryId && (
         <aside className="rf-map__detail">

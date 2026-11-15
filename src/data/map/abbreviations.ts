@@ -1,46 +1,32 @@
-/** Short labels used when the full name won't fit without leaving the territory. */
-export const TERRITORY_ABBREV: Record<string, string> = {
-  alaska: "AK",
-  canada: "CAN",
-  usa: "USA",
-  mexico: "MEX",
-  central_america: "C.AM",
-  greenland: "GRL",
-  venezuela: "G.COL",
-  brazil: "BRA",
-  peru: "AND",
-  argentina: "S.CON",
-  iceland: "ISL",
-  britain: "GBR",
-  scandinavia: "SCN",
-  western_europe: "W.EUR",
-  germany: "C.EUR",
-  southern_europe: "S.EUR",
-  ukraine: "E.EUR",
-  north_africa: "N.AFR",
-  egypt: "EGY",
-  west_africa: "W.AFR",
-  congo: "COG",
-  east_africa: "E.AFR",
-  south_africa: "S.AFR",
-  middle_east: "M.E",
-  central_asia: "C.AS",
-  ural: "W.RUS",
-  siberia: "SIB",
-  yakutsk: "YKT",
-  kamchatka: "F.E",
-  mongolia: "MNG",
-  china: "CHN",
-  india: "IND",
-  southeast_asia: "SE.AS",
-  korea: "KOR",
-  japan: "JPN",
-  indonesia: "IDN",
-  new_guinea: "N.G",
-  western_australia: "W.AUS",
-  eastern_australia: "E.AUS",
+/** Short labels for dense map zoom. */
+const OVERRIDES: Record<string, string> = {
+  united_kingdom: "Britain",
+  usa_west: "W.USA",
+  usa_central: "C.USA",
+  usa_east: "E.USA",
+  canada_west: "W.Can",
+  canada_east: "E.Can",
+  brazil_north: "N.Brazil",
+  brazil_south: "S.Brazil",
+  china_west: "W.China",
+  china_east: "E.China",
+  india_west: "W.India",
+  india_east: "E.India",
+  western_australia: "W.Aus",
+  eastern_australia: "E.Aus",
+  dem_rep_congo: "DRC",
+  central_african_rep: "CAR",
+  united_arab_emirates: "UAE",
+  papua_new_guinea: "N.Guinea",
+  south_korea: "S.Korea",
+  north_korea: "N.Korea",
+  saudi_arabia: "Saudi",
 };
 
-export function territoryAbbrev(id: string, fallbackName: string): string {
-  return TERRITORY_ABBREV[id] ?? fallbackName.slice(0, 3).toUpperCase();
+export function territoryAbbrev(id: string, name: string): string {
+  if (OVERRIDES[id]) return OVERRIDES[id];
+  if (name.length <= 11) return name;
+  const parts = name.replace(/\./g, "").split(/\s+/);
+  if (parts.length >= 2) return parts.map((p) => p[0]).join(".") + ".";
+  return name.slice(0, 9) + "…";
 }

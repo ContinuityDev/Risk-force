@@ -2,6 +2,7 @@ import { useState } from "react";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
 import type { GameAction } from "../engine/actions";
+import { computeEnergyUpkeep } from "../engine/economy";
 import type { GameState, PlayerState, Screen } from "../engine/state";
 
 interface HudProps {
@@ -23,6 +24,7 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
   const r = activePlayer.resources;
   const color = factionColor(activePlayer.id);
   const [helpOpen, setHelpOpen] = useState(false);
+  const upkeep = computeEnergyUpkeep(state, activePlayer.id);
 
   return (
     <header className="rf-hud">
@@ -30,12 +32,18 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
         <span className="rf-label">Turn {state.turn}</span>
         <strong style={{ color }}>{activePlayer.displayName}</strong>
         {!isHumanTurn && <span className="rf-hud__ai">AI executing…</span>}
+        {activePlayer.insolvent && (
+          <span className="rf-hud__warn" title={HELP.upkeep}>
+            Insolvent
+          </span>
+        )}
       </div>
 
       <div className="rf-hud__resources" aria-label="Resources">
-        <span className="rf-resource rf-tick">
+        <span className="rf-resource rf-tick" title={HELP.upkeep}>
           <span className="rf-label">Energy</span>
           <strong>{Math.floor(r.energy)}</strong>
+          <small className="rf-hud__upkeep">−{upkeep}/t</small>
         </span>
         <span className="rf-resource rf-tick">
           <span className="rf-label">Alloy</span>
@@ -112,6 +120,10 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
           <p>{HELP.training}</p>
           <p>{HELP.workers}</p>
           <p>{HELP.invasion}</p>
+          <p>{HELP.upkeep}</p>
+          <p>{HELP.movement}</p>
+          <p>{HELP.continents}</p>
+          <p>{HELP.victory}</p>
           <p>{HELP.ai}</p>
           <button
             type="button"
@@ -119,6 +131,24 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
             onClick={() => setHelpOpen(false)}
           >
             Close
+          </button>
+        </div>
+      )}
+
+      {state.turnLog.length > 0 && (
+        <div className="rf-hud__turnlog" role="status">
+          <span className="rf-label">Turn log</span>
+          <ul>
+            {state.turnLog.slice(-8).map((line, i) => (
+              <li key={`${i}-${line}`}>{line}</li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => dispatch({ type: "DISMISS_TURN_LOG" })}
+          >
+            Clear
           </button>
         </div>
       )}

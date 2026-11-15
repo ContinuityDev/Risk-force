@@ -8,6 +8,7 @@ import { createLocalTransport } from "./net/localTransport";
 import type { Transport } from "./net/transport";
 import { BaseView } from "./components/BaseView";
 import { BattleView } from "./components/BattleView";
+import { CaptureView } from "./components/CaptureView";
 import { Hud } from "./components/Hud";
 import { InvadeView } from "./components/InvadeView";
 import { LobbyScreen } from "./components/LobbyScreen";
@@ -122,6 +123,24 @@ export default function App() {
         return;
       }
       const action = actions[i++]!;
+      const label =
+        action.type === "START_INVASION"
+          ? `${player.displayName} invades ${action.payload.toId}`
+          : action.type === "ORDER_MOVE" || action.type === "MOVE_GARRISON"
+            ? `${player.displayName} marches troops`
+            : action.type === "PLACE_BUILDING"
+              ? `${player.displayName} builds`
+              : action.type === "RESEARCH"
+                ? `${player.displayName} researches`
+                : action.type === "SET_AI_ATTACK_PLANS"
+                  ? `${player.displayName} opens ${action.payload.plans.length} front(s)`
+                  : null;
+      if (label) {
+        transport.dispatch({
+          type: "APPEND_TURN_LOG",
+          payload: { lines: [label] },
+        });
+      }
       transport.dispatch(action);
       if (action.type === "START_INVASION" || action.type === "END_TURN") {
         aiBusy.current = false;
@@ -229,11 +248,14 @@ export default function App() {
   }
 
   if (state.screen === "victory" || state.phase === "ended") {
+    const humanId =
+      Object.values(state.players).find((p) => p.kind === "human")?.id ?? null;
     return (
       <div className="rf-app">
         <VictoryScreen
           winner={state.winner}
           message={state.message}
+          humanId={humanId}
           onMenu={resetToMenu}
         />
       </div>
@@ -291,6 +313,9 @@ export default function App() {
           )}
           {state.screen === "battle" && (
             <BattleView state={state} dispatch={dispatch} />
+          )}
+          {state.screen === "capture" && (
+            <CaptureView state={state} dispatch={dispatch} />
           )}
           {state.screen === "save" && (
             <SaveScreen state={state} dispatch={dispatch} />

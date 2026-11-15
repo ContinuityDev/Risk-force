@@ -30,6 +30,10 @@ const EMPTY_MENU: GameState = {
   message: null,
   nextInstanceId: 1,
   aiAttackPlans: [],
+  armiesInTransit: [],
+  pendingCapture: null,
+  turnLog: [],
+  relations: {},
 };
 
 /**

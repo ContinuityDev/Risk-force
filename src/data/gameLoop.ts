@@ -68,6 +68,43 @@ export const GAME_LOOP = {
     /** On capture, all buildings are wiped (bare land). */
     destroyBuildingsOnCapture: true,
   },
+
+  /**
+   * Energy upkeep (Conflict-of-Nations-like logistics).
+   * Paid each turn after income. Negative energy → insolvent:
+   * production stops next tick, desertFraction of garrison deserts,
+   * workers grant no staffing/build bonuses while insolvent.
+   */
+  upkeep: {
+    perWorker: 1,
+    byRole: {
+      infantry: 1,
+      armor: 3,
+      air: 4,
+      artillery: 3,
+      naval: 4,
+      orbital: 6,
+      cyber: 2,
+    },
+    insolvencyThreshold: 0,
+    desertFraction: 0.15,
+  },
+
+  /** Strategic map movement (centroid distance in SVG px). */
+  movement: {
+    /** World px covered per 1.0 unit speed per turn. */
+    pxPerSpeedPerTurn: 28,
+    /** Sea crossings take this × longer. */
+    seaMultiplier: 1.65,
+    /** Label distance above which a coastal neighbor counts as a sea lane. */
+    seaLinkMinPx: 55,
+    maxTurns: 8,
+  },
+
+  capture: {
+    /** Default fraction of survivors that occupy (AI / slider default). */
+    defaultOccupyFraction: 0.7,
+  },
 } as const;
 
 /** AI personality weights — higher = more emphasis. */
@@ -135,7 +172,15 @@ export const HELP = {
   workers:
     "Workers staff buildings (boosting output up to a cap) and speed construction. Assign them in the base view.",
   invasion:
-    "Attack from an adjacent territory using its garrison. You fight both enemy buildings and units stationed there. Capturing wipes buildings — you get bare land and a reduced local population.",
+    "Attack from an adjacent territory using its garrison. You fight both enemy buildings and units stationed there. Capturing wipes buildings — you get bare land and a reduced local population. After a win, choose how many survivors occupy the new plot.",
   ai:
-    "AI factions defend borders, pick weak targets, and may open flanking fronts based on personality.",
+    "AI factions defend borders, pick weak targets, and may open flanking fronts based on personality. Turns are sequential: you act, then each AI in order.",
+  upkeep:
+    "Units and workers cost energy every turn. If energy goes negative you are insolvent: production stops, workers idle, and some garrison units desert until you recover.",
+  movement:
+    "Move armies between adjacent territories. Travel takes multiple turns based on map distance and the slowest unit; sea crossings are slower. Armies in transit show ETA arrows. Arriving at an enemy territory starts a battle.",
+  continents:
+    "Own every territory on a continent to earn bonus energy, alloy, and population each turn. Bonuses are listed on the map legend.",
+  victory:
+    "Total domination: eliminate every rival by owning all territories. Eliminated factions are announced; the last faction standing wins.",
 } as const;

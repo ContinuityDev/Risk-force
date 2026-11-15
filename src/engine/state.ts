@@ -1,3 +1,4 @@
+import type { RelationsTable } from "../data/diplomacy";
 import type { FactionId, ResourceId } from "../data/types";
 
 /** Placed structure instance on a territory base grid. */
@@ -49,6 +50,33 @@ export interface PlayerState {
   reserves: Record<string, number>;
   /** Energy spent each turn on recruitment campaigning. */
   campaignBudget: number;
+  /** True when energy went negative after upkeep (penalties apply). */
+  insolvent?: boolean;
+  /** Soft-eliminated — no territories left. */
+  eliminated?: boolean;
+}
+
+/** Army marching between territories. */
+export interface ArmyTransit {
+  id: string;
+  owner: FactionId;
+  fromId: string;
+  toId: string;
+  force: StrikeForceSlot[];
+  turnsRemaining: number;
+  totalTurns: number;
+}
+
+/** After a successful attack, choose how many survivors occupy. */
+export interface PendingCapture {
+  territoryId: string;
+  attacker: FactionId;
+  /** Origin of the strike (survivors not occupying return here if friendly). */
+  fromId: string | null;
+  survivors: StrikeForceSlot[];
+  /** Population left on the plot after capture retain. */
+  population: number;
+  workers: number;
 }
 
 /** Snapshot of AI invasion intent for UI / tests. */
@@ -155,6 +183,7 @@ export type Screen =
   | "research"
   | "invade"
   | "battle"
+  | "capture"
   | "save"
   | "victory";
 
@@ -162,7 +191,7 @@ export interface GameState {
   version: 1;
   seed: number;
   turn: number;
-  phase: "play" | "battle" | "ended";
+  phase: "play" | "battle" | "capture" | "ended";
   activePlayerIndex: number;
   playerOrder: FactionId[];
   players: Record<string, PlayerState>;
@@ -176,6 +205,14 @@ export interface GameState {
   nextInstanceId: number;
   /** Last AI multi-front attack plan (for map arrows / debugging). */
   aiAttackPlans: AiAttackPlan[];
+  /** Armies currently marching. */
+  armiesInTransit: ArmyTransit[];
+  /** Capture occupation choice pending after attacker win. */
+  pendingCapture: PendingCapture | null;
+  /** Recent AI / system notices (elimination, arrivals, AI summary). */
+  turnLog: string[];
+  /** Diplomacy hook — unused in combat until a future pass. */
+  relations: RelationsTable;
 }
 
 export function emptyResources(): Record<ResourceId, number> {

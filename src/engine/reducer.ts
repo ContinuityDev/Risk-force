@@ -3,7 +3,12 @@ import { GAME_LOOP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
 import { getUnit } from "../data/units";
 import type { GameAction } from "./actions";
-import { applyBattleResult, createBattle, tickBattle } from "./combat";
+import {
+  applyBattleResult,
+  confirmCaptureOccupation,
+  createBattle,
+  tickBattle,
+} from "./combat";
 import {
   applyEconomyTick,
   canAfford,
@@ -11,6 +16,7 @@ import {
   spend,
 } from "./economy";
 import { createInitialState, createMenuState } from "./init";
+import { startArmyMove, tickArmiesForPlayer } from "./movement";
 import { canPlaceBuilding } from "./placement";
 import {
   applyPopulationGrowth,
@@ -24,6 +30,7 @@ import {
   enqueueWorker,
   tickTraining,
 } from "./training";
+import { checkEliminationsAndVictory } from "./victory";
 
 export { createMenuState };
 
@@ -47,6 +54,15 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "DISMISS_MESSAGE":
       return { ...state, message: null };
+
+    case "DISMISS_TURN_LOG":
+      return { ...state, turnLog: [] };
+
+    case "APPEND_TURN_LOG":
+      return {
+        ...state,
+        turnLog: [...(state.turnLog ?? []), ...action.payload.lines],
+      };
 
     case "SET_CAMPAIGN_BUDGET": {
       const pid = activePlayerId(state);
@@ -224,40 +240,33 @@ export function reduce(state: GameState, action: GameAction): GameState {
     }
 
     case "MOVE_GARRISON": {
+      // Legacy single-unit move → multi-turn march
       const pid = activePlayerId(state);
       const { fromId, toId, unitId, count } = action.payload;
-      const from = state.territories[fromId];
-      const to = state.territories[toId];
-      if (!from || !to || from.owner !== pid || to.owner !== pid) {
-        return { ...state, message: "Move between your own territories." };
-      }
-      const fromDef = getTerritory(fromId);
-      if (!fromDef.neighbors.includes(toId)) {
-        return { ...state, message: "Territories must be adjacent." };
-      }
-      if ((from.garrison[unitId] ?? 0) < count || count < 1) {
-        return { ...state, message: "Not enough units in garrison." };
-      }
-      return {
-        ...state,
-        territories: {
-          ...state.territories,
-          [fromId]: {
-            ...from,
-            garrison: {
-              ...from.garrison,
-              [unitId]: (from.garrison[unitId] ?? 0) - count,
-            },
-          },
-          [toId]: {
-            ...to,
-            garrison: {
-              ...to.garrison,
-              [unitId]: (to.garrison[unitId] ?? 0) + count,
-            },
-          },
-        },
-      };
+      return startArmyMove(state, pid, fromId, toId, [{ unitId, count }]);
+    }
+
+    case "ORDER_MOVE": {
+      if (state.phase !== "play") return state;
+      const pid = activePlayerId(state);
+      return startArmyMove(
+        state,
+        pid,
+        action.payload.fromId,
+        action.payload.toId,
+        action.payload.force,
+      );
+    }
+
+    case "CONFIRM_CAPTURE": {
+      if (state.phase !== "capture" || !state.pendingCapture) return state;
+      const next = confirmCaptureOccupation(state, action.payload.occupyCount);
+      return checkEliminationsAndVictory(
+        next,
+        state.pendingCapture.territoryId
+          ? state.territories[state.pendingCapture.territoryId]?.owner
+          : null,
+      );
     }
 
     case "START_INVASION": {
@@ -348,11 +357,11 @@ export function reduce(state: GameState, action: GameAction): GameState {
       if (state.phase !== "play") return state;
       const pid = activePlayerId(state);
       let cur = state;
-
-      // Campaigning spend + population growth for the player ending their turn
-      {
-        const player = cur.players[pid]!;
-        const { player: afterSpend, spent } = spendCampaignBudget(player);
+      const ending = cur.players[pid];
+      if (!ending || ending.eliminated) {
+        // Skip — advance pointer only
+      } else {
+        const { player: afterSpend, spent } = spendCampaignBudget(ending);
         const territories = applyPopulationGrowth(
           { ...cur, players: { ...cur.players, [pid]: afterSpend } },
           pid,
@@ -366,19 +375,37 @@ export function reduce(state: GameState, action: GameAction): GameState {
         };
       }
 
-      let idx = (cur.activePlayerIndex + 1) % cur.playerOrder.length;
+      // Advance to next non-eliminated player (humans first in playerOrder)
+      let idx = cur.activePlayerIndex;
       let turn = cur.turn;
-      if (idx === 0) turn += 1;
+      let guard = 0;
+      do {
+        idx = (idx + 1) % cur.playerOrder.length;
+        if (idx === 0) turn += 1;
+        guard += 1;
+      } while (
+        guard < cur.playerOrder.length + 1 &&
+        cur.players[cur.playerOrder[idx]!]?.eliminated
+      );
+
       let next: GameState = {
         ...cur,
         activePlayerIndex: idx,
         turn,
         selectedTerritoryId: null,
         screen: "map",
-        aiAttackPlans: idx === 0 ? [] : cur.aiAttackPlans,
+        aiAttackPlans: [],
+        turnLog:
+          cur.players[pid]?.kind === "ai"
+            ? cur.turnLog
+            : [],
       };
       const nextPid = next.playerOrder[idx]!;
       next = applyEconomyTick(next, nextPid);
+      if (next.phase === "ended") return next;
+      next = tickArmiesForPlayer(next, nextPid);
+      if (next.phase === "battle" || next.phase === "ended") return next;
+
       const p = next.players[nextPid]!;
       const owned = Object.entries(next.territories).find(
         ([, ts]) => ts.owner === nextPid,

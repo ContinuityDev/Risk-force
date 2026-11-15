@@ -1,3 +1,4 @@
+import { createDefaultRelations } from "../data/diplomacy";
 import { AI_FACTIONS, FACTION_NAMES } from "../data/factions";
 import { GAME_LOOP } from "../data/gameLoop";
 import { TERRITORIES } from "../data/map/territories";
@@ -40,6 +41,8 @@ function makePlayer(
       kind === "human"
         ? GAME_LOOP.campaigning.defaultBudget
         : GAME_LOOP.campaigning.aiDefaultBudget,
+    insolvent: false,
+    eliminated: false,
   };
 }
 
@@ -270,6 +273,10 @@ export function createInitialState(payload: NewGamePayload): GameState {
     message: `Theater seeded (${seed}). Campaigning drives recruitment — land alone is not enough.`,
     nextInstanceId: nextId.n,
     aiAttackPlans: [],
+    armiesInTransit: [],
+    pendingCapture: null,
+    turnLog: [],
+    relations: createDefaultRelations(playerOrder),
   };
 }
 

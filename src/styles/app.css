@@ -443,6 +443,123 @@
   font-size: 0.85rem;
 }
 
+.rf-hud__upkeep {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--rf-text-dim);
+  letter-spacing: 0.04em;
+}
+
+.rf-hud__warn {
+  margin-left: 0.5rem;
+  color: #c07070;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rf-hud__turnlog {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem 0.75rem;
+  align-items: start;
+  padding: 0.45rem 0.65rem;
+  border: var(--rf-hairline);
+  background: rgba(12, 18, 26, 0.9);
+  font-size: 0.8rem;
+}
+
+.rf-hud__turnlog ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--rf-text-dim);
+}
+
+.rf-hud__turnlog li + li {
+  margin-top: 0.15rem;
+}
+
+.rf-map__legend {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  min-width: 11rem;
+  padding: 0.55rem 0.7rem;
+  border: var(--rf-hairline);
+  background: rgba(8, 12, 16, 0.88);
+  font-size: 0.72rem;
+}
+
+.rf-map__legend ul {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rf-map__legend li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  margin-top: 0.25rem;
+  color: var(--rf-text-dim);
+}
+
+.rf-map__legend i {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: 0.2rem;
+  border-radius: 1px;
+}
+
+.rf-map__legend small {
+  display: block;
+  opacity: 0.75;
+}
+
+.rf-map__eta {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0.04em;
+  paint-order: stroke fill;
+  stroke: #081018;
+  stroke-width: 2.5px;
+}
+
+.rf-capture {
+  display: grid;
+  gap: 1rem;
+}
+
+.rf-capture__panel {
+  max-width: 28rem;
+  padding: 1rem 1.1rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.rf-capture__force {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--rf-text-dim);
+  font-size: 0.9rem;
+}
+
+.rf-capture__slider {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.rf-capture__slider input[type="range"] {
+  width: 100%;
+}
+
 /* ── World map ──────────────────────────────────────────── */
 
 .rf-map {
