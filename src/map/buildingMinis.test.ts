@@ -101,7 +101,8 @@ describe("buildingMinis", () => {
       { x: 0, y: 0, w: 1000, h: 500 },
       [],
     );
-    expect(world.some((m) => m.compact && m.count === 4)).toBe(true);
+    // World zoom leaves the pole to unit strength chips (no building pads).
+    expect(world).toEqual([]);
 
     const midCam = {
       x: tdef.label.x - 225,

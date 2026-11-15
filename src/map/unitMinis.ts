@@ -370,20 +370,22 @@ export function layoutUnitMinis(
         : Math.min(3, slotCount);
     const rows = Math.ceil(slotCount / cols);
     const gridH = rows * size + (rows - 1) * gap;
-    // Extra clearance so unit chips never kiss the label / building band.
-    const clearGap = gap + size * (tier === "deep" ? 0.45 : 0.3);
+    const gridW = cols * size + (cols - 1) * gap;
+    // Prefer LEFT of the building band (same vertical strip) so deep-zoom
+    // cameras that frame the label keep units on-screen. Above-label is a
+    // fallback only — it often clips under the HUD.
+    const sideCy = labelBot + gap + size * 0.55;
+    const sideX = baseX - gridW / 2 - gap - size * 0.35;
+    const clearGap = gap + size * 0.35;
     const aboveCy = labelTop - clearGap - gridH / 2;
-    const sideX = baseX - size * (cols * 0.55 + 0.8);
 
     const anchors = [
+      { cx: sideX, cy: sideCy },
+      { cx: sideX, cy: sideCy + size * 0.7 },
+      { cx: sideX - size * 0.6, cy: sideCy },
+      { cx: baseX + gridW / 2 + gap + size * 0.35, cy: sideCy },
       { cx: baseX, cy: aboveCy },
-      { cx: baseX - size * 0.8, cy: aboveCy },
-      { cx: baseX + size * 0.8, cy: aboveCy },
-      { cx: sideX, cy: aboveCy },
-      {
-        cx: sideX,
-        cy: (lbl?.y ?? ay) - size * 0.35,
-      },
+      { cx: baseX - size * 0.6, cy: aboveCy },
     ];
 
     let placed = false;

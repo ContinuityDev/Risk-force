@@ -50,7 +50,7 @@ function greenlandState(): Record<string, TerritoryState> {
 }
 
 describe("unitMinis mid/deep dense cores", () => {
-  it("keeps a multi-type mid grid above Greenland buildings/label", () => {
+  it("keeps a multi-type mid grid beside Greenland buildings without overlap", () => {
     const greenland = TERRITORIES.find((t) => t.id === "greenland")!;
     const cam = {
       x: greenland.label.x - 160,
@@ -92,13 +92,18 @@ describe("unitMinis mid/deep dense cores", () => {
     expect(units.some((u) => u.more && u.more > 0)).toBe(true);
 
     for (const u of units) {
-      expect(u.y + u.size / 2).toBeLessThanOrEqual(greenland.label.y + 0.5);
+      const ub = { x: u.x, y: u.y, w: u.size, h: u.size };
+      expect(
+        overlaps(ub, {
+          x: greenland.label.x,
+          y: greenland.label.y,
+          w: 18,
+          h: 8,
+        }),
+      ).toBe(false);
       for (const b of bldgs) {
         expect(
-          overlaps(
-            { x: u.x, y: u.y, w: u.size, h: u.size },
-            { x: b.x, y: b.y, w: b.size, h: b.size },
-          ),
+          overlaps(ub, { x: b.x, y: b.y, w: b.size, h: b.size }),
         ).toBe(false);
       }
     }

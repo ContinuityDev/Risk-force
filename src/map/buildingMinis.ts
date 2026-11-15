@@ -277,19 +277,8 @@ export function layoutBuildingMinis(
       : ay + size * 0.9;
 
     if (tier === "world") {
-      // Skip tiny plots so Europe doesn't fill with overlapping pads.
-      if (t.area < 0.0045) continue;
-      if (zoomScale >= 0.9 && t.area < 0.006) continue;
-      const compact = tryPlaceCompact(
-        t,
-        buildings,
-        baseX,
-        belowY,
-        size,
-        gap,
-        occupied,
-      );
-      if (compact) out.push(compact);
+      // World zoom: unit strength chips own the pole. Building pads at this
+      // scale just double-stack Europe into an unreadible cloud.
       continue;
     }
 
