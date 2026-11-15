@@ -1,0 +1,352 @@
+#!/usr/bin/env node
+/**
+ * Invade button/picker/arrows, unit minis mid+deep, research new units,
+ * battle with expansion units. 844x390 + 1280x800.
+ */
+import { mkdirSync, copyFileSync } from "node:fs";
+import { join } from "node:path";
+import { chromium } from "playwright";
+
+const BASE = process.env.RF_URL ?? "http://127.0.0.1:5173/Risk-force/";
+const OUT = "/opt/cursor/artifacts";
+const TMP = "/tmp/cursor/screenshots-invade-units";
+mkdirSync(OUT, { recursive: true });
+mkdirSync(TMP, { recursive: true });
+
+const RESEARCH = [
+  "jumpjet_doctrine",
+  "rail_walker_frames",
+  "emp_field_ops",
+  "siege_mech_corps",
+  "stealth_recon",
+  "aa_doctrine",
+  "theater_airlift",
+  "orbital_fire_control",
+  "elite_ops",
+  "infantry_doctrine",
+  "spec_ops",
+  "mech_corps",
+  "walker_chassis",
+  "mass_drivers",
+  "emp_warfare",
+  "electronic_warfare",
+  "cyber_doctrine",
+  "titan_frames",
+  "siege_protocols",
+  "drone_swarm",
+  "sensor_fusion",
+  "grav_armor",
+  "point_defense_grid",
+  "orbital_defense",
+  "heavy_airlift",
+  "theater_logistics",
+  "supply_chains",
+  "field_repair",
+  "orbital_weapons",
+  "orbital_uplink",
+  "cyber_infantry",
+  "nano_industry",
+  "plasma_doctrine",
+];
+
+const browser = await chromium.launch({ headless: true });
+
+async function shot(page, name) {
+  const path = join(TMP, `${name}.png`);
+  await page.screenshot({ path, fullPage: false });
+  copyFileSync(path, join(OUT, `${name}.png`));
+  console.log("saved", name);
+}
+
+function wheelAt(page, svgSel, clientX, clientY, deltaY, times) {
+  return page.evaluate(
+    ({ sel, x, y, dy, n }) => {
+      const el = document.querySelector(sel);
+      if (!el) throw new Error("missing svg");
+      for (let i = 0; i < n; i++) {
+        el.dispatchEvent(
+          new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            deltaY: dy,
+          }),
+        );
+      }
+    },
+    { sel: svgSel, x: clientX, y: clientY, dy: deltaY, n: times },
+  );
+}
+
+async function boot(page) {
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.locator(".rf-menu button.primary").click();
+  await page.waitForSelector(".rf-lobby");
+  await page.locator(".rf-lobby button.primary").click();
+  await page.waitForSelector(".rf-map");
+  await page.waitForFunction(() => window.__RF__?.neighbors, null, {
+    timeout: 20000,
+  });
+  await page.evaluate(() => {
+    window.__RF__.dispatch({
+      type: "NEW_GAME",
+      payload: {
+        humanCount: 1,
+        aiCount: 2,
+        multiplayerMode: "solo",
+        seed: 77,
+      },
+    });
+  });
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "DISMISS_MESSAGE" });
+    window.__RF__.dispatch({ type: "DISMISS_NEWS_DIGEST" });
+  });
+}
+
+async function seed(page) {
+  return page.evaluate((research) => {
+    const s = window.__RF__.getState();
+    const neigh = window.__RF__.neighbors;
+    let fromId = null;
+    let toId = null;
+    for (const [id, ts] of Object.entries(s.territories)) {
+      if (ts.owner !== "player") continue;
+      for (const n of neigh[id] || []) {
+        if (s.territories[n]?.owner && s.territories[n].owner !== "player") {
+          fromId = id;
+          toId = n;
+          break;
+        }
+      }
+      if (fromId) break;
+    }
+    const territories = { ...s.territories };
+    for (const [tid, ts] of Object.entries(territories)) {
+      if (ts.owner !== "player") continue;
+      territories[tid] = {
+        ...ts,
+        garrison: {
+          trooper: 5,
+          jumpjet_trooper: 2,
+          hover_tank: 2,
+          aa_tank: 1,
+          railgun_walker: 1,
+          emp_disruptor: 1,
+          stealth_recon_drone: 2,
+          heavy_siege_mech: 1,
+          airlift_dropship: 1,
+        },
+      };
+    }
+    if (fromId) {
+      territories[fromId] = {
+        ...territories[fromId],
+        garrison: {
+          trooper: 8,
+          jumpjet_trooper: 4,
+          aa_tank: 2,
+          railgun_walker: 2,
+          emp_disruptor: 2,
+          heavy_siege_mech: 1,
+          stealth_recon_drone: 2,
+          airlift_dropship: 1,
+        },
+      };
+    }
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...s,
+          territories,
+          battle: null,
+          phase: "play",
+          screen: "map",
+          pendingCapture: null,
+          message: null,
+          newsDigest: null,
+          armiesInTransit: [],
+          activePlayerIndex: 0,
+          players: {
+            ...s.players,
+            player: {
+              ...s.players.player,
+              researched: Array.from(
+                new Set([
+                  ...(s.players.player.researched ?? []),
+                  ...research,
+                ]),
+              ),
+              resources: {
+                ...s.players.player.resources,
+                supply: 120,
+                energy: 800,
+                alloy: 500,
+                research: 400,
+              },
+            },
+          },
+        },
+      },
+    });
+    return { fromId, toId };
+  }, RESEARCH);
+}
+
+async function suite(page, tag) {
+  await boot(page);
+  const ids = await seed(page);
+  console.log("seed", tag, ids);
+  await page.waitForTimeout(300);
+
+  const svgBox = await page.locator(".rf-map__svg").boundingBox();
+  if (!svgBox) throw new Error("no svg");
+
+  // Select origin + zoom toward its on-screen label so minis stay framed
+  await page.evaluate((tid) => {
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: tid },
+    });
+  }, ids.fromId);
+  await page.waitForTimeout(450);
+
+  async function zoomOnLabel(times) {
+    const box = await page.locator(".rf-map__svg").boundingBox();
+    if (!box) return;
+    const pt = await page.evaluate(() => {
+      const texts = [...document.querySelectorAll(".rf-map__labels text, .rf-map text")];
+      const hit =
+        texts.find((t) => /Greenland|Sahara|Canada|Algeria/i.test(t.textContent || "")) ??
+        texts[0];
+      if (!hit) return null;
+      const r = hit.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    const x = pt?.x ?? box.x + box.width * 0.38;
+    const y = pt?.y ?? box.y + box.height * 0.45;
+    await wheelAt(page, ".rf-map__svg", x, y, -120, times);
+    await page.waitForTimeout(350);
+  }
+
+  await zoomOnLabel(8);
+  await shot(page, `risk-force-unit-minis-mid${tag}`);
+  await zoomOnLabel(14);
+  await shot(page, `risk-force-unit-minis-deep${tag}`);
+
+  // Enemy territory → Invade button
+  await page.evaluate((tid) => {
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: tid },
+    });
+  }, ids.toId);
+  await page.waitForTimeout(500);
+  // Ensure drawer open on short landscape
+  const toggle = page.locator(".rf-map__sheet-toggle").first();
+  if ((await toggle.count()) && !(await page.locator('button:has-text("Invade")').count())) {
+    // try opening detail via selecting again
+  }
+  await shot(page, `risk-force-invade-button${tag}`);
+
+  const invadeBtn = page.locator('button:has-text("Invade")');
+  if (await invadeBtn.count()) {
+    await invadeBtn.first().click();
+    await page.waitForTimeout(500);
+    await shot(page, `risk-force-invade-picker${tag}`);
+    await shot(page, `risk-force-invade-arrows${tag}`);
+    const confirm = page.locator('button:has-text("Confirm invasion")');
+    if (await confirm.count()) {
+      await confirm.first().click();
+      await page.waitForTimeout(500);
+      await shot(page, `risk-force-invade-march${tag}`);
+    }
+  } else {
+    console.warn("no Invade button", tag);
+  }
+
+  // Research tree
+  await page.evaluate(() => {
+    window.__RF__.dispatch({
+      type: "SET_SCREEN",
+      payload: { screen: "research" },
+    });
+  });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    const prefer =
+      /Jump-Jet Doctrine|Rail Walker Frames|EMP Field Ops|Siege Mech Corps|Stealth Recon|AA Doctrine|Theater Airlift|Orbital Fire Control|Elite Ops/i;
+    const el = [...document.querySelectorAll("button, li")].find((n) =>
+      prefer.test((n.textContent || "").slice(0, 120)),
+    );
+    el?.scrollIntoView?.({ block: "center", inline: "center" });
+    // Also scroll the infantry/armor columns into view
+    const armor = [...document.querySelectorAll("h3")].find((h) =>
+      /Armor|Infantry/i.test(h.textContent || ""),
+    );
+    armor?.scrollIntoView?.({ block: "start", inline: "nearest" });
+  });
+  await page.waitForTimeout(350);
+  await shot(page, `risk-force-research-new-units${tag}`);
+
+  // Battle with new units
+  await page.evaluate(({ toId }) => {
+    const s = window.__RF__.getState();
+    const force = [
+      { unitId: "jumpjet_trooper", count: 3 },
+      { unitId: "railgun_walker", count: 1 },
+      { unitId: "emp_disruptor", count: 1 },
+      { unitId: "aa_tank", count: 1 },
+      { unitId: "heavy_siege_mech", count: 1 },
+    ];
+    const battle = window.__RF__.createBattle(s, toId, "player", force);
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...s,
+          battle,
+          phase: "battle",
+          screen: "battle",
+          message: null,
+          newsDigest: null,
+        },
+      },
+    });
+  }, ids);
+  await page.waitForTimeout(700);
+  // Advance battle a bit so attack anims show
+  for (let i = 0; i < 25; i++) {
+    await page.evaluate(() =>
+      window.__RF__.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.12 } }),
+    );
+  }
+  await page.waitForTimeout(200);
+  await shot(page, `risk-force-battle-new-units${tag}`);
+}
+
+{
+  const ctx = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const page = await ctx.newPage();
+  await suite(page, "");
+  await ctx.close();
+}
+
+{
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+  });
+  const page = await ctx.newPage();
+  await suite(page, "-desktop");
+  await ctx.close();
+}
+
+await browser.close();
+console.log("Done");

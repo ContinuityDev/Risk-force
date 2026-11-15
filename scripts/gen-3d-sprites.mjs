@@ -135,9 +135,17 @@ async function bakeList(items, category) {
   }
 }
 
-await bakeList(catalog.units, "units");
-await bakeList(catalog.buildings, "buildings");
-await bakeList(catalog.fx, "fx");
+const only = new Set(process.argv.slice(2).filter((a) => !a.startsWith("-")));
+function filter(items) {
+  if (!only.size) return items;
+  return items.filter((item) => only.has(item.id));
+}
+
+await bakeList(filter(catalog.units), "units");
+if (!only.size) {
+  await bakeList(catalog.buildings, "buildings");
+  await bakeList(catalog.fx, "fx");
+}
 
 await browser.close();
 server.close();

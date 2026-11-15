@@ -9,6 +9,7 @@ import {
   createBattle,
   tickBattle,
 } from "./combat";
+import { tickArmiesForPlayer } from "./movement";
 import { reduce } from "./reducer";
 
 describe("combat matrix", () => {
@@ -173,7 +174,7 @@ describe("battle simulation", () => {
     }
   });
 
-  it("START_INVASION through reducer enters battle phase", () => {
+  it("START_INVASION marches and battles on arrival", () => {
     let state = createInitialState({
       humanCount: 1,
       aiCount: 2,
@@ -212,9 +213,23 @@ describe("battle simulation", () => {
         force: [{ unitId: "trooper", count: 4 }],
       },
     });
-    expect(state.phase).toBe("battle");
+    expect(state.phase).toBe("play");
+    expect(state.armiesInTransit?.length).toBeGreaterThan(0);
+    const army = state.armiesInTransit!.find((a) => a.toId === to);
+    expect(army?.force[0]?.count).toBe(4);
+    const cur = tickArmiesForPlayer(
+      {
+        ...state,
+        armiesInTransit: state.armiesInTransit!.map((a) => ({
+          ...a,
+          turnsRemaining: 1,
+        })),
+      },
+      "player",
+    );
+    expect(cur.phase).toBe("battle");
     expect(
-      state.battle?.units.filter((u) => u.side === "attacker").length,
+      cur.battle?.units.filter((u) => u.side === "attacker").length,
     ).toBe(4);
   });
 });

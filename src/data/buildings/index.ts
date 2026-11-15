@@ -532,6 +532,8 @@ export const BUILDINGS: Record<string, BuildingDef> = {
       "heavy_walker",
       "stealth_operative",
       "cyber_commando",
+      "jumpjet_trooper",
+      "elite_commando",
     ],
     sprite: { id: "building-barracks", frameW: 48, frameH: 48 },
     anims: {
@@ -562,6 +564,10 @@ export const BUILDINGS: Record<string, BuildingDef> = {
       "siege_cannon",
       "plasma_howitzer",
       "cruise_launcher",
+      "railgun_walker",
+      "heavy_siege_mech",
+      "aa_tank",
+      "emp_disruptor",
     ],
     sprite: { id: "building-vehicle-factory", frameW: 64, frameH: 48 },
     anims: {
@@ -589,6 +595,8 @@ export const BUILDINGS: Record<string, BuildingDef> = {
       "stealth_bomber",
       "interceptor_drone",
       "assault_dropship",
+      "stealth_recon_drone",
+      "airlift_dropship",
     ],
     sprite: { id: "building-airfield", frameW: 64, frameH: 48 },
     anims: {
@@ -667,6 +675,7 @@ export const BUILDINGS: Record<string, BuildingDef> = {
       "orbital_laser_platform",
       "kinetic_rod_battery",
       "satellite_relay",
+      "orbital_strike_uplink",
     ],
     requiresResearch: "orbital_uplink",
     sprite: { id: "building-uplink", frameW: 64, frameH: 48 },

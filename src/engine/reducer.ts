@@ -299,6 +299,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
     }
 
     case "START_INVASION": {
+      // March into the target — battle opens on arrival via tickArmiesForPlayer.
       if (state.phase !== "play") return state;
       const pid = activePlayerId(state);
       const player = state.players[pid]!;
@@ -318,6 +319,11 @@ export function reduce(state: GameState, action: GameAction): GameState {
       if (!force.length || force.every((f) => f.count <= 0)) {
         return { ...state, message: "Assemble a strike force." };
       }
+      for (const slot of force) {
+        if ((from.garrison[slot.unitId] ?? 0) < slot.count) {
+          return { ...state, message: "Not enough units in local garrison." };
+        }
+      }
       const supplyNeed = forceSupplyCost(
         force,
         (id) => getUnit(id).supplyCost ?? 1,
@@ -328,27 +334,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
           message: `Insufficient supply (need ${supplyNeed}).`,
         };
       }
-      // Draw from local garrison (not global reserves)
-      const garrison = { ...from.garrison };
-      for (const slot of force) {
-        if ((garrison[slot.unitId] ?? 0) < slot.count) {
-          return { ...state, message: "Not enough units in local garrison." };
-        }
-        garrison[slot.unitId] = (garrison[slot.unitId] ?? 0) - slot.count;
-      }
-      const battle = createBattle(
-        {
-          ...state,
-          territories: {
-            ...state.territories,
-            [fromId]: { ...from, garrison },
-          },
-        },
-        toId,
-        pid,
-        force,
-      );
-      return {
+      const withSupply: GameState = {
         ...state,
         players: {
           ...state.players,
@@ -360,14 +346,14 @@ export function reduce(state: GameState, action: GameAction): GameState {
             },
           },
         },
-        territories: {
-          ...state.territories,
-          [fromId]: { ...from, garrison },
-        },
-        battle,
-        phase: "battle",
-        screen: "battle",
-        message: `Strike force inbound to ${getTerritory(toId).name}.`,
+      };
+      const marched = startArmyMove(withSupply, pid, fromId, toId, force);
+      if (!(marched.armiesInTransit?.length ?? 0)) {
+        return { ...state, message: marched.message ?? "Cannot invade." };
+      }
+      return {
+        ...marched,
+        message: `Invasion force marching on ${getTerritory(toId).name}.`,
       };
     }
 
