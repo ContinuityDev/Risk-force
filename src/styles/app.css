@@ -278,6 +278,35 @@
   letter-spacing: 0.06em;
 }
 
+.rf-install {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  max-width: 16rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.rf-install__ios {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rf-install__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--rf-text-dim);
+  line-height: 1.4;
+  text-align: left;
+}
+
+.rf-install__dismiss {
+  font-size: 0.75rem;
+}
+
 /* ── Lobby ──────────────────────────────────────────────── */
 
 .rf-lobby {
@@ -1912,6 +1941,274 @@
   color: var(--rf-text-dim);
 }
 
+/* ── Rotate overlay (portrait on touch) ─────────────────── */
+
+.rf-rotate {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 30%, #1a2838 0%, transparent 60%),
+    #070e18;
+  color: var(--rf-text);
+  text-align: center;
+}
+
+.rf-rotate__card {
+  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rf-rotate__card h1 {
+  font-size: 1.35rem;
+  letter-spacing: 0.08em;
+}
+
+.rf-rotate__card p {
+  margin: 0;
+  color: var(--rf-text-dim);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.rf-rotate__icon {
+  color: var(--rf-accent);
+  margin-bottom: 0.35rem;
+  animation: rf-rotate-wiggle 2.4s ease-in-out infinite;
+}
+
+.rf-rotate__note {
+  font-size: 0.72rem !important;
+  color: var(--rf-text-faint) !important;
+}
+
+@keyframes rf-rotate-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  35% {
+    transform: rotate(90deg);
+  }
+  55% {
+    transform: rotate(90deg);
+  }
+}
+
+@media (orientation: portrait) and (hover: none) {
+  .rf-rotate {
+    display: flex;
+  }
+
+  .rf-shell,
+  .rf-menu,
+  .rf-lobby,
+  .rf-victory {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .rf-rotate {
+    display: flex;
+  }
+}
+
+/* ── Touch tooltips / place confirm ─────────────────────── */
+
+.rf-touch-tooltip {
+  position: fixed;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 9000;
+  max-width: min(92vw, 28rem);
+  padding: 0.65rem 0.9rem;
+  background: rgba(8, 12, 16, 0.96);
+  border: var(--rf-hairline);
+  color: var(--rf-text);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.rf-base__place-confirm {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  background: rgba(8, 12, 18, 0.94);
+  border: var(--rf-hairline);
+  font-size: 0.8rem;
+}
+
+.rf-base__place-confirm span {
+  flex: 1 1 8rem;
+  color: var(--rf-text-dim);
+}
+
+.rf-resource--energy.is-held .rf-hud__ledger {
+  display: flex;
+}
+
+.rf-hud__nav-toggle {
+  display: none;
+}
+
+.rf-base__drawer-toggle,
+.rf-battle__log-toggle {
+  display: none;
+}
+
+/* ── Rotate overlay (portrait on touch) ─────────────────── */
+
+.rf-rotate {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 30%, #1a2838 0%, transparent 60%),
+    #070e18;
+  color: var(--rf-text);
+  text-align: center;
+}
+
+.rf-rotate__card {
+  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rf-rotate__card h1 {
+  font-size: 1.35rem;
+  letter-spacing: 0.08em;
+}
+
+.rf-rotate__card p {
+  margin: 0;
+  color: var(--rf-text-dim);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.rf-rotate__icon {
+  color: var(--rf-accent);
+  margin-bottom: 0.35rem;
+  animation: rf-rotate-wiggle 2.4s ease-in-out infinite;
+}
+
+.rf-rotate__note {
+  font-size: 0.72rem !important;
+  color: var(--rf-text-faint) !important;
+}
+
+@keyframes rf-rotate-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  35% {
+    transform: rotate(90deg);
+  }
+  55% {
+    transform: rotate(90deg);
+  }
+}
+
+@media (orientation: portrait) and (hover: none) {
+  .rf-rotate {
+    display: flex;
+  }
+
+  .rf-shell,
+  .rf-menu,
+  .rf-lobby,
+  .rf-victory {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .rf-rotate {
+    display: flex;
+  }
+}
+
+/* ── Touch tooltips / place confirm ─────────────────────── */
+
+.rf-touch-tooltip {
+  position: fixed;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 9000;
+  max-width: min(92vw, 28rem);
+  padding: 0.65rem 0.9rem;
+  background: rgba(8, 12, 16, 0.96);
+  border: var(--rf-hairline);
+  color: var(--rf-text);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.rf-base__place-confirm {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  background: rgba(8, 12, 18, 0.94);
+  border: var(--rf-hairline);
+  font-size: 0.8rem;
+}
+
+.rf-base__place-confirm span {
+  flex: 1 1 8rem;
+  color: var(--rf-text-dim);
+}
+
+.rf-resource--energy.is-held .rf-hud__ledger {
+  display: flex;
+}
+
+.rf-hud__nav-toggle {
+  display: none;
+}
+
+.rf-base__drawer-toggle,
+.rf-battle__log-toggle {
+  display: none;
+}
+
 /* ── Responsive ─────────────────────────────────────────── */
 
 @media (max-width: 900px) {
@@ -1935,5 +2232,280 @@
   .rf-map__detail {
     position: static;
     margin-top: 0.65rem;
+  }
+}
+
+/*
+ * Short landscape phones (~360–430px tall, ~740–930px wide).
+ * Collapsible drawers, 44px tap targets, safe-area, readable HUD.
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --rf-tap: 44px;
+  }
+
+  html,
+  body,
+  #root {
+    font-size: 13px;
+  }
+
+  .rf-app,
+  .rf-shell {
+    min-height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .rf-main {
+    padding: 0.35rem 0.55rem
+      max(0.45rem, env(safe-area-inset-bottom, 0px));
+    max-width: none;
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rf-hud {
+    grid-template-columns: auto 1fr auto;
+    gap: 0.35rem 0.55rem;
+    padding: 0.35rem max(0.55rem, env(safe-area-inset-right, 0px))
+      0.35rem max(0.55rem, env(safe-area-inset-left, 0px));
+    padding-top: max(0.35rem, env(safe-area-inset-top, 0px));
+  }
+
+  .rf-hud__identity strong {
+    font-size: 0.85rem;
+  }
+
+  .rf-hud__resources {
+    gap: 0.45rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .rf-hud__nav {
+    position: relative;
+    justify-content: flex-end;
+  }
+
+  .rf-hud__nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--rf-tap);
+    min-width: var(--rf-tap);
+    padding: 0.35rem 0.75rem;
+  }
+
+  .rf-hud__nav-items {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.25rem);
+    z-index: 40;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 9.5rem;
+    padding: 0.4rem;
+    background: rgba(12, 18, 26, 0.98);
+    border: var(--rf-hairline);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  .rf-hud__nav.is-open .rf-hud__nav-items {
+    display: flex;
+  }
+
+  .rf-hud__nav-items button,
+  .rf-hud__nav button {
+    min-height: var(--rf-tap);
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .rf-hud__help,
+  .rf-hud__turnlog {
+    max-height: 28vh;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .rf-hud__message {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.45rem;
+  }
+
+  .rf-map {
+    position: relative;
+    height: calc(100dvh - 3.2rem);
+    max-height: calc(100dvh - 3.2rem);
+  }
+
+  .rf-map__svg {
+    height: 100%;
+    width: 100%;
+    touch-action: none;
+  }
+
+  .rf-map__hint {
+    display: none;
+  }
+
+  .rf-map__detail {
+    position: absolute;
+    left: 0.4rem;
+    right: auto;
+    bottom: 0.4rem;
+    max-width: min(42vw, 14rem);
+    max-height: 42vh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    font-size: 0.78rem;
+    padding: 0.55rem 0.65rem;
+    z-index: 5;
+  }
+
+  .rf-map__detail button {
+    min-height: var(--rf-tap);
+  }
+
+  .rf-view-header {
+    margin-bottom: 0.45rem;
+    padding-bottom: 0.35rem;
+    align-items: center;
+  }
+
+  .rf-view-header h2 {
+    font-size: 0.95rem;
+  }
+
+  .rf-base {
+    position: relative;
+    height: calc(100dvh - 3.2rem);
+    max-height: calc(100dvh - 3.2rem);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rf-base .rf-view-header {
+    flex: 0 0 auto;
+  }
+
+  .rf-base__layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    gap: 0.35rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .rf-base__yard {
+    max-width: 100%;
+    max-height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-x pan-y;
+  }
+
+  .rf-base__drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--rf-tap);
+    width: 100%;
+  }
+
+  .rf-base__catalog {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    max-height: min(70dvh, 22rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.65rem 0.75rem
+      max(0.75rem, env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    border-radius: var(--rf-radius) var(--rf-radius) 0 0;
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.55);
+  }
+
+  .rf-base__catalog.is-open {
+    display: block;
+  }
+
+  .rf-base__catalog button,
+  .rf-base__train-list button,
+  .rf-base__staff-control input,
+  .rf-invade__stepper button {
+    min-height: var(--rf-tap);
+  }
+
+  .rf-battle__stage {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .rf-battle__viewport {
+    max-height: calc(100dvh - 5rem);
+  }
+
+  .rf-battle__log-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--rf-tap);
+    width: 100%;
+  }
+
+  .rf-battle__log {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    max-height: min(55dvh, 16rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 0.65rem 0.75rem
+      max(0.75rem, env(safe-area-inset-bottom, 0px));
+    background: rgba(12, 18, 26, 0.98);
+    border-top: var(--rf-hairline);
+  }
+
+  .rf-battle__log.is-open {
+    display: block;
+  }
+
+  .rf-invade,
+  .rf-research,
+  .rf-save {
+    max-height: calc(100dvh - 3.2rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .rf-invade__force li,
+  .rf-research__list button {
+    min-height: var(--rf-tap);
+  }
+
+  button,
+  .rf-field select,
+  .rf-field input {
+    min-height: var(--rf-tap);
+  }
+}
+
+/* Desktop / tall screens: nav items always visible; toggle hidden */
+@media (min-width: 901px), (min-height: 501px) {
+  .rf-hud__nav-items {
+    display: contents;
   }
 }

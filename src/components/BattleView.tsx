@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { BATTLE_FIELD } from "../data/battleField";
 import { getBuilding } from "../data/buildings";
 import { factionName } from "../data/factions";
@@ -108,6 +108,8 @@ function ProjectileLayer({ p }: { p: BattleState["projectiles"][number] }) {
 
 export function BattleView({ state, dispatch }: BattleViewProps) {
   const battle = state.battle;
+  const [tooltip, setTooltip] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
 
   const title = useMemo(() => {
     if (!battle) return "Battle";
@@ -139,6 +141,15 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
 
   return (
     <div className="rf-battle rf-fade-in">
+      {tooltip && (
+        <div
+          className="rf-touch-tooltip"
+          role="tooltip"
+          onClick={() => setTooltip(null)}
+        >
+          {tooltip}
+        </div>
+      )}
       <header className="rf-view-header">
         <div>
           <span className="rf-label">Engagement</span>
@@ -235,6 +246,7 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             } catch {
               /* */
             }
+            const tip = `${d.buildingId} · HP ${Math.ceil(d.hp)}/${d.maxHp}`;
             return (
               <div
                 key={d.id}
@@ -252,6 +264,20 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   top: pos.top,
                   width: size,
                   height: size,
+                }}
+                title={tip}
+                onPointerDown={(e) => {
+                  if (e.pointerType === "mouse") return;
+                  const t = window.setTimeout(() => setTooltip(tip), 480);
+                  const clear = () => {
+                    window.clearTimeout(t);
+                    window.removeEventListener("pointerup", clear);
+                    window.removeEventListener("pointercancel", clear);
+                  };
+                  window.addEventListener("pointerup", clear, { once: true });
+                  window.addEventListener("pointercancel", clear, {
+                    once: true,
+                  });
                 }}
               >
                 {(d.buildingId.includes("shield") ||
@@ -307,6 +333,13 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             const wreck = !u.alive;
             // Hide long-lived grey ghosts — keep burnt wrecks briefly then drop.
             if (wreck && u.animT > 2.4) return null;
+            let unitName = u.unitId;
+            try {
+              unitName = getUnit(u.unitId).name;
+            } catch {
+              /* */
+            }
+            const tip = `${unitName} (${u.side}) · HP ${Math.ceil(u.hp)}/${u.maxHp}`;
             return (
               <div
                 key={u.id}
@@ -326,6 +359,20 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   top: pos.top,
                   width: size,
                   height: size,
+                }}
+                title={tip}
+                onPointerDown={(e) => {
+                  if (e.pointerType === "mouse") return;
+                  const t = window.setTimeout(() => setTooltip(tip), 480);
+                  const clear = () => {
+                    window.clearTimeout(t);
+                    window.removeEventListener("pointerup", clear);
+                    window.removeEventListener("pointercancel", clear);
+                  };
+                  window.addEventListener("pointerup", clear, { once: true });
+                  window.addEventListener("pointercancel", clear, {
+                    once: true,
+                  });
                 }}
               >
                 {wreck ? (
@@ -454,7 +501,15 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
           </div>
         </div>
 
-        <aside className="rf-battle__log">
+        <button
+          type="button"
+          className="ghost rf-battle__log-toggle"
+          aria-expanded={logOpen}
+          onClick={() => setLogOpen((v) => !v)}
+        >
+          {logOpen ? "Hide log" : "Combat log"}
+        </button>
+        <aside className={`rf-battle__log${logOpen ? " is-open" : ""}`}>
           <span className="rf-label">Combat log</span>
           <ul>
             {battle.log.length === 0 && (

@@ -114,17 +114,24 @@ function resolveRelative(id: string): string {
   return ALIASES[id] ?? defaultPath(id);
 }
 
+/** Public asset base (respects Vite `base` for GitHub Pages). */
+function assetUrl(path: string): string {
+  const base = import.meta.env.BASE_URL || "/";
+  const trimmed = path.replace(/^\//, "");
+  return `${base}${trimmed}`;
+}
+
 /** Resolve a sprite id to a public URL under `/sprites/`. */
 export function getSpriteUrl(id: string): string {
   if (!id) return PLACEHOLDER;
-  return `/sprites/${resolveRelative(id)}`;
+  return assetUrl(`sprites/${resolveRelative(id)}`);
 }
 
 /** Directional sheet URL (`…-dirs.png`), or null if single-facing. */
 export function getDirectionalSheetUrl(id: string): string | null {
   if (!id || getDirectionCount(id) <= 1) return null;
   const rel = resolveRelative(id);
-  return `/sprites/${rel.replace(/\.png$/, "-dirs.png")}`;
+  return assetUrl(`sprites/${rel.replace(/\.png$/, "-dirs.png")}`);
 }
 
 export function getDirectionCount(id: string): number {
