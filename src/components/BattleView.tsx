@@ -215,18 +215,27 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
               Resolve & Continue
             </button>
           ) : (
-            <button
-              type="button"
-              className="rf-battle__skip"
-              onClick={() => {
-                for (let i = 0; i < 240; i++) {
-                  dispatch({ type: "BATTLE_TICK", payload: { dt: 0.25 } });
-                }
-                dispatch({ type: "RESOLVE_BATTLE" });
-              }}
-            >
-              Skip Battle
-            </button>
+            <>
+              <button
+                type="button"
+                className="rf-battle__retreat"
+                onClick={() => dispatch({ type: "RETREAT_BATTLE" })}
+              >
+                Retreat
+              </button>
+              <button
+                type="button"
+                className="rf-battle__skip"
+                onClick={() => {
+                  for (let i = 0; i < 240; i++) {
+                    dispatch({ type: "BATTLE_TICK", payload: { dt: 0.25 } });
+                  }
+                  dispatch({ type: "RESOLVE_BATTLE" });
+                }}
+              >
+                Skip Battle
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -247,18 +256,27 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             Resolve
           </button>
         ) : (
-          <button
-            type="button"
-            className="rf-battle__skip"
-            onClick={() => {
-              for (let i = 0; i < 240; i++) {
-                dispatch({ type: "BATTLE_TICK", payload: { dt: 0.25 } });
-              }
-              dispatch({ type: "RESOLVE_BATTLE" });
-            }}
-          >
-            Skip
-          </button>
+          <>
+            <button
+              type="button"
+              className="rf-battle__retreat"
+              onClick={() => dispatch({ type: "RETREAT_BATTLE" })}
+            >
+              Retreat
+            </button>
+            <button
+              type="button"
+              className="rf-battle__skip"
+              onClick={() => {
+                for (let i = 0; i < 240; i++) {
+                  dispatch({ type: "BATTLE_TICK", payload: { dt: 0.25 } });
+                }
+                dispatch({ type: "RESOLVE_BATTLE" });
+              }}
+            >
+              Skip
+            </button>
+          </>
         )}
       </div>
 

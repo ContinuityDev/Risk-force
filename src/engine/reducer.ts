@@ -5,8 +5,7 @@ import { getUnit } from "../data/units";
 import type { GameAction } from "./actions";
 import {
   applyBattleResult,
-  confirmCaptureOccupation,
-  createBattle,
+  retreatBattle,
   tickBattle,
 } from "./combat";
 import {
@@ -16,13 +15,20 @@ import {
   spend,
 } from "./economy";
 import { createInitialState, createMenuState } from "./init";
+import { payInvasionSupply } from "./logistics";
+import { applyMarketTrade } from "./market";
 import { startArmyMove, tickArmiesForPlayer } from "./movement";
+import {
+  resolveCaptureDisposition,
+  stabilizeTerritory,
+} from "./occupation";
+import { findRoute } from "./pathfinding";
 import { canPlaceBuilding } from "./placement";
 import {
   applyPopulationGrowth,
   spendCampaignBudget,
 } from "./population";
-import { applyResearch } from "./research";
+import { applyResearch, tickResearchForPlayer } from "./research";
 import type { GameState } from "./state";
 import {
   assignBuildingWorkers,
@@ -31,6 +37,7 @@ import {
   tickTraining,
 } from "./training";
 import { checkEliminationsAndVictory } from "./victory";
+import { disbandUnits } from "./solvency";
 
 export { createMenuState };
 
@@ -45,12 +52,40 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "LOAD_STATE": {
       const s = action.payload.state;
+      const territories: typeof s.territories = {};
+      for (const [id, ts] of Object.entries(s.territories ?? {})) {
+        territories[id] = {
+          ...ts,
+          garrisonHp: ts.garrisonHp ?? {},
+          control: ts.control ?? "core",
+          occupiedTurns: ts.occupiedTurns ?? 0,
+          movedThisTurn: ts.movedThisTurn ?? false,
+        };
+      }
+      const players: typeof s.players = {};
+      for (const [id, p] of Object.entries(s.players ?? {})) {
+        players[id] = { ...p, researchJob: p.researchJob ?? null };
+      }
       return {
         ...s,
+        territories,
+        players,
         newsFeed: s.newsFeed ?? [],
         newsUnread: s.newsUnread ?? 0,
         newsDigest: s.newsDigest ?? null,
         turnLog: s.turnLog ?? [],
+        battle: s.battle
+          ? {
+              ...s.battle,
+              fromId: s.battle.fromId ?? null,
+              mods: s.battle.mods ?? {
+                terrainDealt: 1,
+                defenderIncoming: 1,
+                attackerFrontage: 1,
+                defenderFrontage: 1,
+              },
+            }
+          : null,
       };
     }
 
@@ -184,10 +219,11 @@ export function reduce(state: GameState, action: GameAction): GameState {
       const player = state.players[pid]!;
       const next = applyResearch(player, action.payload.nodeId);
       if (!next) return { ...state, message: "Cannot research that yet." };
+      const turns = next.researchJob?.totalTurns ?? 1;
       return {
         ...state,
         players: { ...state.players, [pid]: next },
-        message: "Research complete.",
+        message: `Research started (${turns} turn${turns === 1 ? "" : "s"}).`,
       };
     }
 
@@ -289,7 +325,12 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "CONFIRM_CAPTURE": {
       if (state.phase !== "capture" || !state.pendingCapture) return state;
-      const next = confirmCaptureOccupation(state, action.payload.occupyCount);
+      const disposition = action.payload.disposition ?? "raze";
+      const next = resolveCaptureDisposition(
+        state,
+        disposition,
+        action.payload.occupyCount,
+      );
       return checkEliminationsAndVictory(
         next,
         state.pendingCapture.territoryId
@@ -298,11 +339,61 @@ export function reduce(state: GameState, action: GameAction): GameState {
       );
     }
 
+    case "STABILIZE_TERRITORY": {
+      if (state.phase !== "play") return state;
+      return stabilizeTerritory(
+        state,
+        action.payload.territoryId,
+        activePlayerId(state),
+      );
+    }
+
+    case "MARKET_TRADE": {
+      if (state.phase !== "play") return state;
+      return applyMarketTrade(
+        state,
+        activePlayerId(state),
+        action.payload.from,
+        action.payload.to,
+        action.payload.amount,
+      );
+    }
+
+    case "DISBAND_UNITS": {
+      if (state.phase !== "play") return state;
+      return disbandUnits(
+        state,
+        activePlayerId(state),
+        action.payload.territoryId,
+        action.payload.unitId,
+        action.payload.count,
+      );
+    }
+
+    case "ORDER_ROUTE": {
+      if (state.phase !== "play") return state;
+      const pid = activePlayerId(state);
+      const { fromId, toId, force, path } = action.payload;
+      const route =
+        path.length >= 2
+          ? { path, hops: [] as { fromId: string; toId: string; turns: number }[], totalTurns: 0 }
+          : findRoute(fromId, toId, force, {
+              avoidEnemy: true,
+              owner: pid,
+              territories: state.territories,
+            });
+      if (!route || route.path.length < 2) {
+        return { ...state, message: "No route to destination." };
+      }
+      // March first hop now; remaining path stored on army via successive orders later.
+      const firstTo = route.path[1]!;
+      return startArmyMove(state, pid, fromId, firstTo, force);
+    }
+
     case "START_INVASION": {
       // March into the target — battle opens on arrival via tickArmiesForPlayer.
       if (state.phase !== "play") return state;
       const pid = activePlayerId(state);
-      const player = state.players[pid]!;
       const { fromId, toId, force } = action.payload;
       const from = state.territories[fromId];
       const to = state.territories[toId];
@@ -328,25 +419,13 @@ export function reduce(state: GameState, action: GameAction): GameState {
         force,
         (id) => getUnit(id).supplyCost ?? 1,
       );
-      if (player.resources.supply < supplyNeed) {
+      const withSupply = payInvasionSupply(state, pid, fromId, supplyNeed);
+      if (!withSupply) {
         return {
           ...state,
           message: `Insufficient supply (need ${supplyNeed}).`,
         };
       }
-      const withSupply: GameState = {
-        ...state,
-        players: {
-          ...state.players,
-          [pid]: {
-            ...player,
-            resources: {
-              ...player.resources,
-              supply: player.resources.supply - supplyNeed,
-            },
-          },
-        },
-      };
       const marched = startArmyMove(withSupply, pid, fromId, toId, force);
       if (!(marched.armiesInTransit?.length ?? 0)) {
         return { ...state, message: marched.message ?? "Cannot invade." };
@@ -368,6 +447,9 @@ export function reduce(state: GameState, action: GameAction): GameState {
     case "RESOLVE_BATTLE":
       return applyBattleResult(state);
 
+    case "RETREAT_BATTLE":
+      return retreatBattle(state);
+
     case "END_TURN": {
       if (state.phase !== "play") return state;
       const pid = activePlayerId(state);
@@ -388,6 +470,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
           players: { ...cur.players, [pid]: afterSpend },
           territories: trained,
         };
+        cur = tickResearchForPlayer(cur, pid);
       }
 
       // Advance to next non-eliminated player (humans first in playerOrder)

@@ -34,7 +34,28 @@ export interface TerritoryState {
   workers: number;
   /** Units stationed on this plot (defend / launch invasions). */
   garrison: Record<string, number>;
+  /**
+   * Parallel HP arrays for garrison units (length === count per unitId).
+   * Omitted / short arrays are treated as full HP at battle spawn.
+   */
+  garrisonHp: Record<string, number[]>;
   trainingQueue: TrainingJob[];
+  /**
+   * Homeland core vs captured occupation.
+   * Cores: starting territories. Occupied: captured (reduced output until stabilized).
+   */
+  control: "core" | "occupied" | "stabilized";
+  /** Turns this territory has been continuously garrisoned while occupied. */
+  occupiedTurns: number;
+  /** Units that moved out or arrived this turn — no fortified bonus next battle. */
+  movedThisTurn?: boolean;
+}
+
+/** Active multi-turn research job (1–N turns). */
+export interface ResearchJob {
+  nodeId: string;
+  turnsRemaining: number;
+  totalTurns: number;
 }
 
 export interface PlayerState {
@@ -43,6 +64,8 @@ export interface PlayerState {
   displayName: string;
   resources: Record<ResourceId, number>;
   researched: string[];
+  /** In-progress research — completes via tickResearch. */
+  researchJob: ResearchJob | null;
   /**
    * Global staging pool (legacy / overflow). Prefer territorial garrisons.
    * Still used as a soft buffer when capturing / demobilizing.
@@ -77,6 +100,9 @@ export interface PendingCapture {
   /** Population left on the plot after capture retain. */
   population: number;
   workers: number;
+  /** Buildings surviving the battle (for Keep disposition). */
+  buildings: PlacedBuilding[];
+  supplyStock: number;
 }
 
 /** Snapshot of AI invasion intent for UI / tests. */
@@ -89,6 +115,8 @@ export interface AiAttackPlan {
 export interface StrikeForceSlot {
   unitId: string;
   count: number;
+  /** Current HP per unit (length === count). Omitted = all at maxHp. */
+  hps?: number[];
 }
 
 export interface BattleUnit {
@@ -168,6 +196,8 @@ export interface BattleState {
   territoryId: string;
   attacker: FactionId;
   defender: FactionId;
+  /** Origin territory of the arriving army (retreat / leftover returns). */
+  fromId: string | null;
   units: BattleUnit[];
   defenses: BattleDefense[];
   projectiles: BattleProjectile[];
@@ -175,8 +205,15 @@ export interface BattleState {
   scorches: BattleScorch[];
   time: number;
   elapsed: number;
-  status: "running" | "attacker_win" | "defender_win";
+  status: "running" | "attacker_win" | "defender_win" | "retreated";
   log: string[];
+  /** Snapshot combat modifiers at battle start. */
+  mods: {
+    terrainDealt: number;
+    defenderIncoming: number;
+    attackerFrontage: number;
+    defenderFrontage: number;
+  };
 }
 
 export type Screen =

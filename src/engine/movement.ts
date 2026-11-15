@@ -9,6 +9,12 @@ import { SEA_ROUTES } from "../data/map/earthPaths";
 import { getTerritory } from "../data/map/territories";
 import { getUnit } from "../data/units";
 import { createBattle } from "./combat";
+import { travelBiomeMult } from "./combatMods";
+import {
+  mergeIntoGarrison,
+  normalizeForce,
+  takeFromGarrison,
+} from "./garrisonHp";
 import type {
   ArmyTransit,
   GameState,
@@ -91,6 +97,7 @@ export function travelTurns(
   if (isSeaLink(fromId, toId)) {
     turns = Math.ceil(turns * GAME_LOOP.movement.seaMultiplier);
   }
+  turns = Math.ceil(turns * travelBiomeMult(toId));
   return Math.max(1, Math.min(GAME_LOOP.movement.maxTurns, turns));
 }
 
@@ -122,17 +129,6 @@ export function canOrderMove(
   return { ok: true };
 }
 
-function mergeForce(
-  garrison: Record<string, number>,
-  force: StrikeForceSlot[],
-): Record<string, number> {
-  const next = { ...garrison };
-  for (const slot of force) {
-    next[slot.unitId] = (next[slot.unitId] ?? 0) + slot.count;
-  }
-  return next;
-}
-
 /** Deduct garrison and enqueue a transit army. */
 export function startArmyMove(
   state: GameState,
@@ -144,19 +140,24 @@ export function startArmyMove(
   const check = canOrderMove(state, playerId, fromId, toId, force);
   if (!check.ok) return { ...state, message: check.reason };
 
-  const from = state.territories[fromId]!;
-  const garrison = { ...from.garrison };
-  for (const slot of force) {
-    garrison[slot.unitId] = (garrison[slot.unitId] ?? 0) - slot.count;
-    if (garrison[slot.unitId]! <= 0) delete garrison[slot.unitId];
+  let from = state.territories[fromId]!;
+  const taken: StrikeForceSlot[] = [];
+  for (const slot of force.filter((f) => f.count > 0)) {
+    const pulled = takeFromGarrison(from, slot.unitId, slot.count);
+    if (!pulled) {
+      return { ...state, message: "Not enough units in garrison." };
+    }
+    from = pulled.territory;
+    taken.push({ unitId: slot.unitId, count: slot.count, hps: pulled.hps });
   }
-  const turns = travelTurns(fromId, toId, force);
+  const marchForce = normalizeForce(taken);
+  const turns = travelTurns(fromId, toId, marchForce);
   const army: ArmyTransit = {
     id: `army_${state.nextInstanceId}`,
     owner: playerId as ArmyTransit["owner"],
     fromId,
     toId,
-    force: force.filter((f) => f.count > 0),
+    force: marchForce,
     turnsRemaining: turns,
     totalTurns: turns,
   };
@@ -166,7 +167,7 @@ export function startArmyMove(
     nextInstanceId: state.nextInstanceId + 1,
     territories: {
       ...state.territories,
-      [fromId]: { ...from, garrison },
+      [fromId]: { ...from, movedThisTurn: true },
     },
     armiesInTransit: [...(state.armiesInTransit ?? []), army],
     message: `Army en route to ${getTerritory(toId).name} · ETA ${turns} turn${turns === 1 ? "" : "s"}.`,
@@ -209,16 +210,13 @@ export function tickArmiesForPlayer(
     if (dest.owner === playerId) {
       territories = {
         ...territories,
-        [army.toId]: {
-          ...dest,
-          garrison: mergeForce(dest.garrison, army.force),
-        },
+        [army.toId]: mergeIntoGarrison(dest, army.force),
       };
       log.push(`Reinforcements arrived in ${getTerritory(army.toId).name}.`);
       continue;
     }
     const snap: GameState = { ...state, territories };
-    battle = createBattle(snap, army.toId, playerId, army.force);
+    battle = createBattle(snap, army.toId, playerId, army.force, army.fromId);
     battleMessage = `Arriving army engages in ${getTerritory(army.toId).name}.`;
     log.push(`Arrival battle · ${getTerritory(army.toId).name}.`);
   }

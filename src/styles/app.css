@@ -2195,6 +2195,14 @@
 .rf-battle__actions {
   display: flex;
   gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rf-battle__retreat {
+  border-color: color-mix(in srgb, var(--rf-danger, #c45c4a) 55%, transparent);
+  color: var(--rf-danger, #e8a090);
+  background: color-mix(in srgb, var(--rf-danger, #c45c4a) 12%, transparent);
 }
 
 .rf-battle__legend {
