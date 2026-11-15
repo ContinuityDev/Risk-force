@@ -596,7 +596,33 @@ export function BaseView({
             </section>
           )}
           <span className="rf-label">Structures</span>
-          <ul data-tutorial="base-build-menu">
+          {selectedBuilding && (() => {
+            const def = getBuilding(selectedBuilding);
+            return (
+              <div className="rf-base__detail" data-tutorial="base-build-menu">
+                <header>
+                  <Sprite id={def.sprite.id} size={40} anim="idle" />
+                  <div>
+                    <strong>{def.name}</strong>
+                    <small>
+                      {def.size.w}×{def.size.h} · E{def.cost.energy}
+                      {def.cost.alloy ? ` · A${def.cost.alloy}` : ""}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost rf-base__detail-close"
+                    aria-label="Close dossier"
+                    onClick={() => setSelectedBuilding(null)}
+                  >
+                    ×
+                  </button>
+                </header>
+                <p className="rf-base__blurb">{buildingBlurb(def)}</p>
+              </div>
+            );
+          })()}
+          <ul data-tutorial={selectedBuilding ? undefined : "base-build-menu"}>
             {catalog.map((b) => {
               const unlocked = isUnlocked(activePlayer, b.id);
               const affordable = canAfford(activePlayer, b.cost);
@@ -637,11 +663,6 @@ export function BaseView({
                       </small>
                     </span>
                   </button>
-                  {selected && (
-                    <p className="rf-base__blurb rf-base__blurb--menu">
-                      {buildingBlurb(b)}
-                    </p>
-                  )}
                 </li>
               );
             })}

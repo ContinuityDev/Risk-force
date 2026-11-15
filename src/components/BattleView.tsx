@@ -22,25 +22,28 @@ interface DmgFloater {
   side: "atk" | "def";
 }
 
-/** Muzzle flash offset as % of actor box, keyed by 8-dir frame. */
+/** Muzzle flash offset as % of actor box, keyed by 8-dir frame (barrel tip). */
 const MUZZLE_8: Array<{ left: string; top: string }> = [
-  { left: "88%", top: "42%" }, // E
-  { left: "78%", top: "72%" }, // SE
-  { left: "50%", top: "88%" }, // S
-  { left: "22%", top: "72%" }, // SW
-  { left: "12%", top: "42%" }, // W
-  { left: "22%", top: "18%" }, // NW
-  { left: "50%", top: "10%" }, // N
-  { left: "78%", top: "18%" }, // NE
+  { left: "92%", top: "46%" }, // E
+  { left: "82%", top: "78%" }, // SE
+  { left: "50%", top: "92%" }, // S
+  { left: "18%", top: "78%" }, // SW
+  { left: "8%", top: "46%" }, // W
+  { left: "18%", top: "16%" }, // NW
+  { left: "50%", top: "8%" }, // N
+  { left: "82%", top: "16%" }, // NE
 ];
 
-function muzzleStyle(facing: number, spriteId: string) {
+function muzzleStyle(facing: number, spriteId: string): CSSProperties {
   const n = getDirectionCount(spriteId);
-  const frame = angleToDirFrame(facing, n);
-  if (n === 8) return MUZZLE_8[frame] ?? MUZZLE_8[0];
-  // Approximate for other counts via 8-dir table
   const mapped = angleToDirFrame(facing, 8);
-  return MUZZLE_8[mapped] ?? MUZZLE_8[0];
+  const pos = MUZZLE_8[n === 8 ? angleToDirFrame(facing, n) : mapped] ?? MUZZLE_8[0]!;
+  const deg = (facing * 180) / Math.PI;
+  return {
+    left: pos.left,
+    top: pos.top,
+    transform: `translate(-50%, -50%) rotate(${deg}deg)`,
+  };
 }
 
 interface BattleViewProps {
@@ -73,44 +76,35 @@ function zoneStyle(z: {
 }
 
 function ProjectileLayer({ p }: { p: BattleState["projectiles"][number] }) {
-  const x0 = (p.x / FIELD_W) * 100;
-  const y0 = (p.y / FIELD_H) * 100;
-  const x1 = (p.tx / FIELD_W) * 100;
-  const y1 = (p.ty / FIELD_H) * 100;
-  const cx = x0 + (x1 - x0) * p.progress;
-  const cy = y0 + (y1 - y0) * p.progress;
+  const sx = ((p.sx ?? p.x) / FIELD_W) * 100;
+  const sy = ((p.sy ?? p.y) / FIELD_H) * 100;
+  const tipX = (p.x / FIELD_W) * 100;
+  const tipY = (p.y / FIELD_H) * 100;
+  const dx = tipX - sx;
+  const dy = tipY - sy;
+  const len = Math.hypot(dx, dy);
+  const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
   const style = p.style;
-
-  if (style === "laser" || style === "rail" || style === "orbital") {
-    const dx = x1 - x0;
-    const dy = y1 - y0;
-    const len = Math.hypot(dx, dy);
-    const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
-    return (
-      <>
-        <div
-          className={`rf-battle__beam-el rf-battle__beam-el--${style}`}
-          style={{
-            left: `${x0}%`,
-            top: `${y0}%`,
-            width: `${len}%`,
-            transform: `rotate(${ang}deg)`,
-            opacity: Math.max(0.25, 0.9 - p.progress * 0.4),
-          }}
-        />
-        <div
-          className={`rf-battle__bolt rf-battle__bolt--${style}`}
-          style={{ left: `${cx}%`, top: `${cy}%` }}
-        />
-      </>
-    );
-  }
+  const isBeam = style === "laser" || style === "rail" || style === "orbital";
 
   return (
-    <div
-      className={`rf-battle__bolt rf-battle__bolt--${style}`}
-      style={{ left: `${cx}%`, top: `${cy}%` }}
-    />
+    <>
+      <div
+        className={`rf-battle__tracer rf-battle__tracer--${style}${
+          isBeam ? " is-beam" : ""
+        }`}
+        style={{
+          left: `${sx}%`,
+          top: `${sy}%`,
+          width: `${Math.max(len, 1.2)}%`,
+          transform: `rotate(${ang}deg)`,
+        }}
+      />
+      <div
+        className={`rf-battle__bolt rf-battle__bolt--${style}`}
+        style={{ left: `${tipX}%`, top: `${tipY}%` }}
+      />
+    </>
   );
 }
 
@@ -384,9 +378,8 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   <span
                     className="rf-battle__muzzle"
                     style={muzzleStyle(d.facing, spriteId)}
-                  >
-                    <img src={getSpriteUrl("fx-muzzle")} alt="" draggable={false} />
-                  </span>
+                    aria-hidden
+                  />
                 )}
                 {d.alive && (
                   <span className="rf-battle__hpbar">
@@ -483,9 +476,8 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   <span
                     className="rf-battle__muzzle"
                     style={muzzleStyle(u.facing, spriteId)}
-                  >
-                    <img src={getSpriteUrl("fx-muzzle")} alt="" draggable={false} />
-                  </span>
+                    aria-hidden
+                  />
                 )}
                 {u.anim === "hit" && u.alive && (
                   <span className="rf-battle__spark rf-battle__spark--hit" aria-hidden />
@@ -522,92 +514,51 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
 
           {battle.explosions.map((ex) => {
             const pos = worldToPct(ex.x, ex.y);
-            // ~1.3× tank (~145px), flickery flame + rising smoke
-            const life = Math.min(1, ex.t / 0.9);
-            const flicker = 0.92 + Math.sin(ex.t * 42 + ex.x * 3) * 0.08;
-            const grow = 0.78 + life * 0.35;
-            if (ex.style === "emp") {
-              return (
-                <div
-                  key={ex.id}
-                  className="rf-battle__blast"
-                  style={{ left: pos.left, top: pos.top }}
-                >
-                  <img
-                    className="rf-battle__explosion"
-                    src={getSpriteUrl("fx-emp")}
-                    alt=""
-                    style={{
-                      width: 120,
-                      height: 120,
-                      transform: `scale(${grow})`,
-                      opacity: Math.max(0, 1 - life * 1.1),
-                    }}
-                  />
-                </div>
-              );
-            }
+            const life = Math.min(1, ex.t / 0.55);
+            const isStructure = ex.style === "structure";
+            const isEmp = ex.style === "emp";
+            const size = isEmp ? 22 : isStructure ? 36 : 14;
             return (
               <div
                 key={ex.id}
-                className="rf-battle__blast"
+                className={`rf-battle__blast rf-battle__blast--${ex.style}`}
                 style={{ left: pos.left, top: pos.top }}
               >
                 <span
-                  className="rf-battle__flame rf-battle__flame--a"
+                  className="rf-battle__impact"
                   style={{
-                    transform: `scale(${grow * flicker}) rotate(${life * 12}deg)`,
-                    opacity: Math.max(0, 0.95 - life * 1.05),
+                    width: size,
+                    height: size,
+                    opacity: Math.max(0, 1 - life),
+                    transform: `scale(${0.55 + life * 0.9})`,
                   }}
                 />
-                <span
-                  className="rf-battle__flame rf-battle__flame--b"
-                  style={{
-                    transform: `scale(${grow * (1.05 - flicker * 0.08)}) rotate(${-life * 18}deg)`,
-                    opacity: Math.max(0, 0.85 - life * 1.1),
-                  }}
-                />
-                <img
-                  className="rf-battle__explosion rf-battle__explosion--core"
-                  src={getSpriteUrl("fx-explosion")}
-                  alt=""
-                  style={{
-                    width: 145,
-                    height: 145,
-                    transform: `scale(${grow * flicker})`,
-                    opacity: Math.max(0, 0.9 - life * 1.2),
-                    mixBlendMode: "screen",
-                  }}
-                />
-                <img
-                  className="rf-battle__explosion-smoke rf-battle__explosion-smoke--a"
-                  src={getSpriteUrl("fx-smoke")}
-                  alt=""
-                  style={{
-                    width: 110,
-                    height: 110,
-                    transform: `translate(${life * 10}px, ${-6 - life * 48}px) scale(${0.85 + life * 1.1})`,
-                    opacity: Math.max(0, 0.65 - life * 0.7),
-                  }}
-                />
-                <img
-                  className="rf-battle__explosion-smoke rf-battle__explosion-smoke--b"
-                  src={getSpriteUrl("fx-smoke")}
-                  alt=""
-                  style={{
-                    width: 95,
-                    height: 95,
-                    transform: `translate(${-8 - life * 14}px, ${-10 - life * 56}px) scale(${0.7 + life * 1.25})`,
-                    opacity: Math.max(0, 0.55 - life * 0.65),
-                  }}
-                />
-                <span
-                  className="rf-battle__sparks"
-                  style={{
-                    opacity: Math.max(0, 0.95 - life * 1.35),
-                    transform: `scale(${0.7 + life * 0.5})`,
-                  }}
-                />
+                {(isStructure || isEmp) && (
+                  <img
+                    className="rf-battle__explosion rf-battle__explosion--core"
+                    src={getSpriteUrl(isEmp ? "fx-emp" : "fx-explosion")}
+                    alt=""
+                    style={{
+                      width: size * 1.15,
+                      height: size * 1.15,
+                      opacity: Math.max(0, 0.85 - life * 1.1),
+                      transform: `scale(${0.7 + life * 0.45})`,
+                    }}
+                  />
+                )}
+                {isStructure && (
+                  <img
+                    className="rf-battle__explosion-smoke"
+                    src={getSpriteUrl("fx-smoke")}
+                    alt=""
+                    style={{
+                      width: 40,
+                      height: 40,
+                      transform: `translate(0, ${-4 - life * 22}px) scale(${0.8 + life})`,
+                      opacity: Math.max(0, 0.55 - life * 0.7),
+                    }}
+                  />
+                )}
               </div>
             );
           })}

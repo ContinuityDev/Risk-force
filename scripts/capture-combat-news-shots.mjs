@@ -225,24 +225,28 @@ async function suite(page, tag) {
   await page.mouse.move(2, 2);
   await shot(page, `risk-force-building-description${tag}`);
 
-  // Battle mid-fight + frame sequence
+  // Battle mid-fight + frame sequence — wait until tracers are in flight
   await forceBattle(page);
-  // Let combat run a bit so projectiles/muzzles appear
-  for (let i = 0; i < 8; i++) {
-    await page.evaluate(() =>
-      window.__RF__.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.2 } }),
-    );
-    await page.waitForTimeout(80);
-  }
+  await page.evaluate(async () => {
+    let guard = 0;
+    while (guard++ < 80) {
+      window.__RF__.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.12 } });
+      const b = window.__RF__.getState().battle;
+      if (!b || b.status !== "running") break;
+      if ((b.projectiles?.length ?? 0) >= 2) break;
+      await new Promise((r) => setTimeout(r, 16));
+    }
+  });
+  await page.waitForTimeout(120);
   await shot(page, `risk-force-battle-midfight${tag}`);
 
-  // Frame sequence for GIF-like evidence
+  // Frame sequence — capture while shots travel across the gap
   const frames = [];
   for (let i = 0; i < 6; i++) {
     await page.evaluate(() =>
-      window.__RF__.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.18 } }),
+      window.__RF__.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.1 } }),
     );
-    await page.waitForTimeout(70);
+    await page.waitForTimeout(90);
     const fp = join(TMP, `battle-frame${tag}-${i}.png`);
     await page.screenshot({ path: fp });
     frames.push(fp);
@@ -295,6 +299,21 @@ async function suite(page, tag) {
     });
   });
   await page.waitForTimeout(200);
+  // Clear seeded badge news so the digest is AI-only and priority-sorted
+  await page.evaluate(() => {
+    const s = window.__RF__.getState();
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...s,
+          newsFeed: [],
+          newsUnread: 0,
+          newsDigest: null,
+        },
+      },
+    });
+  });
   await page.evaluate(() => window.__RF__.dispatch({ type: "END_TURN" }));
   // Wait for digest
   await page.waitForSelector(".rf-news--digest", { timeout: 15000 });

@@ -6,6 +6,7 @@ import {
   digestHeadline,
   newsFromAiAction,
   newsFromBattleResult,
+  prioritizeNews,
 } from "./engine/news";
 import { createMenuState } from "./engine/reducer";
 import type { NewsItem } from "./engine/state";
@@ -332,13 +333,14 @@ export default function App() {
     }
 
     if (batch.length) {
+      const ranked = prioritizeNews(batch);
       transport.dispatch({
         type: "APPEND_NEWS",
-        payload: { items: batch, showDigest: true },
+        payload: { items: ranked, showDigest: true },
       });
       transport.dispatch({
         type: "APPEND_TURN_LOG",
-        payload: { lines: [digestHeadline(batch)] },
+        payload: { lines: [digestHeadline(ranked)] },
       });
     }
 
