@@ -1,0 +1,1805 @@
+/* Risk Force — application chrome & screens */
+
+.rf-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.rf-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.rf-main {
+  flex: 1;
+  padding: 0.85rem 1.1rem 1.4rem;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.rf-back {
+  margin: 1rem 1.1rem 0;
+  align-self: flex-start;
+}
+
+.rf-text-dim {
+  color: var(--rf-text-dim);
+}
+
+.rf-hint {
+  font-size: 0.78rem;
+  color: var(--rf-text-faint);
+  margin-top: 0.75rem;
+  line-height: 1.4;
+}
+
+.rf-empty {
+  display: grid;
+  place-items: center;
+  gap: 1rem;
+  min-height: 40vh;
+  color: var(--rf-text-dim);
+}
+
+.rf-view-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: var(--rf-hairline);
+}
+
+.rf-view-header h2 {
+  margin-top: 0.2rem;
+}
+
+.rf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-field input,
+.rf-field select,
+.rf-lobby__names input,
+.rf-invade select {
+  background: var(--rf-panel);
+  border: var(--rf-hairline);
+  border-radius: var(--rf-radius);
+  padding: 0.5rem 0.65rem;
+  outline: none;
+}
+
+.rf-field input:focus,
+.rf-field select:focus,
+.rf-lobby__names input:focus {
+  border-color: var(--rf-accent-dim);
+}
+
+/* ── Motion ─────────────────────────────────────────────── */
+
+@keyframes rf-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rf-pulse-idle {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}
+
+@keyframes rf-flash {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  40% {
+    filter: brightness(1.55);
+  }
+}
+
+@keyframes rf-fade-out {
+  to {
+    opacity: 0.25;
+    filter: grayscale(0.6);
+  }
+}
+
+@keyframes rf-resource-tick {
+  0% {
+    color: var(--rf-accent);
+  }
+  100% {
+    color: var(--rf-brass);
+  }
+}
+
+@keyframes rf-route-dash {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+@keyframes rf-shield-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes rf-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes rf-scan {
+  0% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0.2;
+  }
+}
+
+.rf-fade-in {
+  animation: rf-fade-in 0.45s ease both;
+}
+
+.rf-tick strong {
+  animation: rf-resource-tick 0.6s ease;
+}
+
+.rf-sprite {
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+.rf-sprite--idle {
+  animation: rf-pulse-idle 2.8s ease-in-out infinite;
+}
+
+.rf-sprite--working {
+  animation: rf-pulse-idle 1.4s ease-in-out infinite;
+}
+
+.rf-sprite--firing,
+.rf-sprite--attack {
+  animation: rf-flash 0.28s ease;
+}
+
+.rf-sprite--destroyed {
+  animation: rf-fade-out 0.6s ease forwards;
+}
+
+.rf-sprite--hit {
+  animation: rf-flash 0.2s ease;
+}
+
+.rf-sprite--none,
+.rf-sprite--move {
+  animation: none;
+}
+
+/* ── Menu ───────────────────────────────────────────────── */
+
+.rf-menu {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 2rem 1.25rem;
+}
+
+.rf-menu__atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 35%, rgba(61, 106, 122, 0.22), transparent 60%),
+    linear-gradient(180deg, transparent 40%, rgba(10, 14, 20, 0.85) 100%),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 80px,
+      rgba(36, 48, 65, 0.12) 80px,
+      rgba(36, 48, 65, 0.12) 81px
+    );
+  pointer-events: none;
+}
+
+.rf-menu__content {
+  position: relative;
+  text-align: center;
+  max-width: 36rem;
+}
+
+.rf-menu__eyebrow {
+  margin-bottom: 0.85rem;
+}
+
+.rf-menu__brand {
+  font-family: var(--rf-font-display);
+  font-size: clamp(2.6rem, 8vw, 4.4rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.05;
+  color: var(--rf-text);
+  text-shadow: 0 0 40px rgba(126, 182, 201, 0.12);
+}
+
+.rf-menu__subtitle {
+  margin: 0.85rem 0 2.2rem;
+  color: var(--rf-brass);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.rf-menu__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-width: 16rem;
+  margin: 0 auto;
+}
+
+.rf-menu__actions button {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  letter-spacing: 0.06em;
+}
+
+/* ── Lobby ──────────────────────────────────────────────── */
+
+.rf-lobby {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 3rem;
+}
+
+.rf-lobby__header {
+  margin-bottom: 1.75rem;
+}
+
+.rf-lobby__header h1 {
+  margin: 0.75rem 0 0.35rem;
+}
+
+.rf-lobby__tag {
+  color: var(--rf-text-dim);
+  margin: 0;
+}
+
+.rf-lobby__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.rf-lobby__names {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 1.25rem;
+}
+
+.rf-lobby__lan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: flex-end;
+  margin-bottom: 1.25rem;
+  padding: 0.9rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+}
+
+.rf-lobby__lan .rf-field {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.rf-lobby__status {
+  width: 100%;
+  margin: 0;
+  color: var(--rf-accent);
+  font-size: 0.85rem;
+}
+
+.rf-lobby__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── HUD ────────────────────────────────────────────────── */
+
+.rf-hud {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto minmax(12rem, 1.4fr);
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  padding: 0.65rem 1.1rem;
+  border-bottom: var(--rf-hairline);
+  background: linear-gradient(180deg, rgba(21, 28, 39, 0.95), rgba(15, 20, 28, 0.88));
+  backdrop-filter: blur(6px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.rf-hud__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.rf-hud__identity strong {
+  font-family: var(--rf-font-display);
+  letter-spacing: 0.04em;
+  font-size: 0.95rem;
+}
+
+.rf-hud__ai {
+  font-size: 0.72rem;
+  color: var(--rf-brass);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rf-hud__resources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.15rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.rf-hud__campaign {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 9rem;
+}
+
+.rf-hud__campaign input[type="range"] {
+  width: 5.5rem;
+  accent-color: var(--rf-brass, #c4a574);
+}
+
+.rf-hud__help {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.75rem 0.9rem;
+  border: var(--rf-hairline);
+  background: rgba(12, 18, 26, 0.96);
+  font-size: 0.82rem;
+  color: var(--rf-text-dim);
+  line-height: 1.45;
+}
+
+.rf-hud__help strong {
+  color: var(--rf-text);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.rf-hud__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.rf-hud__nav button {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rf-hud__message {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.65rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  color: var(--rf-text-dim);
+  font-size: 0.85rem;
+}
+
+.rf-hud__upkeep {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--rf-text-dim);
+  letter-spacing: 0.04em;
+}
+
+.rf-hud__warn {
+  margin-left: 0.5rem;
+  color: #c07070;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rf-hud__turnlog {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem 0.75rem;
+  align-items: start;
+  padding: 0.45rem 0.65rem;
+  border: var(--rf-hairline);
+  background: rgba(12, 18, 26, 0.9);
+  font-size: 0.8rem;
+}
+
+.rf-hud__turnlog ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--rf-text-dim);
+}
+
+.rf-hud__turnlog li + li {
+  margin-top: 0.15rem;
+}
+
+.rf-map__legend {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  min-width: 11rem;
+  padding: 0.55rem 0.7rem;
+  border: var(--rf-hairline);
+  background: rgba(8, 12, 16, 0.88);
+  font-size: 0.72rem;
+}
+
+.rf-map__legend ul {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rf-map__legend li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  margin-top: 0.25rem;
+  color: var(--rf-text-dim);
+}
+
+.rf-map__legend i {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: 0.2rem;
+  border-radius: 1px;
+}
+
+.rf-map__legend small {
+  display: block;
+  opacity: 0.75;
+}
+
+.rf-map__eta {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0.04em;
+  paint-order: stroke fill;
+  stroke: #081018;
+  stroke-width: 2.5px;
+}
+
+.rf-capture {
+  display: grid;
+  gap: 1rem;
+}
+
+.rf-capture__panel {
+  max-width: 28rem;
+  padding: 1rem 1.1rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.rf-capture__force {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--rf-text-dim);
+  font-size: 0.9rem;
+}
+
+.rf-capture__slider {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.rf-capture__slider input[type="range"] {
+  width: 100%;
+}
+
+/* ── World map ──────────────────────────────────────────── */
+
+.rf-map {
+  position: relative;
+}
+
+.rf-map__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: var(--rf-hairline);
+  background: #081018;
+  box-shadow: inset 0 0 60px rgba(14, 40, 56, 0.45);
+  touch-action: none;
+  cursor: grab;
+}
+
+.rf-map__svg.is-dragging {
+  cursor: grabbing;
+}
+
+.rf-map__hint {
+  margin: 0.35rem 0.15rem 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+}
+
+.rf-map__march {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+
+.rf-map__march button {
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.rf-map__route {
+  animation: rf-route-dash 8s linear infinite;
+}
+
+.rf-map__scan {
+  animation: rf-scan 4s ease-in-out infinite;
+}
+
+.rf-map__chrome-label {
+  fill: #5c6b7e;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  font-family: var(--rf-font-display);
+}
+
+.rf-map__territory {
+  cursor: pointer;
+  transition: fill-opacity 0.15s ease, stroke 0.15s ease, filter 0.15s ease;
+}
+
+.rf-map__territory:hover {
+  fill-opacity: 0.88 !important;
+  filter: brightness(1.2);
+  stroke: var(--rf-accent);
+}
+
+.rf-map__label {
+  fill: rgba(248, 252, 255, 0.96);
+  font-family: var(--rf-font-body);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  /* font-size set per-territory via attribute; no stroke outline (avoids ghosting) */
+  stroke: none;
+  paint-order: normal;
+}
+
+.rf-map__detail {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 0.9rem;
+  background: rgba(15, 20, 28, 0.94);
+  border: var(--rf-hairline);
+  min-width: 10rem;
+  backdrop-filter: blur(6px);
+}
+
+/* ── Base ───────────────────────────────────────────────── */
+
+.rf-base__layout {
+  display: grid;
+  grid-template-columns: auto minmax(14rem, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.rf-base__yard {
+  position: relative;
+  border: var(--rf-hairline);
+  overflow: hidden;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45);
+}
+
+.rf-base__terrain {
+  position: absolute;
+  inset: 0;
+  background:
+    /* service roads — cross + perimeter */
+    linear-gradient(
+      90deg,
+      transparent 40%,
+      rgba(70, 82, 92, 0.45) 41%,
+      rgba(70, 82, 92, 0.45) 44%,
+      transparent 45%
+    ),
+    linear-gradient(
+      0deg,
+      transparent 55%,
+      rgba(70, 82, 92, 0.4) 56%,
+      rgba(70, 82, 92, 0.4) 58%,
+      transparent 59%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(55, 68, 78, 0.35) 0 3%,
+      transparent 3% 97%,
+      rgba(55, 68, 78, 0.35) 97% 100%
+    ),
+    /* pad plates */
+    repeating-linear-gradient(
+      90deg,
+      #161e24 0px,
+      #161e24 83px,
+      #1c2830 83px,
+      #1c2830 84px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      #161e24 0px,
+      #161e24 83px,
+      #1c2830 83px,
+      #1c2830 84px
+    ),
+    /* panel hatch */
+    repeating-linear-gradient(
+      135deg,
+      transparent 0 10px,
+      rgba(126, 182, 201, 0.03) 10px 11px
+    ),
+    linear-gradient(160deg, #1a242c 0%, #121820 45%, #0e141a 100%);
+}
+
+.rf-base__terrain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* pad corner lights + center markers — hard dots, no soft blobs */
+  background:
+    linear-gradient(
+      45deg,
+      transparent 48%,
+      rgba(126, 182, 201, 0.07) 49%,
+      transparent 51%
+    ),
+    radial-gradient(circle at 6px 6px, #c4a574 0 1.5px, transparent 2px),
+    radial-gradient(circle at calc(100% - 6px) 6px, #c4a574 0 1.5px, transparent 2px),
+    radial-gradient(circle at 6px calc(100% - 6px), #7eb6c9 0 1.5px, transparent 2px),
+    radial-gradient(
+      circle at calc(100% - 6px) calc(100% - 6px),
+      #7eb6c9 0 1.5px,
+      transparent 2px
+    ),
+    radial-gradient(circle at 42px 42px, rgba(168, 212, 224, 0.55) 0 1px, transparent 1.5px);
+  background-size:
+    100% 100%,
+    84px 84px,
+    84px 84px,
+    84px 84px,
+    84px 84px,
+    84px 84px;
+  pointer-events: none;
+}
+
+.rf-base__gridlines {
+  position: absolute;
+  inset: 0;
+}
+
+.rf-base__pad {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  background: rgba(20, 28, 22, 0.35);
+  border: 1px solid rgba(126, 182, 201, 0.16);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.rf-base__pad:hover:not(:disabled) {
+  background: rgba(126, 182, 201, 0.12);
+  border-color: rgba(126, 182, 201, 0.45);
+}
+
+.rf-base__pad.is-filled {
+  pointer-events: auto;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.rf-base__ghost {
+  position: absolute;
+  z-index: 2;
+  border: 2px solid var(--rf-accent);
+  background: rgba(126, 182, 201, 0.16);
+  pointer-events: none;
+}
+
+.rf-base__ghost.is-valid {
+  border-color: #6ec4a0;
+  background: rgba(110, 196, 160, 0.28);
+  box-shadow: inset 0 0 18px rgba(110, 196, 160, 0.18);
+}
+
+.rf-base__ghost.is-invalid {
+  border-color: #c07070;
+  background: rgba(192, 112, 112, 0.28);
+  box-shadow: inset 0 0 18px rgba(192, 112, 112, 0.16);
+}
+
+.rf-base__structure {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 4px;
+  pointer-events: none;
+}
+
+.rf-base__structure.is-target {
+  outline: 1px solid var(--rf-danger);
+  outline-offset: -2px;
+}
+
+.rf-base__structure.is-building .rf-sprite {
+  opacity: 0.7;
+  filter: saturate(0.6) brightness(1.1);
+}
+
+.rf-base__sprite {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 94%;
+  object-fit: contain;
+  filter: contrast(1.05) saturate(1.05)
+    drop-shadow(0 5px 8px rgba(0, 0, 0, 0.55));
+}
+
+.rf-base__accent {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 4px;
+  height: 2px;
+  opacity: 0.65;
+  border-radius: 1px;
+}
+
+.rf-base__progress,
+.rf-base__hp,
+.rf-base__name {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  font-size: 0.58rem;
+  line-height: 1.1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.rf-base__progress {
+  top: 4px;
+  color: var(--rf-brass);
+}
+
+.rf-base__name {
+  top: 4px;
+  color: rgba(215, 221, 230, 0.75);
+  font-size: 0.55rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rf-base__structure.is-building .rf-base__name {
+  display: none;
+}
+
+.rf-base__hp {
+  bottom: 8px;
+  color: var(--rf-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-base__staff {
+  position: absolute;
+  left: 6px;
+  bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.62rem;
+  color: var(--rf-text-dim);
+  background: rgba(8, 12, 16, 0.75);
+  padding: 0.1rem 0.25rem;
+  z-index: 2;
+}
+
+.rf-base__staff input {
+  width: 2.2rem;
+  background: transparent;
+  border: 1px solid rgba(126, 182, 201, 0.35);
+  color: var(--rf-text);
+  font-size: 0.65rem;
+  padding: 0.05rem;
+}
+
+.rf-base__pop {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: var(--rf-hairline);
+}
+
+.rf-base__train-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0;
+}
+
+.rf-base__train-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rf-base__train-list button {
+  width: 100%;
+  text-align: left;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.45rem;
+}
+
+.rf-base__catalog {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.75rem;
+  max-height: min(70vh, 560px);
+  overflow: auto;
+}
+
+.rf-base__catalog ul {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-base__catalog li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+}
+
+.rf-base__catalog strong {
+  display: block;
+  font-size: 0.82rem;
+}
+
+.rf-base__catalog small {
+  color: var(--rf-text-faint);
+  font-size: 0.7rem;
+}
+
+/* ── Research ───────────────────────────────────────────── */
+
+.rf-research__branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.rf-research__branch {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.7rem;
+}
+
+.rf-research__branch h3 {
+  font-family: var(--rf-font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rf-brass);
+  margin-bottom: 0.55rem;
+  font-weight: 500;
+}
+
+.rf-research__branch ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-research__branch li button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+}
+
+.rf-research__branch li button.is-done {
+  border-color: var(--rf-ok);
+  color: var(--rf-ok);
+  background: transparent;
+}
+
+.rf-research__name {
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+
+.rf-research__meta {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.72rem;
+  color: var(--rf-text-dim);
+}
+
+.rf-research__unlocks {
+  font-size: 0.68rem;
+  color: var(--rf-text-faint);
+}
+
+/* ── Invade ─────────────────────────────────────────────── */
+
+.rf-invade__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.rf-invade__force {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.75rem;
+}
+
+.rf-invade__force ul {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.rf-invade__force li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--rf-border-soft);
+}
+
+.rf-invade__force li:last-child {
+  border-bottom: none;
+}
+
+.rf-invade__force small {
+  display: block;
+  color: var(--rf-text-faint);
+  font-size: 0.72rem;
+}
+
+.rf-invade__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.rf-invade__stepper button {
+  width: 1.75rem;
+  padding: 0.2rem;
+}
+
+.rf-invade__footer {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Battle ─────────────────────────────────────────────── */
+
+.rf-battle__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(12rem, 0.7fr);
+  gap: 0.85rem;
+  min-height: 360px;
+}
+
+.rf-battle__field {
+  border: var(--rf-hairline);
+  background: #0c121a;
+  display: block;
+  max-height: 480px;
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.4);
+}
+
+.rf-battle__viewport {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  border: var(--rf-hairline);
+  overflow: hidden;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.45);
+}
+
+/* Decorative sky ABOVE the playable arena — units never spawn here. */
+.rf-battle__skyband {
+  flex: 0 0 2.4rem;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 80% at 70% 40%, rgba(126, 182, 201, 0.16), transparent 55%),
+    radial-gradient(ellipse 50% 60% at 25% 70%, rgba(180, 200, 160, 0.1), transparent 60%),
+    linear-gradient(180deg, #152838 0%, #1e3340 55%, #243628 100%);
+  border-bottom: 1px solid rgba(40, 55, 38, 0.85);
+}
+
+.rf-battle__arena {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #1a2418;
+}
+
+/* Full playable ground plane — textured dirt/grass, not a flat void. */
+.rf-battle__ground {
+  position: absolute;
+  inset: 0;
+  background:
+    /* crater rims */
+    radial-gradient(ellipse 90px 36px at 14% 42%, transparent 28%, #1a2214 32%, #050704 40%, transparent 62%),
+    radial-gradient(ellipse 70px 30px at 40% 68%, transparent 30%, #181e12 34%, #060806 42%, transparent 65%),
+    radial-gradient(ellipse 80px 32px at 66% 32%, transparent 26%, #1c2416 30%, #070a05 38%, transparent 60%),
+    radial-gradient(ellipse 55px 24px at 86% 58%, transparent 32%, #202818 36%, #0a0e08 44%, transparent 65%),
+    radial-gradient(ellipse 48px 20px at 52% 48%, transparent 30%, #1a2014 34%, #080a06 42%, transparent 62%),
+    /* dirt / grass variation */
+    radial-gradient(ellipse 160px 100px at 22% 50%, rgba(72, 86, 48, 0.45), transparent 70%),
+    radial-gradient(ellipse 180px 110px at 72% 55%, rgba(58, 68, 42, 0.5), transparent 70%),
+    radial-gradient(ellipse 100px 60px at 50% 80%, rgba(90, 78, 52, 0.4), transparent 65%),
+    radial-gradient(ellipse 120px 70px at 35% 25%, rgba(64, 78, 44, 0.35), transparent 65%),
+    /* berm / trench */
+    linear-gradient(
+      0deg,
+      transparent 18%,
+      rgba(30, 36, 24, 0.75) 22%,
+      rgba(58, 62, 44, 0.55) 28%,
+      transparent 34%
+    ),
+    linear-gradient(185deg, #3a4834 0%, #2a3828 28%, #1c2618 58%, #141a10 100%);
+}
+
+.rf-battle__tracks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background:
+    repeating-linear-gradient(
+      92deg,
+      transparent 0 10px,
+      rgba(30, 28, 22, 0.35) 10px 12px,
+      transparent 12px 22px
+    ),
+    linear-gradient(
+      95deg,
+      transparent 8%,
+      rgba(55, 48, 36, 0.4) 12%,
+      rgba(55, 48, 36, 0.35) 26%,
+      transparent 32%
+    ),
+    linear-gradient(
+      88deg,
+      transparent 55%,
+      rgba(48, 42, 30, 0.3) 60%,
+      rgba(48, 42, 30, 0.25) 72%,
+      transparent 78%
+    );
+}
+
+.rf-battle__zone {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  border: 1px dashed transparent;
+}
+
+.rf-battle__zone--deploy {
+  background: rgba(110, 196, 160, 0.16);
+  border-color: rgba(110, 196, 160, 0.32);
+  box-shadow: inset 0 0 28px rgba(110, 196, 160, 0.1);
+}
+
+.rf-battle__zone--nml {
+  background: rgba(40, 48, 36, 0.06);
+}
+
+.rf-battle__zone--base {
+  background: rgba(126, 182, 201, 0.14);
+  border-color: rgba(126, 182, 201, 0.3);
+  box-shadow: inset 0 0 28px rgba(126, 182, 201, 0.08);
+}
+
+.rf-battle__ground::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(90, 82, 60, 0.35) 0 1px, transparent 2px),
+    radial-gradient(circle at 60% 70%, rgba(50, 46, 36, 0.4) 0 1px, transparent 2px),
+    radial-gradient(circle at 80% 40%, rgba(70, 66, 50, 0.3) 0 1px, transparent 2px);
+  background-size: 48px 36px, 62px 44px, 38px 28px;
+  pointer-events: none;
+}
+
+.rf-battle__ground::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 28px 12px at 28% 36%, rgba(28, 24, 18, 0.55) 0 40%, transparent 70%),
+    radial-gradient(ellipse 22px 10px at 58% 58%, rgba(22, 20, 14, 0.5) 0 40%, transparent 70%),
+    linear-gradient(180deg, rgba(16, 20, 14, 0.2), transparent 35%);
+  pointer-events: none;
+}
+
+.rf-battle__scorch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50px 18px at 22% 52%, rgba(20, 12, 8, 0.7) 0 40%, transparent 70%),
+    radial-gradient(ellipse 36px 14px at 55% 38%, rgba(30, 16, 8, 0.55) 0 35%, transparent 65%),
+    radial-gradient(ellipse 44px 16px at 74% 68%, rgba(18, 10, 6, 0.65) 0 38%, transparent 70%);
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}
+
+.rf-battle__rubble {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 18px 10px at 24% 44%, rgba(55, 50, 40, 0.55) 0 40%, transparent 70%),
+    radial-gradient(ellipse 14px 8px at 61% 62%, rgba(45, 42, 34, 0.5) 0 40%, transparent 70%),
+    radial-gradient(ellipse 22px 9px at 78% 36%, rgba(40, 36, 28, 0.45) 0 40%, transparent 70%),
+    radial-gradient(ellipse 12px 7px at 40% 78%, rgba(48, 44, 36, 0.4) 0 40%, transparent 70%);
+}
+
+.rf-battle__smoke {
+  position: absolute;
+  width: 120px;
+  height: 160px;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 70%, rgba(50, 48, 44, 0.45), transparent 65%),
+    radial-gradient(ellipse at 40% 40%, rgba(70, 68, 62, 0.3), transparent 60%);
+  filter: blur(6px);
+  opacity: 0.55;
+  animation: rf-smoke-drift 7s ease-in-out infinite;
+}
+
+.rf-battle__smoke--a {
+  left: 18%;
+  top: 28%;
+}
+
+.rf-battle__smoke--b {
+  left: 68%;
+  top: 22%;
+  width: 140px;
+  animation-delay: -3s;
+}
+
+@keyframes rf-smoke-drift {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(-18px) scale(1.08);
+    opacity: 0.65;
+  }
+}
+
+.rf-battle__ridge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #2a4038 20%,
+    #3d5a48 50%,
+    #2a4038 80%,
+    transparent
+  );
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.rf-battle__actor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.rf-battle__actor img,
+.rf-battle__actor .rf-dir-sprite {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Keep camo/material readable — avoid washed-out overexposure */
+  filter: contrast(1.06) saturate(1.08) brightness(0.98)
+    drop-shadow(0 5px 6px rgba(0, 0, 0, 0.55));
+}
+
+.rf-battle__actor.is-firing img,
+.rf-battle__actor.is-firing .rf-dir-sprite {
+  animation: rf-flash 0.28s ease;
+}
+
+.rf-battle__actor.is-moving img,
+.rf-battle__actor.is-moving .rf-dir-sprite {
+  animation: rf-bob 0.5s ease-in-out infinite;
+}
+
+.rf-battle__actor.is-wreck img {
+  opacity: 0.45;
+  filter: grayscale(0.7) drop-shadow(0 4px 4px rgba(0, 0, 0, 0.4));
+}
+
+.rf-battle__actor.is-disabled img,
+.rf-battle__actor.is-disabled .rf-dir-sprite {
+  opacity: 0.55;
+  filter: saturate(0.4) brightness(1.2);
+}
+
+.rf-battle__shield-bubble {
+  position: absolute;
+  inset: -8%;
+  border: 1.5px solid rgba(126, 182, 201, 0.45);
+  border-radius: 50%;
+  box-shadow: inset 0 0 16px rgba(126, 182, 201, 0.2);
+  animation: rf-shield-pulse 2s ease-in-out infinite;
+}
+
+.rf-battle__muzzle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, #fff 0%, #a8d4e0 40%, transparent 70%);
+  box-shadow: 0 0 12px #7eb6c9;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.rf-battle__hpbar {
+  position: absolute;
+  left: 28%;
+  right: 28%;
+  top: 4%;
+  height: 3px;
+  background: rgba(8, 12, 16, 0.75);
+  border-radius: 1px;
+  overflow: hidden;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.rf-battle__hpbar i {
+  display: block;
+  height: 100%;
+  background: #6aaa8a;
+}
+
+.rf-battle__hpbar.is-atk i {
+  background: #7eb6c9;
+}
+
+.rf-battle__hpbar.is-def i {
+  background: #c07070;
+}
+
+.rf-battle__beam-el {
+  position: absolute;
+  height: 2px;
+  transform-origin: left center;
+  z-index: 4;
+  pointer-events: none;
+  border-radius: 1px;
+}
+
+.rf-battle__beam-el--laser {
+  background: linear-gradient(90deg, transparent, #9fd4e4, #e8f4f8);
+  box-shadow: 0 0 6px #7eb6c9;
+  height: 2.5px;
+}
+
+.rf-battle__beam-el--rail {
+  background: linear-gradient(90deg, transparent, #e0c48a, #fff);
+  box-shadow: 0 0 8px #c4a574;
+  height: 3px;
+}
+
+.rf-battle__beam-el--orbital {
+  background: linear-gradient(90deg, transparent, #c8e8f0, #fff);
+  box-shadow: 0 0 10px #a8d4e0;
+  height: 3.5px;
+}
+
+.rf-battle__bolt {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  background: #9fd4e4;
+  box-shadow: 0 0 18px #7eb6c9, 0 0 6px #fff;
+}
+
+.rf-battle__bolt--plasma {
+  width: 24px;
+  height: 24px;
+  background: #6ec4a0;
+  box-shadow: 0 0 24px #6ec4a0, 0 0 8px #b8f0d0;
+}
+
+.rf-battle__bolt--emp {
+  width: 28px;
+  height: 28px;
+  background: #7eb6c9;
+  box-shadow: 0 0 28px #7eb6c9, 0 0 10px #fff;
+}
+
+.rf-battle__bolt--missile {
+  width: 22px;
+  height: 9px;
+  border-radius: 2px;
+  background: #c4a574;
+  box-shadow: 0 0 16px #c4a574, 0 0 4px #fff;
+}
+
+.rf-battle__bolt--rail,
+.rf-battle__bolt--laser,
+.rf-battle__bolt--orbital {
+  width: 16px;
+  height: 16px;
+  background: #e8f4f8;
+  box-shadow: 0 0 20px #a8d4e0, 0 0 6px #fff;
+}
+
+.rf-battle__beam-el--laser {
+  height: 4.5px !important;
+  box-shadow: 0 0 10px #7eb6c9, 0 0 4px #fff !important;
+}
+
+.rf-battle__beam-el--rail {
+  height: 5px !important;
+  box-shadow: 0 0 12px #c4a574, 0 0 4px #fff !important;
+}
+
+.rf-battle__blast {
+  position: absolute;
+  z-index: 8;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+}
+
+.rf-battle__blast > * {
+  grid-area: 1 / 1;
+}
+
+.rf-battle__explosion {
+  pointer-events: none;
+  object-fit: contain;
+  filter: brightness(1.15) saturate(1.25) contrast(1.1)
+    drop-shadow(0 0 8px rgba(255, 110, 30, 0.45));
+}
+
+.rf-battle__explosion-smoke {
+  pointer-events: none;
+  object-fit: contain;
+  filter: blur(2px) brightness(0.55) saturate(0.4);
+  mix-blend-mode: multiply;
+}
+
+.rf-battle__explosion-smoke--a {
+  filter: blur(2.2px) brightness(0.45) saturate(0.35);
+}
+
+.rf-battle__explosion-smoke--b {
+  filter: blur(2.8px) brightness(0.4) saturate(0.3);
+}
+
+.rf-battle__explosion--core {
+  filter: brightness(1.35) saturate(1.4) contrast(1.1)
+    drop-shadow(0 0 6px rgba(255, 140, 40, 0.55));
+}
+
+.rf-battle__flame {
+  width: 130px;
+  height: 130px;
+  pointer-events: none;
+  border-radius: 42% 58% 48% 52% / 48% 42% 58% 52%;
+  mix-blend-mode: screen;
+  animation: rf-flame-flicker 0.12s steps(2) infinite;
+}
+
+.rf-battle__flame--a {
+  background:
+    radial-gradient(ellipse 45% 55% at 48% 58%, #fff6c8 0%, #ffb040 28%, transparent 58%),
+    radial-gradient(ellipse 55% 60% at 40% 48%, #ff7020 0%, transparent 55%),
+    radial-gradient(ellipse 40% 50% at 62% 52%, #ff4810 0%, transparent 50%);
+}
+
+.rf-battle__flame--b {
+  width: 118px;
+  height: 118px;
+  border-radius: 55% 45% 52% 48% / 45% 55% 45% 55%;
+  background:
+    radial-gradient(ellipse 50% 45% at 55% 60%, #ffe090 0%, #ff9020 30%, transparent 60%),
+    radial-gradient(ellipse 35% 55% at 35% 45%, #ff6010 0%, transparent 52%);
+  animation-delay: -0.05s;
+}
+
+@keyframes rf-flame-flicker {
+  0% {
+    filter: brightness(1) contrast(1.05);
+  }
+  50% {
+    filter: brightness(1.18) contrast(1.15);
+  }
+  100% {
+    filter: brightness(0.95) contrast(1.08);
+  }
+}
+
+.rf-battle__sparks {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 28% 38%, #ffe090 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 72% 32%, #ffc060 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 48% 72%, #fff0c0 0 1px, transparent 1.6px),
+    radial-gradient(circle at 62% 52%, #ff9030 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 22% 58%, #ffd070 0 0.9px, transparent 1.5px);
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.rf-battle__scorch-decal {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 50%, rgba(12, 8, 4, 0.75) 0 35%, rgba(28, 16, 8, 0.45) 55%, transparent 78%),
+    radial-gradient(ellipse 40% 30% at 40% 45%, rgba(40, 22, 10, 0.35) 0 40%, transparent 70%);
+  mix-blend-mode: multiply;
+}
+
+.rf-battle__beam {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(126, 182, 201, 0.65));
+}
+
+.rf-battle__beam--laser {
+  stroke: #9fd4e4;
+}
+
+.rf-battle__beam--rail {
+  stroke: #e0c48a;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px rgba(196, 165, 116, 0.7));
+}
+
+.rf-battle__beam--orbital {
+  stroke: #c8e8f0;
+  stroke-width: 3.5;
+}
+
+.rf-battle__orb {
+  fill: #9fd4e4;
+}
+
+.rf-battle__orb--plasma {
+  fill: #6ec4a0;
+  filter: drop-shadow(0 0 4px rgba(110, 196, 160, 0.8));
+}
+
+.rf-battle__orb--missile,
+.rf-battle__orb--torpedo {
+  fill: #c4a574;
+}
+
+.rf-battle__orb--emp {
+  fill: #7eb6c9;
+  filter: drop-shadow(0 0 6px rgba(126, 182, 201, 0.9));
+}
+
+.rf-battle__orb--flak,
+.rf-battle__orb--bolt {
+  fill: #d7dde6;
+}
+
+.rf-battle__orb--laser,
+.rf-battle__orb--rail,
+.rf-battle__orb--orbital {
+  fill: #e8f4f8;
+}
+
+.rf-battle__flash {
+  animation: rf-flash 0.28s ease;
+}
+
+.rf-battle__fade {
+  animation: rf-fade-out 0.7s ease forwards;
+}
+
+.rf-battle__pulse {
+  animation: rf-pulse-idle 1.8s ease-in-out infinite;
+}
+
+.rf-battle__bob {
+  animation: rf-bob 0.55s ease-in-out infinite;
+}
+
+.rf-battle__shield-ring {
+  animation: rf-shield-pulse 2s ease-in-out infinite;
+}
+
+.rf-battle__log {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.75rem;
+  overflow: auto;
+  max-height: 480px;
+}
+
+.rf-battle__log ul {
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--rf-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.rf-battle__log li {
+  border-left: 2px solid var(--rf-border);
+  padding-left: 0.45rem;
+}
+
+.rf-battle__stats {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.65rem;
+  font-size: 0.7rem;
+  color: var(--rf-text-faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.rf-battle__result {
+  margin-top: 0.75rem;
+  color: var(--rf-brass);
+  font-family: var(--rf-font-display);
+  letter-spacing: 0.06em;
+  font-size: 0.85rem;
+}
+
+.rf-battle__actions {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.rf-battle__legend {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+/* ── Save ───────────────────────────────────────────────── */
+
+.rf-save {
+  max-width: 40rem;
+}
+
+.rf-save__io {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.rf-save__slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.rf-save__slots li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+}
+
+.rf-save__slots p {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+}
+
+.rf-save__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rf-save__error {
+  color: var(--rf-danger);
+  margin-top: 0.75rem;
+}
+
+/* ── Victory ────────────────────────────────────────────── */
+
+.rf-victory {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background:
+    radial-gradient(ellipse 50% 40% at 50% 30%, rgba(126, 182, 201, 0.12), transparent 65%),
+    var(--rf-void);
+}
+
+.rf-victory__panel {
+  text-align: center;
+  max-width: 28rem;
+}
+
+.rf-victory__panel h1 {
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  letter-spacing: 0.16em;
+  margin: 0.6rem 0 1rem;
+}
+
+.rf-victory__winner {
+  margin: 0 0 1.5rem;
+  color: var(--rf-text-dim);
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .rf-hud {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .rf-hud__nav,
+  .rf-hud__resources {
+    justify-content: flex-start;
+  }
+
+  .rf-base__layout,
+  .rf-battle__stage,
+  .rf-invade__row,
+  .rf-lobby__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rf-map__detail {
+    position: static;
+    margin-top: 0.65rem;
+  }
+}

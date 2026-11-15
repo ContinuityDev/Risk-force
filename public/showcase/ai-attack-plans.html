@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>AI Multi-Front Attack Plans</title>
+<style>
+html,body{margin:0;background:#0a1016;font-family:Georgia,serif;color:#e8eef4}
+h2{text-align:center;font-weight:500;letter-spacing:.1em;opacity:.8;margin:14px 0 4px;font-size:.95rem}
+.note{text-align:center;opacity:.55;font-size:.75rem;margin:0 0 10px}
+.wrap{width:1280px;height:640px;margin:0 auto 18px;border:1px solid #2a3848;background:
+  radial-gradient(ellipse at 50% 40%,#163040,transparent 55%),
+  linear-gradient(180deg,#0e1820,#0a1218);position:relative;overflow:hidden}
+svg{width:100%;height:100%}
+.land{fill:#1e2c24;stroke:#3a5040;stroke-width:1.2}
+.owned{fill:#2a4838}
+.enemy{fill:#3a2830}
+.label{fill:#c8d4c0;font-size:11px;letter-spacing:.04em}
+.arrow{fill:none;stroke:#e8b060;stroke-width:2.4;opacity:.9;marker-end:url(#arrow)}
+.arrow2{stroke:#c07070;stroke-width:2.2}
+.tag{position:absolute;left:18px;bottom:14px;font-size:.72rem;opacity:.7;letter-spacing:.06em}
+</style></head><body>
+<h2>AI ATTACK PLAN · MULTI-FRONT</h2>
+<p class="note">Border defense held · primary strike + flanking axis (personality: opportunism / flanking)</p>
+<div class="wrap">
+<svg viewBox="450 40 220 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#e8b060"/>
+    </marker>
+  </defs>
+  <!-- Simplified Europe blobs -->
+  <ellipse class="land owned" cx="496" cy="104" rx="22" ry="14"/>
+  <ellipse class="land owned" cx="537" cy="78" rx="26" ry="18"/>
+  <ellipse class="land owned" cx="508" cy="120" rx="24" ry="16"/>
+  <ellipse class="land enemy" cx="550" cy="110" rx="22" ry="15"/>
+  <ellipse class="land enemy" cx="566" cy="127" rx="24" ry="14"/>
+  <ellipse class="land enemy" cx="578" cy="107" rx="22" ry="16"/>
+  <ellipse class="land owned" cx="480" cy="88" rx="16" ry="10"/>
+  <text class="label" x="486" y="106">Britain</text>
+  <text class="label" x="520" y="80">Scandinavia</text>
+  <text class="label" x="492" y="124">W. Europe</text>
+  <text class="label" x="536" y="112">C. Europe</text>
+  <text class="label" x="552" y="130">S. Europe</text>
+  <text class="label" x="564" y="108">E. Europe</text>
+  <!-- Primary + flank arrows -->
+  <path class="arrow" d="M508,120 Q528,118 548,112"/>
+  <path class="arrow arrow2" d="M537,85 Q555,95 568,120"/>
+  <path class="arrow" d="M496,108 Q520,100 548,108" opacity=".55"/>
+</svg>
+<div class="tag">GOLD = primary axis · RED = flanking front</div>
+</div>
+</body></html>

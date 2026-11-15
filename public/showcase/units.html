@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Risk Force — Unit Roster</title>
+<style>
+  html,body{margin:0;background:#0c1218;color:#e8eef4;font-family:Georgia,serif}
+  h1{font-weight:500;letter-spacing:.08em;font-size:1.4rem;margin:1.5rem 2rem .5rem}
+  p{margin:0 2rem 1.5rem;opacity:.65;font-size:.95rem}
+  .row{display:flex;flex-wrap:wrap;gap:1.25rem;padding:1rem 2rem 3rem;align-items:flex-end}
+  .card{display:flex;flex-direction:column;align-items:center;gap:.4rem;width:160px}
+  .card img{width:140px;height:140px;object-fit:contain;image-rendering:auto;
+    filter:drop-shadow(0 10px 14px rgba(0,0,0,.55))}
+  .card span{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+</style>
+</head>
+<body>
+<h1>RISK FORCE — FIELD UNITS</h1>
+<p>Pre-rendered 3D isometric sprites · olive / desert / urban / navy</p>
+<div class="row" id="row"></div>
+<script>
+const units = [
+  ['unit-rail-tank','Rail Tank'],['unit-hover','Hover Tank'],['unit-mech','Assault Mech'],
+  ['unit-siege-mech','Siege Mech'],['unit-trooper','Troopers'],['unit-power-trooper','Power Troopers'],
+  ['unit-spider','Spider Mech'],['unit-drone','Scout Drone'],['unit-gunship','Gunship'],
+  ['unit-howitzer','Howitzer'],['unit-destroyer','Destroyer'],['unit-orbital','Orbital']
+];
+const row = document.getElementById('row');
+for (const [id,name] of units) {
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = `<img src="/sprites/units/${id}.png" alt="${name}"/><span>${name}</span>`;
+  row.appendChild(d);
+}
+</script>
+</body>
+</html>
