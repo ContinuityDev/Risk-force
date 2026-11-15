@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   BUILDING_LIST,
   getBuilding,
@@ -75,9 +82,75 @@ export function BaseView({
   } | null>(null);
   const [tooltip, setTooltip] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  /** When a placed building is selected: actions menu or train list. */
-  const [panelMode, setPanelMode] = useState<"actions" | "train">("actions");
+  /**
+   * Anchored context menu on a placed building (Train / Staff / Info).
+   * Coordinates are viewport-fixed (px) so yard scroll cannot drift them.
+   */
+  const [buildingMenu, setBuildingMenu] = useState<{
+    instanceId: string;
+    left: number;
+    top: number;
+  } | null>(null);
+  /** What the side panel / drawer is showing after a menu pick. */
+  const [drawerMode, setDrawerMode] = useState<
+    "build" | "train" | "staff" | "info" | null
+  >(null);
   const [shortLandscape, setShortLandscape] = useState(false);
+  const yardRef = useRef<HTMLDivElement | null>(null);
+  const ctxRef = useRef<HTMLDivElement | null>(null);
+
+  /** Place / clamp the context menu next to the selected building. */
+  function anchorMenuToBuilding(instanceId: string) {
+    const yard = yardRef.current;
+    const el =
+      yard?.querySelector(
+        `[data-instance-id="${CSS.escape(instanceId)}"]`,
+      ) ?? null;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const menuEl = ctxRef.current;
+    const menuW = menuEl?.offsetWidth || 148;
+    const menuH = menuEl?.offsetHeight || 130;
+    const gap = 2;
+    const edge = 8;
+    // Prefer flush to the right edge of the building; flip left if needed
+    let left = rect.right + gap;
+    let top = rect.top + Math.max(0, (rect.height - menuH) / 2);
+    if (left + menuW > window.innerWidth - edge) {
+      left = rect.left - menuW - gap;
+    }
+    if (left < edge) {
+      // Fall back: below the building, left-aligned to it
+      left = Math.min(
+        Math.max(edge, rect.left),
+        window.innerWidth - menuW - edge,
+      );
+      top = rect.bottom + gap;
+    }
+    if (left + menuW > window.innerWidth - edge) {
+      left = Math.max(edge, window.innerWidth - menuW - edge);
+    }
+    if (top + menuH > window.innerHeight - edge) {
+      top = Math.max(edge, window.innerHeight - menuH - edge);
+    }
+    if (top < edge) top = edge;
+    setBuildingMenu({ instanceId, left, top });
+  }
+
+  useLayoutEffect(() => {
+    if (!buildingMenu?.instanceId) return;
+    anchorMenuToBuilding(buildingMenu.instanceId);
+    const onResize = () => anchorMenuToBuilding(buildingMenu.instanceId);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onResize, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onResize, true);
+    };
+    // Re-run when the open target changes; coords update inside.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildingMenu?.instanceId, CELL, shortLandscape]);
+
   useEffect(() => {
     const mq = window.matchMedia(
       "(orientation: landscape) and (max-height: 500px)",
@@ -219,6 +292,7 @@ export function BaseView({
 
       <div className="rf-base__layout">
         <div
+          ref={yardRef}
           className="rf-base__yard"
           style={
             {
@@ -278,13 +352,20 @@ export function BaseView({
                       setDemolishId(inst.instanceId);
                       setPendingPlace(null);
                       setSelectedBuilding(null);
-                      setPanelMode("actions");
-                      if (shortLandscape) setDrawerOpen(true);
+                      setDrawerMode(null);
+                      setDrawerOpen(false);
+                      // Provisional coords; layout effect re-anchors from the DOM rect
+                      setBuildingMenu({
+                        instanceId: inst.instanceId,
+                        left: 0,
+                        top: 0,
+                      });
                       return;
                     }
                     setSelectedInstanceId(null);
                     setDemolishId(null);
-                    setPanelMode("actions");
+                    setBuildingMenu(null);
+                    setDrawerMode(null);
                     if (!selectedBuilding) return;
                     // Touch: tap-to-preview + Confirm. Mouse: place immediately (desktop unchanged).
                     const touch =
@@ -362,6 +443,7 @@ export function BaseView({
                 className={`rf-base__structure${
                   demolishId === inst.instanceId ? " is-target" : ""
                 }${constructing ? " is-building" : ""}`}
+                data-instance-id={inst.instanceId}
                 style={{
                   left: inst.x * CELL,
                   top: inst.y * CELL,
@@ -432,40 +514,133 @@ export function BaseView({
               </div>
             );
           })}
+
         </div>
+
+        {buildingMenu &&
+          selectedInst &&
+          selectedDef &&
+          buildingMenu.instanceId === selectedInst.instanceId && (
+            <div
+              ref={ctxRef}
+              className="rf-base__ctx"
+              role="menu"
+              data-tutorial="base-train"
+              style={{
+                left: buildingMenu.left,
+                top: buildingMenu.top,
+                visibility:
+                  buildingMenu.left === 0 && buildingMenu.top === 0
+                    ? "hidden"
+                    : "visible",
+              }}
+            >
+              {isTrainingBuilding(selectedDef) &&
+                selectedInst.buildRemaining <= 0 && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="rf-base__ctx-item"
+                    onClick={() => {
+                      setBuildingMenu(null);
+                      setDrawerMode("train");
+                      setDrawerOpen(true);
+                    }}
+                  >
+                    Train unit
+                  </button>
+                )}
+              <button
+                type="button"
+                role="menuitem"
+                className="rf-base__ctx-item"
+                onClick={() => {
+                  setBuildingMenu(null);
+                  setDrawerMode("staff");
+                  setDrawerOpen(true);
+                }}
+              >
+                Staff
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="rf-base__ctx-item"
+                onClick={() => {
+                  setBuildingMenu(null);
+                  setDrawerMode("info");
+                  setDrawerOpen(true);
+                }}
+              >
+                Info
+              </button>
+            </div>
+          )}
 
         {shortLandscape && (
           <button
             type="button"
             className="ghost rf-base__drawer-toggle"
-            aria-expanded={drawerOpen}
-            onClick={() => setDrawerOpen(true)}
+            aria-expanded={drawerOpen && drawerMode === "build"}
+            onClick={() => {
+              setBuildingMenu(null);
+              setSelectedInstanceId(null);
+              setDrawerMode("build");
+              setDrawerOpen(true);
+            }}
           >
-            Build · Staff · Train
+            Build
           </button>
         )}
         <Drawer
-          open={shortLandscape ? drawerOpen : true}
-          onClose={() => setDrawerOpen(false)}
+          open={
+            shortLandscape
+              ? drawerOpen
+              : drawerMode === "train" ||
+                drawerMode === "staff" ||
+                drawerMode === "info" ||
+                !!selectedBuilding ||
+                drawerMode === "build" ||
+                !selectedInst
+          }
+          onClose={() => {
+            setDrawerOpen(false);
+            setDrawerMode(null);
+            setBuildingMenu(null);
+          }}
           side="right"
           inline={!shortLandscape}
           className="rf-base__catalog"
           tutorialId="base-panels"
         >
         <div className="rf-base__catalog-inner">
-          {owned && selectedInst && (
+          {owned &&
+            selectedInst &&
+            selectedDef &&
+            drawerMode === "staff" && (
             <section
               className="rf-base__staff-panel"
               title={HELP.workers}
               data-tutorial="base-desc"
             >
-              <span className="rf-label">Staffing</span>
-              <p>
-                <strong>{getBuilding(selectedInst.buildingId).name}</strong>
-              </p>
-              <p className="rf-base__blurb">
-                {buildingBlurb(getBuilding(selectedInst.buildingId))}
-              </p>
+              <div className="rf-base__train-head">
+                <button
+                  type="button"
+                  className="ghost rf-base__train-back"
+                  onClick={() => {
+                    setDrawerMode(null);
+                    setDrawerOpen(false);
+                    setBuildingMenu({
+                      instanceId: selectedInst.instanceId,
+                      left: 0,
+                      top: 0,
+                    });
+                  }}
+                >
+                  ← {selectedDef.name}
+                </button>
+                <span className="rf-label">Staff</span>
+              </div>
               <p className="rf-hint">
                 Free workers: {freeWorkers}. Output scales with assigned staff.
               </p>
@@ -515,93 +690,46 @@ export function BaseView({
               })()}
             </section>
           )}
-          {owned && selectedInst && selectedDef && panelMode === "actions" && (
-            <section className="rf-base__actions" data-tutorial="base-train">
-              <span className="rf-label">Building menu</span>
-              <p>
-                <strong>{selectedDef.name}</strong>
-                <span className="rf-text-dim">
-                  {" "}
-                  · Pop {ts.population} untrained
-                </span>
-              </p>
-              <div className="rf-base__action-list">
-                {isTrainingBuilding(selectedDef) &&
-                  selectedInst.buildRemaining <= 0 && (
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() => setPanelMode("train")}
-                    >
-                      Train unit
-                    </button>
-                  )}
+
+          {owned &&
+            selectedInst &&
+            selectedDef &&
+            drawerMode === "info" && (
+            <section className="rf-base__staff-panel" data-tutorial="base-desc">
+              <div className="rf-base__train-head">
                 <button
                   type="button"
-                  className="ghost"
+                  className="ghost rf-base__train-back"
                   onClick={() => {
-                    /* staffing panel already above when selected */
+                    setDrawerMode(null);
+                    setDrawerOpen(false);
+                    setBuildingMenu({
+                      instanceId: selectedInst.instanceId,
+                      left: 0,
+                      top: 0,
+                    });
                   }}
                 >
-                  Staff / info (see above)
+                  ← {selectedDef.name}
                 </button>
-                {selectedDef.id !== "command_nexus" && (
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={!canAct}
-                    onClick={() => {
-                      if (demolishId === selectedInst.instanceId) {
-                        dispatch({
-                          type: "DEMOLISH_BUILDING",
-                          payload: {
-                            territoryId: tid,
-                            instanceId: selectedInst.instanceId,
-                          },
-                        });
-                        setSelectedInstanceId(null);
-                        setDemolishId(null);
-                      } else {
-                        setDemolishId(selectedInst.instanceId);
-                      }
-                    }}
-                  >
-                    {demolishId === selectedInst.instanceId
-                      ? "Confirm demolish"
-                      : "Demolish"}
-                  </button>
-                )}
+                <span className="rf-label">Info</span>
               </div>
-              {trainingJobsForSelected.length > 0 && (
-                <div className="rf-base__queue">
-                  <span className="rf-label">Queue at this building</span>
-                  <ul>
-                    {trainingJobsForSelected.map((j) => {
-                      let label =
-                        j.kind === "worker" ? "Worker" : (j.unitId ?? "Unit");
-                      if (j.unitId) {
-                        try {
-                          label = getUnit(j.unitId).name;
-                        } catch {
-                          /* */
-                        }
-                      }
-                      return (
-                        <li key={j.id}>
-                          {label}×{j.count}{" "}
-                          <span className="rf-text-dim">
-                            T-{j.turnsRemaining}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
+              <p>
+                <strong>{selectedDef.name}</strong>
+              </p>
+              <p className="rf-base__blurb">{buildingBlurb(selectedDef)}</p>
+              <p className="rf-hint">
+                HP {Math.ceil(selectedInst.hp)}/{selectedDef.maxHp} · Staff{" "}
+                {selectedInst.workers ?? 0}/
+                {workerCapForBuilding(selectedInst.buildingId)}
+              </p>
             </section>
           )}
 
-          {owned && selectedInst && selectedDef && panelMode === "train" && (
+          {owned &&
+            selectedInst &&
+            selectedDef &&
+            drawerMode === "train" && (
             <section
               className="rf-base__pop"
               title={HELP.training}
@@ -610,19 +738,26 @@ export function BaseView({
               <div className="rf-base__train-head">
                 <button
                   type="button"
-                  className="ghost"
-                  onClick={() => setPanelMode("actions")}
+                  className="ghost rf-base__train-back"
+                  onClick={() => {
+                    setDrawerMode(null);
+                    setDrawerOpen(false);
+                    setBuildingMenu({
+                      instanceId: selectedInst.instanceId,
+                      left: 0,
+                      top: 0,
+                    });
+                  }}
                 >
-                  ← Back
+                  ← {selectedDef.name} · Train
                 </button>
-                <span className="rf-label">Train at {selectedDef.name}</span>
               </div>
-              <p className="rf-hint">
-                Untrained pop: <strong>{ts.population}</strong>. Locked units
-                show their research gate.
+              <p className="rf-base__train-recruits">
+                Available recruits: <strong>{ts.population}</strong>
               </p>
               {selectedDef.producesWorkers && (
-                <div className="rf-base__train-row">
+                <ul className="rf-base__train-list">
+                  <li>
                   {(() => {
                     const cost = {
                       energy: GAME_LOOP.training.worker.energy,
@@ -635,7 +770,7 @@ export function BaseView({
                     return (
                       <button
                         type="button"
-                        className={`ghost${short.length ? " is-unaffordable" : ""}`}
+                        className={`rf-base__train-card${short.length ? " is-unaffordable" : ""}`}
                         disabled={hardBlock}
                         aria-disabled={!canAct || !check.ok}
                         onClick={() => {
@@ -650,20 +785,25 @@ export function BaseView({
                           });
                         }}
                       >
-                        <strong>Worker</strong>
-                        <CostLabel
-                          cost={cost}
-                          shortfalls={short}
-                          showNeed={short.length > 0}
-                        />
-                        <small>T-{GAME_LOOP.training.worker.turns}</small>
+                        <span className="rf-base__train-card-main">
+                          <strong>Worker</strong>
+                          <CostLabel
+                            cost={cost}
+                            shortfalls={short}
+                            showNeed={short.length > 0}
+                          />
+                        </span>
+                        <span className="rf-base__train-card-meta">
+                          <small>T-{GAME_LOOP.training.worker.turns}</small>
+                        </span>
                         {hardBlock && !check.ok && (
                           <span className="rf-cost__need">{check.reason}</span>
                         )}
                       </button>
                     );
                   })()}
-                </div>
+                  </li>
+                </ul>
               )}
               <ul className="rf-base__train-list">
                 {(selectedDef.produces ?? []).map((unitId) => {
@@ -697,7 +837,9 @@ export function BaseView({
                     <li key={unitId}>
                       <button
                         type="button"
-                        className={short.length && unlocked ? "is-unaffordable" : undefined}
+                        className={`rf-base__train-card${
+                          short.length && unlocked ? " is-unaffordable" : ""
+                        }`}
                         disabled={hardBlock}
                         aria-disabled={!canAct || !unlocked || !check.ok}
                         title={`${u.name} · HP ${u.maxHp} · Dmg ${u.damage}`}
@@ -718,21 +860,27 @@ export function BaseView({
                           });
                         }}
                       >
-                        <Sprite id={u.sprite.id} size={32} anim="idle" />
-                        <span>
-                          <strong>{u.name}</strong>
-                          <CostLabel
-                            cost={cost}
-                            shortfalls={unlocked ? short : []}
-                            showNeed={unlocked && short.length > 0}
-                          />
-                          <small>
-                            T-{turns}
-                            {u.supplyCost ? ` · upkeep S${u.supplyCost}` : ""}
-                            {!unlocked && gated
-                              ? ` · locked: ${gated.name}`
-                              : ""}
-                          </small>
+                        <Sprite id={u.sprite.id} size={28} anim="idle" />
+                        <span className="rf-base__train-card-body">
+                          <span className="rf-base__train-card-main">
+                            <strong>{u.name}</strong>
+                            <CostLabel
+                              cost={cost}
+                              shortfalls={unlocked ? short : []}
+                              showNeed={unlocked && short.length > 0}
+                            />
+                          </span>
+                          <span className="rf-base__train-card-meta">
+                            <small>T-{turns}</small>
+                            {u.supplyCost ? (
+                              <small>upkeep S{u.supplyCost}</small>
+                            ) : null}
+                            {!unlocked && gated ? (
+                              <small className="rf-text-dim">
+                                locked: {gated.name}
+                              </small>
+                            ) : null}
+                          </span>
                           {unlocked &&
                             short.length === 0 &&
                             !check.ok && (
@@ -775,13 +923,20 @@ export function BaseView({
             </section>
           )}
 
+          {(drawerMode === "build" ||
+            drawerMode === null ||
+            !!selectedBuilding) &&
+            drawerMode !== "train" &&
+            drawerMode !== "staff" &&
+            drawerMode !== "info" && (
+            <>
           {owned && !selectedInst && (
             <section className="rf-base__pop" data-tutorial="base-train">
               <span className="rf-label">Training</span>
               <p className="rf-hint">
                 Tap a Barracks, Vehicle Factory, Airfield, Drydock, or Command
                 Nexus on the grid, then choose <strong>Train unit</strong>.
-                Untrained pop: <strong>{ts.population}</strong>.
+                Available recruits: <strong>{ts.population}</strong>.
               </p>
               {ts.trainingQueue.length > 0 && (
                 <div className="rf-base__queue">
@@ -862,7 +1017,8 @@ export function BaseView({
                         pulseResources(short.map((s) => s.resource));
                       }
                       setSelectedInstanceId(null);
-                      setPanelMode("actions");
+                      setBuildingMenu(null);
+                      setDrawerMode("build");
                       setSelectedBuilding((cur) =>
                         cur === b.id ? null : b.id,
                       );
@@ -894,9 +1050,11 @@ export function BaseView({
           </ul>
           <p className="rf-hint">
             Select a structure, then click an empty pad (on phones: tap to
-            preview, then Confirm). Click a building twice to demolish (HQ
-            excluded). Long-press a building for stats.
+            preview, then Confirm). Tap a building for Train / Staff / Info.
+            Long-press a building for stats.
           </p>
+            </>
+          )}
         </div>
         </Drawer>
       </div>

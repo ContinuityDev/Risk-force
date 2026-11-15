@@ -87,9 +87,11 @@ export function Hud({
   return (
     <header className="rf-hud">
       <div className="rf-hud__identity">
-        <span className="rf-label">Turn {state.turn}</span>
-        <strong style={{ color }}>{activePlayer.displayName}</strong>
-        {!isHumanTurn && <span className="rf-hud__ai">AI executing…</span>}
+        <span className="rf-label">T{state.turn}</span>
+        <strong className="rf-hud__commander" style={{ color }}>
+          {activePlayer.displayName}
+        </strong>
+        {!isHumanTurn && <span className="rf-hud__ai">AI…</span>}
         {activePlayer.insolvent && (
           <span className="rf-hud__warn" title={HELP.upkeep}>
             Insolvent
@@ -97,7 +99,11 @@ export function Hud({
         )}
       </div>
 
-      <div className="rf-hud__resources" aria-label="Resources" data-tutorial="hud-resources">
+      <div
+        className="rf-hud__resources"
+        aria-label="Resources"
+        data-tutorial="hud-resources"
+      >
         <button
           type="button"
           className={`rf-resource rf-tick rf-resource--energy${
@@ -111,16 +117,19 @@ export function Hud({
           }
         >
           <ResourceIcon id="energy" />
-          <span className="rf-resource__text">
-            <span className="rf-label">{RESOURCE_META.energy.short}</span>
-            <strong>{Math.floor(r.energy)}</strong>
-            <small
-              className={`rf-hud__upkeep${ledger.net >= 0 ? " is-pos" : " is-neg"}`}
-            >
-              {netSign}
-              {netAbs}/t
-            </small>
+          <span className="rf-resource__name">
+            <span className="rf-resource__full">ENERGY</span>
+            <span className="rf-resource__abbr" aria-hidden="true">
+              NRG
+            </span>
           </span>
+          <strong>{Math.floor(r.energy)}</strong>
+          <small
+            className={`rf-hud__upkeep${ledger.net >= 0 ? " is-pos" : " is-neg"}`}
+          >
+            {netSign}
+            {netAbs}/t
+          </small>
           {tipId === "energy" && (
             <span className="rf-hud__ledger is-open" role="tooltip">
               <strong>{RESOURCE_META.energy.label}</strong>
@@ -146,10 +155,13 @@ export function Hud({
           onClick={() => setTipId((cur) => (cur === "alloy" ? null : "alloy"))}
         >
           <ResourceIcon id="alloy" />
-          <span className="rf-resource__text">
-            <span className="rf-label">{RESOURCE_META.alloy.short}</span>
-            <strong>{Math.floor(r.alloy)}</strong>
+          <span className="rf-resource__name">
+            <span className="rf-resource__full">ALLOY</span>
+            <span className="rf-resource__abbr" aria-hidden="true">
+              ALY
+            </span>
           </span>
+          <strong>{Math.floor(r.alloy)}</strong>
           {tipId === "alloy" && (
             <span className="rf-hud__ledger is-open" role="tooltip">
               <strong>{RESOURCE_META.alloy.label}</strong>
@@ -170,10 +182,13 @@ export function Hud({
           }
         >
           <ResourceIcon id="research" />
-          <span className="rf-resource__text">
-            <span className="rf-label">{RESOURCE_META.research.short}</span>
-            <strong>{Math.floor(r.research)}</strong>
+          <span className="rf-resource__name">
+            <span className="rf-resource__full">RESEARCH</span>
+            <span className="rf-resource__abbr" aria-hidden="true">
+              RSH
+            </span>
           </span>
+          <strong>{Math.floor(r.research)}</strong>
           {tipId === "research" && (
             <span className="rf-hud__ledger is-open" role="tooltip">
               <strong>{RESOURCE_META.research.label}</strong>
@@ -196,10 +211,13 @@ export function Hud({
           }
         >
           <ResourceIcon id="supply" />
-          <span className="rf-resource__text">
-            <span className="rf-label">{RESOURCE_META.supply.short}</span>
-            <strong>{Math.floor(r.supply)}</strong>
+          <span className="rf-resource__name">
+            <span className="rf-resource__full">SUPPLY</span>
+            <span className="rf-resource__abbr" aria-hidden="true">
+              SUP
+            </span>
           </span>
+          <strong>{Math.floor(r.supply)}</strong>
           {tipId === "supply" && (
             <span className="rf-hud__ledger is-open" role="tooltip">
               <strong>{RESOURCE_META.supply.label}</strong>
@@ -216,25 +234,28 @@ export function Hud({
           {...campaignPress}
         >
           <ResourceIcon id="campaign" />
-          <span className="rf-resource__text">
-            <span className="rf-label">{RESOURCE_META.campaign.short}</span>
-            <input
-              type="range"
-              min={0}
-              max={GAME_LOOP.campaigning.maxBudget}
-              step={5}
-              value={activePlayer.campaignBudget}
-              disabled={!isHumanTurn}
-              onChange={(e) =>
-                dispatch({
-                  type: "SET_CAMPAIGN_BUDGET",
-                  payload: { energy: Number(e.target.value) },
-                })
-              }
-              onFocus={() => setTipId("campaign")}
-            />
-            <strong>{activePlayer.campaignBudget}</strong>
+          <span className="rf-resource__name">
+            <span className="rf-resource__full">CAMPAIGN</span>
+            <span className="rf-resource__abbr" aria-hidden="true">
+              CMP
+            </span>
           </span>
+          <input
+            type="range"
+            min={0}
+            max={GAME_LOOP.campaigning.maxBudget}
+            step={5}
+            value={activePlayer.campaignBudget}
+            disabled={!isHumanTurn}
+            onChange={(e) =>
+              dispatch({
+                type: "SET_CAMPAIGN_BUDGET",
+                payload: { energy: Number(e.target.value) },
+              })
+            }
+            onFocus={() => setTipId("campaign")}
+          />
+          <strong>{activePlayer.campaignBudget}</strong>
           {tipId === "campaign" && (
             <span className="rf-hud__ledger is-open" role="tooltip">
               <strong>{RESOURCE_META.campaign.label}</strong>
