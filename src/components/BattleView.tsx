@@ -12,6 +12,7 @@ import {
   getSpriteUrl,
 } from "../sprites/registry";
 import { DirSprite } from "./DirSprite";
+import { Sprite } from "./Sprite";
 
 interface DmgFloater {
   id: string;
