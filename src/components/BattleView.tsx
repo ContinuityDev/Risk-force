@@ -138,18 +138,21 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
         >
           <div className="rf-battle__sky" />
           <div className="rf-battle__ground" />
-          <div className="rf-battle__grid-overlay" />
+          <div className="rf-battle__scorch" />
+          <div className="rf-battle__rubble" />
+          <div className="rf-battle__smoke rf-battle__smoke--a" />
+          <div className="rf-battle__smoke rf-battle__smoke--b" />
           <div className="rf-battle__ridge" />
 
           {battle.defenses.map((d) => {
             if (!d.alive && d.anim !== "destroyed") return null;
             const pos = worldToPct(d.x, d.y);
             let spriteId = "building-shield";
-            let size = 112;
+            let size = 128;
             try {
               const def = getBuilding(d.buildingId);
               spriteId = def.sprite.id;
-              size = def.size.w >= 2 ? 140 : 116;
+              size = def.size.w >= 2 ? 152 : 130;
             } catch {
               /* */
             }
@@ -197,21 +200,22 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             if (!u.alive && u.anim !== "destroyed") return null;
             const pos = worldToPct(u.x, u.y);
             let spriteId = "unit-trooper";
-            let size = 84;
+            // ~80–120px tanks at ~1280px stage width
+            let size = 96;
             try {
               const def = getUnit(u.unitId);
               spriteId = def.sprite.id;
               const isMech = /mech|walker|spider/i.test(u.unitId);
               size =
                 def.role === "armor" || def.role === "naval"
-                  ? 108
+                  ? 112
                   : isMech
-                    ? 118
+                    ? 120
                     : def.role === "air" || def.role === "orbital"
-                      ? 92
+                      ? 100
                       : def.role === "artillery"
-                        ? 100
-                        : 86;
+                        ? 108
+                        : 94;
             } catch {
               /* */
             }
@@ -264,23 +268,39 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
 
           {battle.explosions.map((ex) => {
             const pos = worldToPct(ex.x, ex.y);
-            const scale = 1.25 + ex.t * 2.2;
+            const scale = 1.4 + ex.t * 2.6;
             const fx = ex.style === "emp" ? "fx-emp" : "fx-explosion";
             return (
-              <img
+              <div
                 key={ex.id}
-                className="rf-battle__explosion"
-                src={getSpriteUrl(fx)}
-                alt=""
-                style={{
-                  left: pos.left,
-                  top: pos.top,
-                  width: 120,
-                  height: 120,
-                  transform: `translate(-50%, -50%) scale(${scale})`,
-                  opacity: Math.max(0, 1 - ex.t * 1.2),
-                }}
-              />
+                className="rf-battle__blast"
+                style={{ left: pos.left, top: pos.top }}
+              >
+                <img
+                  className="rf-battle__explosion"
+                  src={getSpriteUrl(fx)}
+                  alt=""
+                  style={{
+                    width: 148,
+                    height: 148,
+                    transform: `scale(${scale})`,
+                    opacity: Math.max(0, 1 - ex.t * 1.05),
+                  }}
+                />
+                {ex.style !== "emp" && (
+                  <img
+                    className="rf-battle__explosion-smoke"
+                    src={getSpriteUrl("fx-smoke")}
+                    alt=""
+                    style={{
+                      width: 160,
+                      height: 160,
+                      transform: `translateY(${-12 - ex.t * 28}px) scale(${1.1 + ex.t * 1.8})`,
+                      opacity: Math.max(0, 0.75 - ex.t * 0.7),
+                    }}
+                  />
+                )}
+              </div>
             );
           })}
         </div>

@@ -77,99 +77,71 @@ export function createBattle(
     });
   };
 
-  // Front line turrets — two columns, clear spacing
+  // Defensive positions — spread across the RIGHT half of the field
   armed.forEach((b, i) => {
     const col = i % 2;
     const row = Math.floor(i / 2);
-    placeDef(b, 8.0 + col * 1.55, 1.35 + row * 1.45);
+    placeDef(b, 8.2 + col * 1.4, 0.9 + row * 1.55);
   });
-  // Walls / pylons mid
   walls.forEach((b, i) => {
-    placeDef(b, 10.0 + (i % 2) * 1.1, 1.7 + Math.floor(i / 2) * 1.5);
+    placeDef(b, 10.1 + (i % 2) * 1.05, 1.1 + Math.floor(i / 2) * 1.55);
   });
-  // Economy behind
   econ.forEach((b, i) => {
-    placeDef(b, 11.5 + (i % 2) * 1.0, 1.5 + Math.floor(i / 2) * 1.4);
+    placeDef(b, 11.6 + (i % 2) * 0.95, 1.0 + Math.floor(i / 2) * 1.5);
   });
-  // HQ back-center
   command.forEach((b, i) => {
-    placeDef(b, 12.6, 2.8 + i * 1.35);
+    placeDef(b, 12.7, 2.2 + i * 1.5);
   });
 
-  // Attackers on the LEFT — spread formation by silhouette class.
+  // Attackers — spread across FULL field height in attacking echelons
   const units: BattleUnit[] = [];
-  const lanes = {
-    infantry: 0,
-    mech: 0,
-    armor: 0,
-    air: 0,
-    artillery: 0,
-    other: 0,
-  };
+  const forceSlots: { unitId: string; udef: ReturnType<typeof getUnit> }[] = [];
   for (const slot of force) {
     const udef = getUnit(slot.unitId);
-    const isMech =
-      /mech|walker|spider/i.test(slot.unitId) ||
-      /mech|walker/i.test(udef.name);
     for (let i = 0; i < slot.count; i++) {
-      let laneKey: keyof typeof lanes = "other";
-      let baseY = 2.5;
-      let baseX = 1.0;
-      let colPitch = 1.35;
-      let rowPitch = 1.2;
-      if (udef.role === "air" || udef.role === "orbital") {
-        laneKey = "air";
-        baseY = 0.55;
-        baseX = 1.6;
-        colPitch = 1.5;
-        rowPitch = 1.15;
-      } else if (udef.role === "armor" || /hover|tank|rail/i.test(slot.unitId)) {
-        laneKey = "armor";
-        baseY = 3.5;
-        baseX = 0.55;
-        colPitch = 1.55;
-        rowPitch = 1.25;
-      } else if (isMech) {
-        laneKey = "mech";
-        baseY = 2.15;
-        baseX = 0.85;
-        colPitch = 1.5;
-        rowPitch = 1.3;
-      } else if (udef.role === "artillery") {
-        laneKey = "artillery";
-        baseY = 5.0;
-        baseX = 0.4;
-        colPitch = 1.4;
-        rowPitch = 1.15;
-      } else if (udef.role === "infantry") {
-        laneKey = "infantry";
-        baseY = 1.15;
-        baseX = 1.35;
-        colPitch = 1.2;
-        rowPitch = 1.05;
-      } else if (udef.role === "naval") {
-        baseY = 5.7;
-        baseX = 1.1;
-      }
-      const idx = lanes[laneKey]++;
-      const col = idx % 3;
-      const row = Math.floor(idx / 3);
-      units.push({
-        id: uid("u", n++),
-        unitId: slot.unitId,
-        side: "attacker",
-        x: baseX + col * colPitch,
-        y: baseY + row * rowPitch,
-        hp: udef.maxHp,
-        maxHp: udef.maxHp,
-        cooldown: 0.15 + (n % 7) * 0.1,
-        anim: "move",
-        animT: 0,
-        alive: true,
-        disabledT: 0,
-      });
+      forceSlots.push({ unitId: slot.unitId, udef });
     }
   }
+  // Sort into front-line (infantry/armor/mech) then support (arty/air)
+  forceSlots.sort((a, b) => {
+    const rank = (u: (typeof forceSlots)[0]) => {
+      if (u.udef.role === "infantry") return 0;
+      if (u.udef.role === "armor" || /hover|tank|rail/i.test(u.unitId)) return 1;
+      if (/mech|walker|spider/i.test(u.unitId)) return 2;
+      if (u.udef.role === "artillery") return 4;
+      if (u.udef.role === "air" || u.udef.role === "orbital") return 3;
+      return 2;
+    };
+    return rank(a) - rank(b);
+  });
+  const total = Math.max(1, forceSlots.length);
+  forceSlots.forEach((slot, i) => {
+    const { unitId, udef } = slot;
+    // Distribute evenly across y ∈ [0.7, 6.4]
+    const y = 0.7 + (i / Math.max(1, total - 1)) * 5.7;
+    let x = 1.1;
+    if (udef.role === "artillery") x = 0.55;
+    else if (udef.role === "air" || udef.role === "orbital") x = 2.4;
+    else if (udef.role === "armor" || /hover|tank|rail/i.test(unitId)) x = 0.85;
+    else if (/mech|walker|spider/i.test(unitId)) x = 1.35;
+    else if (udef.role === "infantry") x = 1.85;
+    // Alternate depth so columns form a wedge, not a single file
+    x += (i % 3) * 1.15 + (i % 2) * 0.25;
+    units.push({
+      id: uid("u", n++),
+      unitId,
+      side: "attacker",
+      x: Math.min(5.6, x),
+      y: Math.min(6.5, y),
+      hp: udef.maxHp,
+      maxHp: udef.maxHp,
+      cooldown: 0.15 + (n % 7) * 0.1,
+      anim: "move",
+      animT: 0,
+      alive: true,
+      disabledT: 0,
+    });
+  });
 
   const forceCount = units.length;
   const defCount = defenses.filter((d) => getBuilding(d.buildingId).damage).length;
@@ -313,7 +285,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
   let projectiles = [...battle.projectiles];
   let explosions = battle.explosions
     .map((e) => ({ ...e, t: e.t + dt }))
-    .filter((e) => e.t < 0.6);
+    .filter((e) => e.t < 0.95);
   const log = [...battle.log];
 
   const snapshot = (): BattleState => ({
@@ -337,13 +309,16 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
     if (!target) return { ...next, anim: "idle" };
 
     const d = dist(next.x, next.y, target.x, target.y);
-    const ideal = Math.max(0.55, udef.range * 0.82);
+    const ideal = Math.max(0.9, udef.range * 0.78);
     if (d > ideal) {
       const step = udef.speed * dt;
+      // Prefer lateral advance — hold lane Y so the line does not collapse
+      const dx = ((target.x - next.x) / d) * step;
+      const dy = ((target.y - next.y) / d) * step * 0.22;
       return {
         ...next,
-        x: next.x + ((target.x - next.x) / d) * step,
-        y: next.y + ((target.y - next.y) / d) * step,
+        x: next.x + dx,
+        y: Math.max(0.4, Math.min(6.7, next.y + dy)),
         anim: "move",
       };
     }

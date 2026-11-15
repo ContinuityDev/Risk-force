@@ -1,42 +1,43 @@
 /**
  * Maps sprite ids from building/unit defs to public `/sprites/...` URLs.
  * Aliases cover catalog ids that differ slightly from on-disk filenames.
+ * Assets are pre-rendered PNG sheets from the three.js sprite lab.
  */
 
 const ALIASES: Record<string, string> = {
   // Buildings
-  "building-supply-depot": "buildings/building-supply.svg",
-  "building-fusion-foundry": "buildings/building-fabricator.svg",
-  "building-missile-battery": "buildings/building-missile.svg",
-  "building-emp-tower": "buildings/building-emp.svg",
-  "building-coastal-battery": "buildings/building-coastal.svg",
-  "building-shield-generator": "buildings/building-shield-gen.svg",
-  "building-research-lab": "buildings/building-lab.svg",
-  "building-cyber-ops": "buildings/building-cyber.svg",
-  "building-silo-pad": "buildings/building-silo.svg",
-  "building-repair-bay": "buildings/building-repair.svg",
-  "building-ammo-factory": "buildings/building-supply.svg",
-  "building-sensor-dome": "buildings/building-sonar.svg",
+  "building-supply-depot": "buildings/building-supply.png",
+  "building-fusion-foundry": "buildings/building-fabricator.png",
+  "building-missile-battery": "buildings/building-missile.png",
+  "building-emp-tower": "buildings/building-emp.png",
+  "building-coastal-battery": "buildings/building-coastal.png",
+  "building-shield-generator": "buildings/building-shield-gen.png",
+  "building-research-lab": "buildings/building-lab.png",
+  "building-cyber-ops": "buildings/building-cyber.png",
+  "building-silo-pad": "buildings/building-silo.png",
+  "building-repair-bay": "buildings/building-repair.png",
+  "building-ammo-factory": "buildings/building-supply.png",
+  "building-sensor-dome": "buildings/building-sonar.png",
 
   // Units
-  "unit-power-trooper": "units/unit-power-trooper.svg",
-  "unit-heavy-walker": "units/unit-walker.svg",
-  "unit-stealth-op": "units/unit-stealth.svg",
-  "unit-cyber-commando": "units/unit-commando.svg",
-  "unit-shield-tank": "units/unit-hover.svg",
-  "unit-spider-mech": "units/unit-spider.svg",
-  "unit-siege-mech": "units/unit-siege-mech.svg",
-  "unit-plasma-howitzer": "units/unit-howitzer.svg",
-  "unit-cruise-launcher": "units/unit-siege.svg",
-  "unit-stealth-bomber": "units/unit-bomber.svg",
-  "unit-assault-dropship": "units/unit-dropship.svg",
-  "unit-carrier-barge": "units/unit-destroyer.svg",
-  "unit-torpedo-boat": "units/unit-hydrofoil.svg",
-  "unit-orbital-laser": "units/unit-orbital.svg",
-  "unit-kinetic-rod": "units/unit-orbital.svg",
-  "unit-sat-relay": "units/unit-orbital.svg",
-  "unit-virus-probe": "units/unit-commando.svg",
-  "unit-data-spike": "units/unit-ew-drone.svg",
+  "unit-power-trooper": "units/unit-power-trooper.png",
+  "unit-heavy-walker": "units/unit-walker.png",
+  "unit-stealth-op": "units/unit-stealth.png",
+  "unit-cyber-commando": "units/unit-commando.png",
+  "unit-shield-tank": "units/unit-hover.png",
+  "unit-spider-mech": "units/unit-spider.png",
+  "unit-siege-mech": "units/unit-siege-mech.png",
+  "unit-plasma-howitzer": "units/unit-howitzer.png",
+  "unit-cruise-launcher": "units/unit-siege.png",
+  "unit-stealth-bomber": "units/unit-bomber.png",
+  "unit-assault-dropship": "units/unit-dropship.png",
+  "unit-carrier-barge": "units/unit-destroyer.png",
+  "unit-torpedo-boat": "units/unit-hydrofoil.png",
+  "unit-orbital-laser": "units/unit-orbital.png",
+  "unit-kinetic-rod": "units/unit-orbital.png",
+  "unit-sat-relay": "units/unit-orbital.png",
+  "unit-virus-probe": "units/unit-commando.png",
+  "unit-data-spike": "units/unit-ew-drone.png",
 };
 
 const PLACEHOLDER =
@@ -49,10 +50,10 @@ const PLACEHOLDER =
   );
 
 function defaultPath(id: string): string {
-  if (id.startsWith("building-")) return `buildings/${id}.svg`;
-  if (id.startsWith("unit-")) return `units/${id}.svg`;
-  if (id.startsWith("fx-")) return `effects/${id}.svg`;
-  return `${id}.svg`;
+  if (id.startsWith("building-")) return `buildings/${id}.png`;
+  if (id.startsWith("unit-")) return `units/${id}.png`;
+  if (id.startsWith("fx-")) return `effects/${id}.png`;
+  return `${id}.png`;
 }
 
 /** Resolve a sprite id to a public URL under `/sprites/`. */

@@ -28,3 +28,6 @@ dist-ssr
 
 # Cloud agent scratch
 agent-tools
+
+scripts/sprite-lab/bundle.js
+scripts/sprite-lab/index.html

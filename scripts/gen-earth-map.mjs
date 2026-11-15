@@ -13,7 +13,7 @@ import {
   geoEquirectangular,
   geoPath,
 } from "d3-geo";
-import { feature } from "topojson-client";
+import { feature, merge as topoMerge } from "topojson-client";
 import { presimplify, quantile, simplify } from "topojson-simplify";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -86,8 +86,25 @@ function filterMetropole(geom, lonRange, latRange) {
   return { type: "MultiPolygon", coordinates: kept };
 }
 
-/** Concatenate features — avoid polygon-clipping.union (corrupts some NE rings). */
+/**
+ * Dissolve internal borders between adjacent countries via topojson.merge
+ * so each territory is one outline (no country-line seams inside).
+ */
+function mergeByNames(names) {
+  const feats = must(...names);
+  if (!feats.length) return { type: "MultiPolygon", coordinates: [] };
+  const ids = new Set(feats.map((f) => f.id));
+  const geoms = topo.objects.countries.geometries.filter((g) =>
+    ids.has(g.id),
+  );
+  if (!geoms.length) return { type: "MultiPolygon", coordinates: [] };
+  return toMulti(topoMerge(topo, geoms));
+}
+
+/** @deprecated use mergeByNames — kept for call sites that pass Feature[] */
 function mergeFeatures(feats) {
+  const names = feats.filter(Boolean).map((f) => f.properties?.name).filter(Boolean);
+  if (names.length) return mergeByNames(names);
   const coords = [];
   for (const f of feats) {
     if (!f?.geometry) continue;
@@ -371,16 +388,19 @@ const DEFS = [
     id: "western_europe",
     name: "W. Europe",
     continent: "Europe",
-    geom: mergeFeatures(
-      [
-        metro("France", [-6, 10], [41, 52]),
-        metro("Spain", [-10, 5], [35, 44]),
-        metro("Portugal", [-10, -5], [36, 43]),
-        metro("Belgium", [2, 7], [49, 52]),
-        metro("Netherlands", [3, 8], [50, 54]),
-        metro("Luxembourg", [5, 7], [49, 51]),
-        metro("Switzerland", [5, 11], [45, 48]),
-      ].filter(Boolean),
+    // Merge then strip overseas territories (e.g. French Guiana)
+    geom: filterMetropole(
+      mergeByNames([
+        "France",
+        "Spain",
+        "Portugal",
+        "Belgium",
+        "Netherlands",
+        "Luxembourg",
+        "Switzerland",
+      ]),
+      [-10, 12],
+      [35, 54],
     ),
     neighbors: ["britain", "germany", "southern_europe", "north_africa"],
     startingOwner: "faction_b",
