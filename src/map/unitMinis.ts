@@ -203,7 +203,11 @@ export function layoutUnitMinis(
     const baseX = lbl?.x ?? ax;
     // Sit just below-left of the label (same vertical band as buildings, shifted
     // left) so deep-zoom cameras that frame the label keep units on-screen.
-    const sideX = lbl ? lbl.x - size * 1.15 : ax - size;
+    // Keep a clear gap left of the label so deep multi-icon grids don't
+    // collide with the label box and fall through to a lone compact chip.
+    const sideX = lbl
+      ? lbl.x - size * (tier === "deep" ? 2.4 : 1.35)
+      : ax - size;
     const sideY = lbl
       ? lbl.y + lbl.h / 2 + gap + size / 2
       : ay + size * 0.9;
@@ -243,7 +247,10 @@ export function layoutUnitMinis(
       continue;
     }
 
-    const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
+    const maxShow =
+      tier === "mid"
+        ? Math.min(3, sorted.length)
+        : Math.min(6, sorted.length);
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
     const cols =
@@ -298,8 +305,10 @@ export function layoutUnitMinis(
       if (moreCount > 0) {
         const slot = slots[shown.length]!;
         const box: Box = { x: slot.x, y: slot.y, w: size * 0.85, h: size * 0.85 };
+        // Keep +N on the same blocker set as the unit lane (don't let
+        // building boxes veto an otherwise valid side-lane layout).
         if (
-          occupied.some((o) => overlaps(box, o, gap * 0.35)) ||
+          blockers.some((o) => overlaps(box, o, gap * 0.35)) ||
           trialBoxes.some((o) => overlaps(box, o, gap * 0.2))
         ) {
           continue;
@@ -326,7 +335,8 @@ export function layoutUnitMinis(
     }
 
     if (!placed) {
-      // Fallback compact badge
+      // Fallback compact badge — prefer label blockers so building clusters
+      // never erase the garrison chip on dense cores (Greenland etc.).
       const total = sorted.reduce((s, u) => s + u.count, 0);
       const top = sorted[0]!;
       const fx = sideX;
@@ -337,7 +347,7 @@ export function layoutUnitMinis(
         w: size * 1.1,
         h: size * 1.1,
       };
-      if (!occupied.some((o) => overlaps(box, o, gap * 0.3))) {
+      if (!labelBoxes.some((o) => overlaps(box, o, gap * 0.3))) {
         occupied.push(box);
         const m = toMini(
           `${t.id}:troops`,
