@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isOnGround } from "../data/battleField";
+import { BATTLE_FIELD, isOnGround } from "../data/battleField";
 import { damageMultiplier } from "../data/combatMatrix";
 import { getTerritory } from "../data/map/territories";
 import { createInitialState } from "./init";
@@ -45,6 +45,20 @@ describe("battle simulation", () => {
     expect(battle.units.some((u) => u.side === "defender")).toBe(true);
     expect(battle.defenses.length).toBeGreaterThan(0);
     expect(battle.status).toBe("running");
+    const deploy = BATTLE_FIELD.attackerDeploy;
+    const base = BATTLE_FIELD.defenderZone;
+    for (const u of attackers) {
+      expect(u.x).toBeGreaterThanOrEqual(deploy.x0);
+      expect(u.x).toBeLessThanOrEqual(deploy.x1);
+      expect(u.x).toBeLessThan(base.x0);
+      expect(isOnGround(u.x, u.y)).toBe(true);
+    }
+    for (const u of battle.units.filter((x) => x.side === "defender")) {
+      expect(u.x).toBeGreaterThanOrEqual(BATTLE_FIELD.garrisonZone.x0);
+      expect(u.x).toBeLessThanOrEqual(BATTLE_FIELD.garrisonZone.x1);
+      expect(u.x).toBeGreaterThanOrEqual(base.x0);
+      expect(isOnGround(u.x, u.y)).toBe(true);
+    }
   });
 
   it("tickBattle advances time and eventually resolves", () => {

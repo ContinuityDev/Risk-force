@@ -2,7 +2,7 @@ import { useState } from "react";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
 import type { GameAction } from "../engine/actions";
-import { computeEnergyUpkeep } from "../engine/economy";
+import { computeEnergyLedger } from "../engine/economy";
 import type { GameState, PlayerState, Screen } from "../engine/state";
 
 interface HudProps {
@@ -24,7 +24,16 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
   const r = activePlayer.resources;
   const color = factionColor(activePlayer.id);
   const [helpOpen, setHelpOpen] = useState(false);
-  const upkeep = computeEnergyUpkeep(state, activePlayer.id);
+  const ledger = computeEnergyLedger(state, activePlayer.id);
+  const netSign = ledger.net >= 0 ? "+" : "−";
+  const netAbs = Math.abs(ledger.net);
+  const energyTitle = [
+    `Income +${ledger.income}/t`,
+    `Upkeep −${ledger.upkeep}/t`,
+    `Campaign −${ledger.campaign}/t`,
+    `Net ${ledger.net >= 0 ? "+" : ""}${ledger.net}/t`,
+    HELP.upkeep,
+  ].join(" · ");
 
   return (
     <header className="rf-hud">
@@ -40,10 +49,27 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
       </div>
 
       <div className="rf-hud__resources" aria-label="Resources">
-        <span className="rf-resource rf-tick" title={HELP.upkeep}>
+        <span
+          className="rf-resource rf-tick rf-resource--energy"
+          title={energyTitle}
+        >
           <span className="rf-label">Energy</span>
           <strong>{Math.floor(r.energy)}</strong>
-          <small className="rf-hud__upkeep">−{upkeep}/t</small>
+          <small
+            className={`rf-hud__upkeep${ledger.net >= 0 ? " is-pos" : " is-neg"}`}
+          >
+            {netSign}
+            {netAbs}/t
+          </small>
+          <span className="rf-hud__ledger" role="tooltip">
+            <span>+{ledger.income} income</span>
+            <span>−{ledger.upkeep} upkeep</span>
+            <span>−{ledger.campaign} campaign</span>
+            <span className={ledger.net >= 0 ? "is-pos" : "is-neg"}>
+              = {ledger.net >= 0 ? "+" : ""}
+              {ledger.net} net
+            </span>
+          </span>
         </span>
         <span className="rf-resource rf-tick">
           <span className="rf-label">Alloy</span>

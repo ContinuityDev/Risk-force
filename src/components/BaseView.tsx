@@ -3,13 +3,13 @@ import { BUILDING_LIST, getBuilding } from "../data/buildings";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
-import { UNIT_LIST } from "../data/units";
+import { UNIT_LIST, getUnit } from "../data/units";
 import type { GameAction } from "../engine/actions";
 import { canAfford } from "../engine/economy";
 import { canPlaceBuilding } from "../engine/placement";
 import { isUnlocked } from "../engine/research";
 import type { GameState, PlayerState } from "../engine/state";
-import { workerCapForBuilding } from "../engine/training";
+import { unitTrainTurns, workerCapForBuilding } from "../engine/training";
 import { Sprite } from "./Sprite";
 
 interface BaseViewProps {
@@ -29,6 +29,9 @@ export function BaseView({
 }: BaseViewProps) {
   const tid = state.selectedTerritoryId;
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(
+    null,
+  );
   const [demolishId, setDemolishId] = useState<string | null>(null);
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
 
@@ -62,6 +65,8 @@ export function BaseView({
     0,
   );
   const freeWorkers = Math.max(0, (ts.workers ?? 0) - assignedWorkers);
+  const selectedInst =
+    ts.buildings.find((b) => b.instanceId === selectedInstanceId) ?? null;
   const trainables = UNIT_LIST.filter(
     (u) =>
       u.id === GAME_LOOP.training.basicUnitId ||
@@ -192,9 +197,11 @@ export function BaseView({
                       return;
                     }
                     if (inst) {
+                      setSelectedInstanceId(inst.instanceId);
                       setDemolishId(inst.instanceId);
                       return;
                     }
+                    setSelectedInstanceId(null);
                     placeAt(x, y);
                   }}
                 />
@@ -260,28 +267,14 @@ export function BaseView({
                   </span>
                 )}
                 {!constructing && owned && (
-                  <label className="rf-base__staff" title={HELP.workers}>
-                    Staff
-                    <input
-                      type="number"
-                      min={0}
-                      max={workerCapForBuilding(inst.buildingId)}
-                      value={inst.workers ?? 0}
-                      disabled={!canAct}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) =>
-                        dispatch({
-                          type: "ASSIGN_WORKERS",
-                          payload: {
-                            territoryId: tid,
-                            instanceId: inst.instanceId,
-                            workers: Number(e.target.value),
-                          },
-                        })
-                      }
-                    />
-                    /{workerCapForBuilding(inst.buildingId)}
-                  </label>
+                  <span
+                    className={`rf-base__staff-badge${
+                      selectedInstanceId === inst.instanceId ? " is-active" : ""
+                    }`}
+                    title="Select building to assign staff"
+                  >
+                    {inst.workers ?? 0}/{workerCapForBuilding(inst.buildingId)}
+                  </span>
                 )}
                 <span className="rf-base__hp">
                   {Math.ceil(inst.hp)}/{def.maxHp}
@@ -293,6 +286,38 @@ export function BaseView({
         </div>
 
         <aside className="rf-base__catalog">
+          {owned && selectedInst && (
+            <section className="rf-base__staff-panel" title={HELP.workers}>
+              <span className="rf-label">Staffing</span>
+              <p>
+                <strong>{getBuilding(selectedInst.buildingId).name}</strong>
+              </p>
+              <p className="rf-hint">
+                Free workers: {freeWorkers}. Output scales with assigned staff.
+              </p>
+              <label className="rf-base__staff-control">
+                Workers
+                <input
+                  type="number"
+                  min={0}
+                  max={workerCapForBuilding(selectedInst.buildingId)}
+                  value={selectedInst.workers ?? 0}
+                  disabled={!canAct || selectedInst.buildRemaining > 0}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "ASSIGN_WORKERS",
+                      payload: {
+                        territoryId: tid,
+                        instanceId: selectedInst.instanceId,
+                        workers: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+                /{workerCapForBuilding(selectedInst.buildingId)}
+              </label>
+            </section>
+          )}
           {owned && (
             <section className="rf-base__pop" title={HELP.training}>
               <span className="rf-label">Population & Training</span>
@@ -312,41 +337,75 @@ export function BaseView({
                     })
                   }
                 >
-                  +Worker (E{GAME_LOOP.training.worker.energy})
+                  +Worker · E{GAME_LOOP.training.worker.energy}
+                  {GAME_LOOP.training.worker.alloy
+                    ? ` · A${GAME_LOOP.training.worker.alloy}`
+                    : ""}{" "}
+                  · T-{GAME_LOOP.training.worker.turns}
                 </button>
               </div>
               <ul className="rf-base__train-list">
-                {trainables.map((u) => (
-                  <li key={u.id}>
-                    <button
-                      type="button"
-                      disabled={!canAct || ts.population < 1}
-                      onClick={() =>
-                        dispatch({
-                          type: "TRAIN_UNIT",
-                          payload: {
-                            territoryId: tid,
-                            unitId: u.id,
-                            count: 1,
-                          },
-                        })
-                      }
-                    >
-                      Train {u.name}
-                    </button>
-                  </li>
-                ))}
+                {trainables.map((u) => {
+                  const energy = Math.ceil(
+                    u.cost.energy * GAME_LOOP.training.unit.energyMult,
+                  );
+                  const alloy = Math.ceil(
+                    (u.cost.alloy ?? 0) * GAME_LOOP.training.unit.alloyMult,
+                  );
+                  const turns = unitTrainTurns(u.id);
+                  return (
+                    <li key={u.id}>
+                      <button
+                        type="button"
+                        disabled={!canAct || ts.population < 1}
+                        onClick={() =>
+                          dispatch({
+                            type: "TRAIN_UNIT",
+                            payload: {
+                              territoryId: tid,
+                              unitId: u.id,
+                              count: 1,
+                            },
+                          })
+                        }
+                      >
+                        <strong>{u.name}</strong>
+                        <small>
+                          E{energy}
+                          {alloy ? ` · A${alloy}` : ""} · T-{turns}
+                        </small>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
               {ts.trainingQueue.length > 0 && (
-                <p className="rf-hint">
-                  Queue:{" "}
-                  {ts.trainingQueue
-                    .map(
-                      (j) =>
-                        `${j.kind}${j.unitId ? `:${j.unitId}` : ""}×${j.count} (T-${j.turnsRemaining})`,
-                    )
-                    .join(", ")}
-                </p>
+                <div className="rf-base__queue">
+                  <span className="rf-label">Queue</span>
+                  <ul>
+                    {ts.trainingQueue.map((j) => {
+                      let label =
+                        j.kind === "worker"
+                          ? "Worker"
+                          : j.unitId ?? "Unit";
+                      if (j.unitId) {
+                        try {
+                          label = getUnit(j.unitId).name;
+                        } catch {
+                          /* */
+                        }
+                      }
+                      return (
+                        <li key={j.id}>
+                          {label}×{j.count}{" "}
+                          <span className="rf-text-dim">
+                            T-{j.turnsRemaining}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
             </section>
           )}

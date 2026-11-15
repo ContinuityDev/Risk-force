@@ -19,10 +19,10 @@ function makePlayer(
     displayName,
     resources: {
       ...emptyResources(),
-      energy: kind === "human" ? 480 : 420,
+      energy: kind === "human" ? 520 : 480,
       alloy: kind === "human" ? 140 : 120,
       research: kind === "human" ? 30 : 24,
-      supply: kind === "human" ? 40 : 35,
+      supply: kind === "human" ? 80 : 70,
     },
     researched:
       kind === "human"
@@ -52,7 +52,8 @@ function starterBuildings(
 ): TerritoryState["buildings"] {
   const shift = owner === "player" ? 0 : owner === "faction_a" ? 1 : 0;
   const row = shift % 2;
-  const w = () => 0;
+  // Lean starter base: one reactor + refinery + depot staffed, light defenses.
+  // Keeps turn-1 energy near break-even and supply from collapsing.
   return [
     {
       instanceId: `b${nextId.n++}`,
@@ -61,7 +62,7 @@ function starterBuildings(
       y: 1 + row,
       hp: 900,
       buildRemaining: 0,
-      workers: w(),
+      workers: 1,
     },
     {
       instanceId: `b${nextId.n++}`,
@@ -70,7 +71,7 @@ function starterBuildings(
       y: 0,
       hp: 240,
       buildRemaining: 0,
-      workers: w(),
+      workers: 2,
     },
     {
       instanceId: `b${nextId.n++}`,
@@ -79,52 +80,7 @@ function starterBuildings(
       y: 2,
       hp: 220,
       buildRemaining: 0,
-      workers: w(),
-    },
-    {
-      instanceId: `b${nextId.n++}`,
-      buildingId: "shield_wall",
-      x: 1,
-      y: 4,
-      hp: 480,
-      buildRemaining: 0,
-      workers: w(),
-    },
-    {
-      instanceId: `b${nextId.n++}`,
-      buildingId: "laser_turret",
-      x: 4,
-      y: 0,
-      hp: 260,
-      buildRemaining: 0,
-      workers: w(),
-    },
-    {
-      instanceId: `b${nextId.n++}`,
-      buildingId: "laser_turret",
-      x: 5,
-      y: 2,
-      hp: 260,
-      buildRemaining: 0,
-      workers: w(),
-    },
-    {
-      instanceId: `b${nextId.n++}`,
-      buildingId: "shield_wall",
-      x: 4,
-      y: 4,
-      hp: 480,
-      buildRemaining: 0,
-      workers: w(),
-    },
-    {
-      instanceId: `b${nextId.n++}`,
-      buildingId: "reactor",
-      x: 5,
-      y: 3,
-      hp: 240,
-      buildRemaining: 0,
-      workers: w(),
+      workers: 2,
     },
     {
       instanceId: `b${nextId.n++}`,
@@ -133,16 +89,25 @@ function starterBuildings(
       y: 4,
       hp: 200,
       buildRemaining: 0,
-      workers: w(),
+      workers: 2,
     },
     {
       instanceId: `b${nextId.n++}`,
-      buildingId: "missile_battery",
-      x: 0,
-      y: 4,
-      hp: 250,
+      buildingId: "laser_turret",
+      x: 4,
+      y: 0,
+      hp: 260,
       buildRemaining: 0,
-      workers: w(),
+      workers: 1,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
+      buildingId: "shield_wall",
+      x: 4,
+      y: 4,
+      hp: 480,
+      buildRemaining: 0,
+      workers: 0,
     },
   ];
 }
@@ -219,22 +184,24 @@ export function createInitialState(payload: NewGamePayload): GameState {
       return tb.area - ta.area;
     });
     bag.forEach((tid) => {
-      const isCore = ranked.indexOf(tid) < Math.max(1, Math.ceil(bag.length * 0.35));
+      // Fewer cores → less early upkeep; expand to grow income + logistics load.
+      const isCore = ranked.indexOf(tid) < Math.max(1, Math.ceil(bag.length * 0.18));
       territories[tid] = {
         owner: fid,
         buildings: isCore ? starterBuildings(nextId, fid) : [],
-        supplyStock: isCore ? 20 : 5,
+        supplyStock: isCore ? 24 : 6,
         population:
           GAME_LOOP.startingPopulation +
           (isCore ? GAME_LOOP.startingPopBonus : 0),
-        workers: isCore ? 4 : 1,
+        // Core workers cover starter staffing (nexus1+reactor2+refinery2+depot2+turret1).
+        workers: isCore ? 10 : 1,
         garrison: isCore
           ? {
-              trooper: fid === humans[0] ? 8 : 6,
-              assault_mech: fid === humans[0] ? 3 : 2,
-              hover_tank: fid === humans[0] ? 2 : 1,
+              trooper: fid === humans[0] ? 5 : 4,
+              assault_mech: 1,
+              hover_tank: 1,
             }
-          : { trooper: 2 },
+          : { trooper: 1 },
         trainingQueue: [],
       };
     });

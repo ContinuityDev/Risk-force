@@ -27,8 +27,8 @@ export const GAME_LOOP = {
   campaigning: {
     /** Max energy that can be earmarked as campaign budget per turn. */
     maxBudget: 200,
-    defaultBudget: 40,
-    aiDefaultBudget: 55,
+    defaultBudget: 25,
+    aiDefaultBudget: 30,
   },
 
   training: {
