@@ -66,7 +66,7 @@ function makePlayer(
             "plasma_doctrine",
             "siege_protocols",
           ]
-        : [...diff.tech],
+        : ["infantry_doctrine", "mech_corps"],
     researchJob: null,
     reserves: {},
     campaignBudget:

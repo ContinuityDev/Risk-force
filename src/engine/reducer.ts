@@ -32,9 +32,7 @@ import {
   spendCampaignBudget,
 } from "./population";
 import { applyResearch, tickResearchForPlayer } from "./research";
-import { disbandUnits } from "./solvency";
-import type { FactionId } from "../data/types";
-import type { GameState, TurnEconomySummary } from "./state";
+import type { GameState } from "./state";
 import {
   assignBuildingWorkers,
   enqueueUnit,
@@ -42,7 +40,7 @@ import {
   tickTraining,
 } from "./training";
 import { checkEliminationsAndVictory } from "./victory";
-import { checkTurnLimitVictory } from "./victoryPoints";
+import { disbandUnits } from "./solvency";
 
 export { createMenuState };
 
@@ -387,12 +385,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
       const { fromId, toId, force, path } = action.payload;
       const route =
         path.length >= 2
-          ? findRoute(fromId, toId, force) && path[0] === fromId
-            ? {
-                path,
-                totalTurns: 0,
-              }
-            : { path, totalTurns: 0 }
+          ? { path, hops: [] as { fromId: string; toId: string; turns: number }[], totalTurns: 0 }
           : findRoute(fromId, toId, force, {
               avoidEnemy: true,
               owner: pid,
@@ -401,21 +394,9 @@ export function reduce(state: GameState, action: GameAction): GameState {
       if (!route || route.path.length < 2) {
         return { ...state, message: "No route to destination." };
       }
+      // March first hop now; remaining path stored on army via successive orders later.
       const firstTo = route.path[1]!;
-      const marched = startArmyMove(state, pid, fromId, firstTo, force);
-      const army = marched.armiesInTransit?.[marched.armiesInTransit.length - 1];
-      if (!army) return { ...state, message: marched.message ?? "Cannot march." };
-      const withPath = {
-        ...marched,
-        plannedRoute: route.path,
-        armiesInTransit: marched.armiesInTransit!.map((a, i, arr) =>
-          i === arr.length - 1
-            ? { ...a, pathRemaining: route.path.slice(2) }
-            : a,
-        ),
-        message: `Multi-hop march · ${route.path.length - 1} legs.`,
-      };
-      return withPath;
+      return startArmyMove(state, pid, fromId, firstTo, force);
     }
 
     case "START_INVASION": {
@@ -519,15 +500,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
           players: { ...cur.players, [pid]: afterSpend },
           territories: trained,
         };
-        const beforeJob = cur.players[pid]?.researchJob?.nodeId;
         cur = tickResearchForPlayer(cur, pid);
-        if (beforeJob && !cur.players[pid]?.researchJob) {
-          try {
-            finishedResearch.push(getResearch(beforeJob).name);
-          } catch {
-            finishedResearch.push(beforeJob);
-          }
-        }
       }
 
       // Advance to next non-eliminated player (humans first in playerOrder)
