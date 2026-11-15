@@ -968,12 +968,12 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                         cy={half * 0.68}
                         r={
                           m.compact
-                            ? Math.max(1.15, m.size * 0.16)
-                            : Math.max(0.85, m.size * 0.11)
+                            ? Math.max(0.95, m.size * 0.14)
+                            : Math.max(0.55, m.size * 0.085)
                         }
                         fill={col}
                         stroke="#f2f7fa"
-                        strokeWidth={Math.max(0.18, 0.35 * zoomScale)}
+                        strokeWidth={Math.max(0.15, 0.3 * zoomScale)}
                       />
                       <text
                         x={half * 0.68}
@@ -982,8 +982,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                         dominantBaseline="middle"
                         fontSize={
                           m.compact
-                            ? Math.max(2.1, m.size * 0.165)
-                            : Math.max(1.7, m.size * 0.125)
+                            ? Math.max(1.9, m.size * 0.15)
+                            : Math.max(1.45, m.size * 0.1)
                         }
                         fill="#0a1218"
                         fontWeight="700"
