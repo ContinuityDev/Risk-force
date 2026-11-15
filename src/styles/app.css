@@ -712,9 +712,13 @@
   cursor: pointer;
 }
 
-.rf-map__bldg use,
 .rf-map__bldg image {
-  image-rendering: auto;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+.rf-map__bldg.is-compact {
+  filter: drop-shadow(0 0 0.6px rgba(242, 247, 250, 0.35));
 }
 
 .rf-map__bldg-more-txt {

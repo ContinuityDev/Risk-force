@@ -23,7 +23,6 @@ import {
   buildingsFingerprint,
   layoutBuildingMinis,
 } from "../map/buildingMinis";
-import { getSpriteUrl } from "../sprites/registry";
 import { Drawer } from "./Drawer";
 
 interface WorldMapProps {
@@ -305,13 +304,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [deferredCam, labels, bldgFp],
   );
-  const miniSpriteIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const m of buildingMinis) {
-      if (m.spriteId) ids.add(m.spriteId);
-    }
-    return [...ids];
-  }, [buildingMinis]);
 
   const scheduleCamera = useCallback((next: Camera) => {
     cameraRef.current = next;
@@ -622,21 +614,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           >
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#9fd4e4" />
           </marker>
-          {miniSpriteIds.map((id) => (
-            <symbol
-              key={id}
-              id={`rf-bldg-sym-${id}`}
-              viewBox="0 0 1 1"
-              preserveAspectRatio="xMidYMid meet"
-            >
-              <image
-                href={getSpriteUrl(id)}
-                width="1"
-                height="1"
-                preserveAspectRatio="xMidYMid meet"
-              />
-            </symbol>
-          ))}
         </defs>
 
         <rect width={WORLD_W} height={WORLD_H} fill="url(#rf-ocean)" />
@@ -861,29 +838,35 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     width={m.size}
                     height={m.size}
                     rx={Math.max(0.35, 1.1 * zoomScale)}
-                    fill="rgba(6,10,16,0.78)"
+                    fill={
+                      m.compact ? "rgba(10,16,24,0.94)" : "rgba(6,10,16,0.82)"
+                    }
                     stroke={col}
-                    strokeWidth={Math.max(strokeW, 1.15 * zoomScale)}
+                    strokeWidth={
+                      m.compact
+                        ? Math.max(strokeW * 1.35, 1.4 * zoomScale)
+                        : Math.max(strokeW, 1.15 * zoomScale)
+                    }
                     pointerEvents="none"
                   />
-                  {/* Faction tint wash over the sprite */}
                   <rect
                     x={-half}
                     y={-half}
                     width={m.size}
-                    height={Math.max(0.5, m.size * 0.14)}
+                    height={Math.max(0.55, m.size * (m.compact ? 0.2 : 0.12))}
                     rx={Math.max(0.35, 1.1 * zoomScale)}
                     fill={col}
-                    opacity="0.85"
+                    opacity={m.compact ? 1 : 0.9}
                     pointerEvents="none"
                   />
-                  {m.spriteId ? (
-                    <use
-                      href={`#rf-bldg-sym-${m.spriteId}`}
-                      x={-half * 0.92}
-                      y={-half * 0.78}
-                      width={m.size * 0.92}
-                      height={m.size * 0.82}
+                  {m.spriteUrl ? (
+                    <image
+                      href={m.spriteUrl}
+                      x={-half * 0.9}
+                      y={-half * (m.compact ? 0.72 : 0.78)}
+                      width={m.size * 0.9}
+                      height={m.size * (m.compact ? 0.72 : 0.82)}
+                      preserveAspectRatio="xMidYMid meet"
                       pointerEvents="none"
                     />
                   ) : null}
@@ -893,7 +876,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                       r={r}
                       fill="none"
                       stroke={col}
-                      strokeWidth={Math.max(0.4, 1.1 * zoomScale)}
+                      strokeWidth={Math.max(0.45, 1.2 * zoomScale)}
                       strokeDasharray={`${dash} ${circ}`}
                       strokeLinecap="round"
                       transform="rotate(-90)"
@@ -901,22 +884,22 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                       opacity="0.95"
                     />
                   )}
-                  {m.compact && m.count != null && m.count > 1 && (
+                  {m.compact && m.count != null && m.count > 0 && (
                     <g pointerEvents="none">
                       <circle
-                        cx={half * 0.75}
-                        cy={-half * 0.75}
-                        r={Math.max(2.2, m.size * 0.32)}
+                        cx={half * 0.78}
+                        cy={-half * 0.78}
+                        r={Math.max(2.6, m.size * 0.36)}
                         fill={col}
-                        stroke="#0a1218"
-                        strokeWidth={Math.max(0.25, 0.55 * zoomScale)}
+                        stroke="#f2f7fa"
+                        strokeWidth={Math.max(0.35, 0.7 * zoomScale)}
                       />
                       <text
-                        x={half * 0.75}
-                        y={-half * 0.75}
+                        x={half * 0.78}
+                        y={-half * 0.78}
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        fontSize={Math.max(3.5, m.size * 0.34)}
+                        fontSize={Math.max(4, m.size * 0.38)}
                         fill="#0a1218"
                         fontWeight="700"
                       >

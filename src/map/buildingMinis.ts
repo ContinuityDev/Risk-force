@@ -20,7 +20,7 @@ export interface PlacedMini {
   /** Compact world-zoom marker: show count badge instead of per-building art. */
   compact?: boolean;
   count?: number;
-  /** Overflow badge after the visible row (+N). */
+  /** Overflow badge after the visible set (+N). */
   more?: number;
 }
 
@@ -81,7 +81,6 @@ export function buildingPriority(buildingId: string): number {
     default:
       score = 200;
   }
-  // Prefer pricier / tougher structures as a tiebreak
   score += Math.min(80, (def.cost.energy ?? 0) / 4 + (def.maxHp ?? 0) / 20);
   return score;
 }
@@ -100,15 +99,138 @@ function sortBuildings(buildings: PlacedBuilding[]): PlacedBuilding[] {
   );
 }
 
-function iconScreenPx(tier: MiniZoomTier): number {
-  if (tier === "world") return 11;
-  if (tier === "mid") return 15;
-  return 18;
+/**
+ * World-unit icon size from camera width so on-screen px grow with zoom-in.
+ * Assumes ~560–700px map CSS width (drawer-safe). Caps so icons stay readable
+ * but not absurd (~40px max on a typical 844 landscape frame).
+ */
+export function iconWorldSize(
+  zoomScale: number,
+  camW: number,
+  tier: MiniZoomTier,
+): number {
+  // Fraction of the visible camera width → roughly constant*growing screen px
+  const frac =
+    tier === "deep" ? 0.072 : tier === "mid" ? 0.042 : 0.016;
+  const raw = camW * frac;
+  // Hard clamps in world units (deep camW≈80 → ~5.8wu ≈ 35–40px on ~560px svg)
+  const min = tier === "deep" ? 4.5 : tier === "mid" ? 2.2 : 1.5;
+  const max = tier === "deep" ? 9.5 : tier === "mid" ? 6.5 : 3.2;
+  void zoomScale;
+  return Math.min(max, Math.max(min, raw));
+}
+
+/** @deprecated kept for tests — approximate screen px from zoom. */
+export function targetScreenPx(zoomScale: number): number {
+  const tier = miniZoomTier(zoomScale);
+  const camW = 1000 * zoomScale;
+  const wu = iconWorldSize(zoomScale, camW, tier);
+  // Assume ~600px map CSS width
+  return Math.min(40, Math.max(10, (wu / camW) * 600));
+}
+
+function toMini(
+  tId: string,
+  b: PlacedBuilding,
+  x: number,
+  y: number,
+  size: number,
+): PlacedMini | null {
+  let def;
+  try {
+    def = getBuilding(b.buildingId);
+  } catch {
+    return null;
+  }
+  const buildTime = Math.max(1, def.buildTime);
+  const constructing = b.buildRemaining > 0;
+  return {
+    key: `${tId}:${b.instanceId}`,
+    territoryId: tId,
+    buildingId: b.buildingId,
+    spriteId: def.sprite.id,
+    spriteUrl: getSpriteUrl(def.sprite.id),
+    x,
+    y,
+    size,
+    constructing,
+    progress: constructing
+      ? Math.max(0, Math.min(1, 1 - b.buildRemaining / buildTime))
+      : 1,
+  };
+}
+
+function tryPlaceCompact(
+  t: TerritoryDef,
+  buildings: PlacedBuilding[],
+  baseX: number,
+  baseY: number,
+  size: number,
+  gap: number,
+  occupied: Box[],
+): PlacedMini | null {
+  const box: Box = { x: baseX, y: baseY, w: size * 1.2, h: size * 1.2 };
+  const offsets = [
+    { x: 0, y: 0 },
+    { x: 0, y: size + gap },
+    { x: 0, y: -(size + gap) },
+    { x: size + gap, y: 0 },
+    { x: -(size + gap), y: 0 },
+  ];
+  for (const off of offsets) {
+    const b: Box = { x: baseX + off.x, y: baseY + off.y, w: box.w, h: box.h };
+    if (occupied.some((o) => overlaps(b, o, gap * 0.5))) continue;
+    occupied.push(b);
+    let spriteId = "building-nexus";
+    try {
+      spriteId = getBuilding(sortBuildings(buildings)[0]!.buildingId).sprite.id;
+    } catch {
+      /* */
+    }
+    return {
+      key: `${t.id}:compact`,
+      territoryId: t.id,
+      buildingId: "command_nexus",
+      spriteId,
+      spriteUrl: getSpriteUrl(spriteId),
+      x: b.x,
+      y: b.y,
+      size,
+      constructing: false,
+      progress: 1,
+      compact: true,
+      count: buildings.length,
+    };
+  }
+  return null;
+}
+
+/** Grid positions centered on (cx, cy), row-major. */
+function gridSlots(
+  n: number,
+  cols: number,
+  size: number,
+  gap: number,
+  cx: number,
+  cy: number,
+): Array<{ x: number; y: number }> {
+  const rows = Math.ceil(n / cols);
+  const gridW = cols * size + (cols - 1) * gap;
+  const gridH = rows * size + (rows - 1) * gap;
+  const x0 = cx - gridW / 2 + size / 2;
+  const y0 = cy - gridH / 2 + size / 2;
+  const out: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < n; i++) {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    out.push({ x: x0 + c * (size + gap), y: y0 + r * (size + gap) });
+  }
+  return out;
 }
 
 /**
  * Place building thumbnails near each territory's label pole.
- * Sizes are counter-scaled with zoom so they stay roughly constant on screen.
+ * Screen size grows with zoom-in; deep zoom uses a compact grid/cluster.
  */
 export function layoutBuildingMinis(
   territories: TerritoryDef[],
@@ -118,9 +240,8 @@ export function layoutBuildingMinis(
   labels: LabelBox[],
 ): PlacedMini[] {
   const tier = miniZoomTier(zoomScale);
-  const screenPx = iconScreenPx(tier);
-  const size = Math.max(1.2, screenPx * zoomScale);
-  const gap = Math.max(0.6, 2.2 * zoomScale);
+  const size = iconWorldSize(zoomScale, cam.w, tier);
+  const gap = Math.max(0.8, size * 0.16);
   const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
   const occupied: Box[] = labels.map((l) => ({
     x: l.x,
@@ -130,7 +251,6 @@ export function layoutBuildingMinis(
   }));
   const out: PlacedMini[] = [];
 
-  // Prefer larger territories first so important bases win collisions
   const ranked = [...territories].sort((a, b) => b.area - a.area);
 
   for (const t of ranked) {
@@ -138,113 +258,91 @@ export function layoutBuildingMinis(
     const buildings = ts?.buildings ?? [];
     if (!buildings.length) continue;
 
-    // Cull off-camera (with margin)
     const ax = t.label.x;
     const ay = t.label.y;
     if (
-      ax < cam.x - 30 ||
-      ax > cam.x + cam.w + 30 ||
-      ay < cam.y - 30 ||
-      ay > cam.y + cam.h + 30
+      ax < cam.x - 40 ||
+      ax > cam.x + cam.w + 40 ||
+      ay < cam.y - 40 ||
+      ay > cam.y + cam.h + 40
     ) {
       continue;
     }
 
     const lbl = labelById[t.id];
-    const baseY = lbl
-      ? lbl.y + lbl.h / 2 + gap + size / 2
-      : ay + size * 0.85;
     const baseX = lbl?.x ?? ax;
+    const belowY = lbl
+      ? lbl.y + lbl.h / 2 + gap + size / 2
+      : ay + size * 0.9;
 
     if (tier === "world") {
-      // Compact: one base marker + count (cap noise at full world)
-      if (zoomScale >= 0.98 && t.area < 0.004) continue;
-      const box: Box = { x: baseX, y: baseY, w: size * 1.15, h: size * 1.15 };
-      if (occupied.some((o) => overlaps(box, o, gap))) continue;
-      occupied.push(box);
-      let spriteId = "building-nexus";
-      try {
-        const head = sortBuildings(buildings)[0]!;
-        spriteId = getBuilding(head.buildingId).sprite.id;
-      } catch {
-        /* */
-      }
-      out.push({
-        key: `${t.id}:compact`,
-        territoryId: t.id,
-        buildingId: "command_nexus",
-        spriteId,
-        spriteUrl: getSpriteUrl(spriteId),
-        x: baseX,
-        y: baseY,
+      if (zoomScale >= 0.98 && t.area < 0.0035) continue;
+      const compact = tryPlaceCompact(
+        t,
+        buildings,
+        baseX,
+        belowY,
         size,
-        constructing: false,
-        progress: 1,
-        compact: true,
-        count: buildings.length,
-      });
+        gap,
+        occupied,
+      );
+      if (compact) out.push(compact);
       continue;
     }
 
     const sorted = sortBuildings(buildings);
-    const maxShow = tier === "mid" ? 3 : sorted.length;
+    const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
     const shown = sorted.slice(0, maxShow);
-    const more = sorted.length - shown.length;
-    const rowW =
-      shown.length * size + Math.max(0, shown.length - 1) * gap +
-      (more > 0 ? size * 0.85 + gap : 0);
-    let rowX0 = baseX - rowW / 2 + size / 2;
+    const moreCount = sorted.length - shown.length;
 
-    // Nudge row vertically if it collides with labels; try a few offsets
-    const yCandidates = [baseY, baseY + size + gap, baseY - (lbl ? lbl.h + size : size * 1.6)];
-    let placedRow: PlacedMini[] | null = null;
+    // Deep: 2–3 column grid/cluster. Mid: single row (or 2-col if many).
+    const cols =
+      tier === "deep"
+        ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(shown.length + (moreCount ? 1 : 0)))))
+        : shown.length + (moreCount ? 1 : 0) <= 3
+          ? shown.length + (moreCount ? 1 : 0)
+          : 3;
 
-    for (const y of yCandidates) {
+    const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
+    const yAnchors = [
+      belowY + (tier === "deep" ? size * 0.35 : 0),
+      belowY + size * 1.2,
+      belowY + size * 2.2,
+      (lbl?.y ?? ay) - (lbl?.h ?? size) / 2 - gap - size,
+    ];
+
+    let placed: PlacedMini[] | null = null;
+
+    for (const cy of yAnchors) {
+      const slots = gridSlots(slotCount, cols, size, gap, baseX, cy);
       const trial: PlacedMini[] = [];
       const trialBoxes: Box[] = [];
-      let x = rowX0;
-      let failed = false;
-      for (const b of shown) {
-        let def;
-        try {
-          def = getBuilding(b.buildingId);
-        } catch {
-          continue;
-        }
-        const box: Box = { x, y, w: size, h: size };
+      let ok = true;
+
+      for (let i = 0; i < shown.length; i++) {
+        const slot = slots[i]!;
+        const box: Box = { x: slot.x, y: slot.y, w: size, h: size };
         if (
-          occupied.some((o) => overlaps(box, o, gap * 0.6)) ||
-          trialBoxes.some((o) => overlaps(box, o, gap * 0.4))
+          occupied.some((o) => overlaps(box, o, gap * 0.45)) ||
+          trialBoxes.some((o) => overlaps(box, o, gap * 0.3))
         ) {
-          failed = true;
+          ok = false;
           break;
         }
-        const buildTime = Math.max(1, def.buildTime);
-        const constructing = b.buildRemaining > 0;
+        const mini = toMini(t.id, shown[i]!, slot.x, slot.y, size);
+        if (!mini) continue;
         trialBoxes.push(box);
-        trial.push({
-          key: `${t.id}:${b.instanceId}`,
-          territoryId: t.id,
-          buildingId: b.buildingId,
-          spriteId: def.sprite.id,
-          spriteUrl: getSpriteUrl(def.sprite.id),
-          x,
-          y,
-          size,
-          constructing,
-          progress: constructing
-            ? Math.max(0, Math.min(1, 1 - b.buildRemaining / buildTime))
-            : 1,
-        });
-        x += size + gap;
+        trial.push(mini);
       }
-      if (failed) continue;
+      if (!ok || trial.length === 0) continue;
 
-      if (more > 0) {
-        const box: Box = { x, y, w: size * 0.85, h: size * 0.85 };
+      if (moreCount > 0 && slots[shown.length]) {
+        const slot = slots[shown.length]!;
+        const moreSize = size * 0.85;
+        const box: Box = { x: slot.x, y: slot.y, w: moreSize, h: moreSize };
         if (
-          !occupied.some((o) => overlaps(box, o, gap * 0.6)) &&
-          !trialBoxes.some((o) => overlaps(box, o, gap * 0.4))
+          !occupied.some((o) => overlaps(box, o, gap * 0.45)) &&
+          !trialBoxes.some((o) => overlaps(box, o, gap * 0.3))
         ) {
           trial.push({
             key: `${t.id}:more`,
@@ -252,23 +350,38 @@ export function layoutBuildingMinis(
             buildingId: "_more",
             spriteId: "",
             spriteUrl: "",
-            x,
-            y,
-            size: size * 0.85,
+            x: slot.x,
+            y: slot.y,
+            size: moreSize,
             constructing: false,
             progress: 1,
-            more,
+            more: moreCount,
           });
           trialBoxes.push(box);
         }
       }
 
-      placedRow = trial;
+      placed = trial;
       for (const box of trialBoxes) occupied.push(box);
       break;
     }
 
-    if (placedRow) out.push(...placedRow);
+    if (placed) {
+      out.push(...placed);
+      continue;
+    }
+
+    // Mid/deep fallback: always show a compact marker when the cluster won't fit
+    const compact = tryPlaceCompact(
+      t,
+      buildings,
+      baseX,
+      belowY,
+      Math.max(size * 0.85, 1.6),
+      gap,
+      occupied,
+    );
+    if (compact) out.push(compact);
   }
 
   return out;

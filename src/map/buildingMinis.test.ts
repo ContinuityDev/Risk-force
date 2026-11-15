@@ -6,6 +6,7 @@ import {
   buildingsFingerprint,
   layoutBuildingMinis,
   miniZoomTier,
+  targetScreenPx,
 } from "./buildingMinis";
 
 function stubTerritory(
@@ -38,7 +39,15 @@ describe("buildingMinis", () => {
     expect(miniZoomTier(0.2)).toBe("deep");
   });
 
-  it("places compact markers at world zoom and rows when zoomed in", () => {
+  it("grows on-screen size with zoom-in and clamps", () => {
+    // world compact stays small; mid/deep jump into the readable band
+    expect(targetScreenPx(1)).toBeLessThanOrEqual(14);
+    expect(targetScreenPx(0.35)).toBeGreaterThan(targetScreenPx(1));
+    expect(targetScreenPx(0.1)).toBeGreaterThanOrEqual(28);
+    expect(targetScreenPx(0.08)).toBeLessThanOrEqual(40);
+  });
+
+  it("places compact markers at world zoom and clusters when zoomed in", () => {
     const tid = TERRITORIES.find((t) => t.area > 0.01)?.id ?? TERRITORIES[0]!.id;
     const tdef = TERRITORIES.find((t) => t.id === tid)!;
     const state: Record<string, TerritoryState> = {
@@ -113,7 +122,59 @@ describe("buildingMinis", () => {
       { x: tdef.label.x - 40, y: tdef.label.y - 40, w: 150, h: 75 },
       [],
     );
-    expect(deep.filter((m) => !m.more).length).toBe(4);
+    const deepIcons = deep.filter((m) => !m.more && !m.compact);
+    expect(deepIcons.length).toBe(4);
+    // Deep icons should be large enough to read (~screenPx * scale)
+    expect(deepIcons[0]!.size).toBeGreaterThan(4);
+  });
+
+  it("falls back to a compact marker when the cluster cannot fit", () => {
+    const tid = TERRITORIES.find((t) => t.area > 0.01)?.id ?? TERRITORIES[0]!.id;
+    const tdef = TERRITORIES.find((t) => t.id === tid)!;
+    const state: Record<string, TerritoryState> = {
+      [tid]: stubTerritory({
+        owner: "player",
+        buildings: [
+          {
+            instanceId: "a",
+            buildingId: "command_nexus",
+            x: 0,
+            y: 0,
+            hp: 400,
+            buildRemaining: 0,
+            workers: 1,
+          },
+          {
+            instanceId: "b",
+            buildingId: "reactor",
+            x: 1,
+            y: 0,
+            hp: 200,
+            buildRemaining: 0,
+            workers: 1,
+          },
+        ],
+      }),
+    };
+    // Giant label covering the pole forces cluster failure → compact fallback
+    const blockingLabel = {
+      id: tid,
+      x: tdef.label.x,
+      y: tdef.label.y,
+      w: 80,
+      h: 60,
+    };
+    const mid = layoutBuildingMinis(
+      [tdef],
+      state,
+      0.5,
+      { x: tdef.label.x - 200, y: tdef.label.y - 100, w: 400, h: 200 },
+      [blockingLabel],
+    );
+    expect(mid.length).toBeGreaterThan(0);
+    expect(mid.some((m) => m.compact || m.buildingId === "command_nexus")).toBe(
+      true,
+    );
   });
 
   it("fingerprints building mutations including construction", () => {
