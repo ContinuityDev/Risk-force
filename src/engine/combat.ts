@@ -592,18 +592,19 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
 
   const attackersAlive = units.some((u) => u.alive && u.side === "attacker");
   const defendersAlive = units.some((u) => u.alive && u.side === "defender");
+  // Attacker wins only when defending units AND armed/command structures are gone.
+  // Bare civilian buildings alone do not force a fight, but garrison troopers do.
   const criticalLeft = defenses.some((d) => {
     if (!d.alive) return false;
     const b = getBuilding(d.buildingId);
     return b.category === "command" || !!b.damage;
   });
-  const anyBuildingLeft = defenses.some((d) => d.alive);
 
   let status: BattleState["status"] = "running";
   if (!attackersAlive) {
     status = "defender_win";
     log.push("Assault collapsed.");
-  } else if ((!criticalLeft && !defendersAlive) || !anyBuildingLeft) {
+  } else if (!criticalLeft && !defendersAlive) {
     status = "attacker_win";
     log.push("Territory secured.");
   }

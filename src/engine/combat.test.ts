@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BATTLE_FIELD, isOnGround } from "../data/battleField";
+import { getBuilding } from "../data/buildings";
 import { damageMultiplier } from "../data/combatMatrix";
 import { getTerritory } from "../data/map/territories";
 import { createInitialState } from "./init";
@@ -172,6 +173,59 @@ describe("battle simulation", () => {
     if (a.y !== b.y) {
       expect(Math.sign(db.y - da.y)).toBe(Math.sign(b.y - a.y));
     }
+  });
+
+  it("bare territory with 1 trooper must fight — no auto-win when only civilian buildings fall", () => {
+    const state = createInitialState({
+      humanCount: 1,
+      aiCount: 1,
+      multiplayerMode: "solo",
+      seed: 21,
+    });
+    const enemy = Object.entries(state.territories).find(
+      ([, t]) => t.owner !== "player",
+    )![0];
+    // Strip armed/command structures; leave a lone trooper + optional civilian husk.
+    const ts = state.territories[enemy]!;
+    const civilianOnly = ts.buildings.filter((b) => {
+      try {
+        const def = getBuilding(b.buildingId);
+        return def.category !== "command" && !def.damage;
+      } catch {
+        return false;
+      }
+    });
+    const bareState = {
+      ...state,
+      territories: {
+        ...state.territories,
+        [enemy]: {
+          ...ts,
+          buildings: civilianOnly.slice(0, 1),
+          garrison: { trooper: 1 },
+        },
+      },
+    };
+    let battle = createBattle(bareState, enemy, "player", [
+      { unitId: "trooper", count: 1 },
+    ]);
+    expect(battle.units.filter((u) => u.side === "defender" && u.alive).length).toBe(
+      1,
+    );
+    // Instantly wipe all buildings — previously this auto-won despite the trooper.
+    battle = {
+      ...battle,
+      defenses: battle.defenses.map((d) => ({
+        ...d,
+        hp: 0,
+        alive: false,
+      })),
+    };
+    battle = tickBattle(battle, 0.05);
+    expect(battle.status).toBe("running");
+    expect(
+      battle.units.some((u) => u.alive && u.side === "defender"),
+    ).toBe(true);
   });
 
   it("START_INVASION marches and battles on arrival", () => {
