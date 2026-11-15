@@ -1,1 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none"><rect x="11" y="12" width="10" height="14" fill="#1c2733" stroke="#5c6b7e"/><rect x="12" y="6" width="8" height="7" fill="#2a3848"/><rect x="18" y="14" width="8" height="2" fill="#3d6a7a"/><circle cx="16" cy="9" r="1.2" fill="#c4a574"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" width="32" height="40" fill="none">
+  <defs>
+    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
+    </radialGradient>
+    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#d4eef5"/>
+      <stop offset="45%" stop-color="#7eb6c9"/>
+      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
+    </radialGradient>
+    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a3848"/>
+      <stop offset="50%" stop-color="#1c2733"/>
+      <stop offset="100%" stop-color="#121820"/>
+    </linearGradient>
+    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b0bec8"/>
+      <stop offset="40%" stop-color="#8a9aac"/>
+      <stop offset="100%" stop-color="#5c6b7e"/>
+    </linearGradient>
+    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0c9a0"/>
+      <stop offset="100%" stop-color="#8a7350"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    
+  </defs>
+
+  <ellipse cx="16" cy="37" rx="7" ry="2" fill="rgba(0,0,0,0.45)"/>
+  <!-- legs -->
+  <path d="M11 28 L10 36 L13 36 L14 28 Z" fill="#121820" stroke="#5c6b7e" stroke-width="0.3"/>
+  <path d="M18 28 L17 36 L20 36 L21 28 Z" fill="#1c2733" stroke="#5c6b7e" stroke-width="0.3"/>
+  <!-- body - darker stealth armor -->
+  <path d="M10 16 L10 28 L16 30 L22 28 L22 16 L16 14 Z" fill="#121820" stroke="#5c6b7e" stroke-width="0.6"/>
+  <path d="M10 16 L16 14 L22 16 L16 19 Z" fill="#1c2733"/>
+  <!-- cyber pack -->
+  <rect x="20" y="18" width="5" height="8" rx="0.5" fill="#0a0e14" stroke="#7eb6c9" stroke-width="0.5"/>
+  <rect x="21" y="19" width="3" height="1.5" fill="#7eb6c9" opacity="0.5"/>
+  <rect x="21" y="22" width="3" height="1.5" fill="#7eb6c9" opacity="0.4"/>
+  <!-- helmet visor -->
+  <ellipse cx="16" cy="11" rx="4.5" ry="5" fill="#121820" stroke="#5c6b7e" stroke-width="0.5"/>
+  <rect x="13" y="9" width="6" height="2.5" rx="0.5" fill="#7eb6c9" opacity="0.7"/>
+  <!-- SMG -->
+  <rect x="22" y="20" width="7" height="1.2" rx="0.3" fill="#8a9aac"/>
+  <!-- shoulder -->
+  <ellipse cx="10" cy="17" rx="2" ry="1.5" fill="#2a3848" stroke="#c4a574" stroke-width="0.3"/>
+
+</svg>

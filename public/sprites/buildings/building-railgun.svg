@@ -1,7 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none">
-  <rect x="8" y="30" width="32" height="12" fill="#1c2733" stroke="#5c6b7e"/>
-  <rect x="6" y="18" width="36" height="6" rx="1" fill="#5c6b7e" stroke="#8a9aac"/>
-  <rect x="2" y="19" width="10" height="4" fill="#3d6a7a"/>
-  <rect x="20" y="24" width="8" height="8" fill="#2a3848"/>
-  <circle cx="24" cy="36" r="2" fill="#c4a574" opacity="0.7"/>
+  <defs>
+    <radialGradient id="padG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1c2733" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0a0e14" stop-opacity="0.2"/>
+    </radialGradient>
+    <radialGradient id="coreG" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#d4eef5"/>
+      <stop offset="45%" stop-color="#7eb6c9"/>
+      <stop offset="100%" stop-color="#1a4050" stop-opacity="0.8"/>
+    </radialGradient>
+    <linearGradient id="hullL" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a3848"/>
+      <stop offset="50%" stop-color="#1c2733"/>
+      <stop offset="100%" stop-color="#121820"/>
+    </linearGradient>
+    <linearGradient id="steelL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b0bec8"/>
+      <stop offset="40%" stop-color="#8a9aac"/>
+      <stop offset="100%" stop-color="#5c6b7e"/>
+    </linearGradient>
+    <linearGradient id="brassL" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0c9a0"/>
+      <stop offset="100%" stop-color="#8a7350"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    
+  </defs>
+
+  <ellipse cx="24" cy="44" rx="18" ry="3.5" fill="url(#padG)"/>
+  <ellipse cx="24" cy="44" rx="16.56" ry="2.98" fill="none" stroke="#3d4a5a" stroke-width="0.6" opacity="0.5"/>
+  <!-- emplacement base -->
+  <path d="M8 42 L8 34 L24 28 L40 34 L40 42 L24 46 Z" fill="#121820" stroke="#5c6b7e" stroke-width="0.7"/>
+  <path d="M8 34 L24 28 L40 34 L24 40 Z" fill="#1c2733"/>
+  <!-- mount -->
+  <path d="M16 38 L16 28 L24 24 L32 28 L32 38 Z" fill="url(#hullL)" stroke="#8a9aac" stroke-width="0.7"/>
+  <ellipse cx="24" cy="28" rx="8" ry="3" fill="#2a3848"/>
+  <!-- long barrel (angled up-right) -->
+  <g transform="rotate(-25 24 26)">
+    <rect x="10" y="23" width="32" height="5" rx="1" fill="url(#steelL)" stroke="#5c6b7e" stroke-width="0.5"/>
+    <rect x="10" y="24" width="32" height="1.5" fill="#0a0e14" opacity="0.35"/>
+    <rect x="8" y="22.5" width="6" height="6" rx="0.5" fill="#1c2733" stroke="#8a9aac" stroke-width="0.5"/>
+    <rect x="38" y="23.5" width="5" height="4" rx="0.3" fill="#8a9aac"/>
+    <circle cx="42" cy="25.5" r="1.5" fill="#7eb6c9" filter="url(#softGlow)"/>
+  </g>
+  <!-- power capacitors -->
+  <rect x="12" y="34" width="4" height="5" rx="0.5" fill="#0a0e14" stroke="#7eb6c9" stroke-width="0.6"/>
+  <rect x="32" y="34" width="4" height="5" rx="0.5" fill="#0a0e14" stroke="#7eb6c9" stroke-width="0.6"/>
+  <rect x="13" y="35" width="2" height="3" fill="#7eb6c9" opacity="0.5"/>
+  <rect x="33" y="35" width="2" height="3" fill="#7eb6c9" opacity="0.5"/>
+  <!-- brass rails -->
+  <line x1="14" y1="40" x2="34" y2="40" stroke="#c4a574" stroke-width="1" opacity="0.7"/>
+
 </svg>
