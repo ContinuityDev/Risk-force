@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Screenshots for gameplay-systems PR: mobile 844×390 + desktop.
- * Starts a real campaign via UI so campaignActive is true.
+ * Each shot dismisses toasts and frames the feature clearly.
  */
 import { mkdirSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
@@ -22,10 +22,21 @@ async function shot(page, name) {
 
 async function waitRF(page) {
   await page.waitForFunction(
-    () => window.__RF__ && typeof window.__RF__.createBattle === "function",
+    () =>
+      window.__RF__ &&
+      typeof window.__RF__.createBattle === "function" &&
+      Object.keys(window.__RF__.neighbors ?? {}).length > 0,
     null,
     { timeout: 30000 },
   );
+}
+
+async function dismissToast(page) {
+  await page.evaluate(() => {
+    window.__RF__?.dismissMessage?.();
+    window.__RF__?.dispatch?.({ type: "DISMISS_MESSAGE" });
+  });
+  await page.waitForTimeout(150);
 }
 
 async function startCampaign(page) {
@@ -34,7 +45,6 @@ async function startCampaign(page) {
   const newBtn = page.getByRole("button", { name: /New Campaign/i });
   if (await newBtn.count()) await newBtn.click();
   await page.waitForTimeout(400);
-  // Lobby: enable VP + hard
   const vp = page.locator('input[type="checkbox"]');
   if (await vp.count()) await vp.first().check().catch(() => {});
   const diff = page.locator("select");
@@ -43,7 +53,6 @@ async function startCampaign(page) {
   await page.getByRole("button", { name: /^Start$/i }).click();
   await page.waitForTimeout(800);
   await waitRF(page);
-  // Seed a deterministic game while keeping campaign active
   await page.evaluate(() => {
     window.__RF__.dispatch({
       type: "NEW_GAME",
@@ -58,14 +67,15 @@ async function startCampaign(page) {
       },
     });
   });
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(500);
+  await dismissToast(page);
 }
 
 async function runViewport(browser, viewport, tag) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
   await startCampaign(page);
 
-  // Territory panel — occupied + terrain
+  // 1) Territory panel — occupied + terrain
   await page.evaluate(() => {
     const s = window.__RF__.getState();
     const tid = Object.entries(s.territories).find(
@@ -78,6 +88,7 @@ async function runViewport(browser, viewport, tag) {
       payload: {
         state: {
           ...s,
+          message: null,
           selectedTerritoryId: tid,
           screen: "map",
           phase: "play",
@@ -90,69 +101,187 @@ async function runViewport(browser, viewport, tag) {
     });
   });
   await page.waitForTimeout(500);
+  await dismissToast(page);
   await shot(page, `${tag}-territory-terrain-occupied`);
 
-  // Invade screen
-  await page.evaluate(() => {
+  // 2) Invade screen with force + sticky forecast/odds
+  const invadeSetup = await page.evaluate(() => {
     const s = window.__RF__.getState();
-    const from = Object.entries(s.territories).find(
-      ([, t]) => t.owner === "player",
-    )?.[0];
+    const neighbors = window.__RF__.neighbors;
+    // Prefer a player territory that borders an enemy
+    let from = null;
+    let enemy = null;
+    for (const [id, t] of Object.entries(s.territories)) {
+      if (t.owner !== "player") continue;
+      const hit = (neighbors[id] ?? []).find(
+        (n) => s.territories[n]?.owner !== "player",
+      );
+      if (hit) {
+        from = id;
+        enemy = hit;
+        break;
+      }
+    }
+    if (!from) {
+      from = Object.entries(s.territories).find(([, t]) => t.owner === "player")?.[0];
+    }
+    const territories = { ...s.territories };
+    for (const [id, t] of Object.entries(territories)) {
+      if (t.owner !== "player") continue;
+      territories[id] = {
+        ...t,
+        garrison: {
+          trooper: 14,
+          hover_tank: 2,
+          siege_cannon: 1,
+        },
+        garrisonHp: {},
+      };
+    }
+    if (enemy && territories[enemy]) {
+      territories[enemy] = {
+        ...territories[enemy],
+        garrison: { trooper: 5, hover_tank: 1 },
+        garrisonHp: {},
+      };
+    }
     window.__RF__.dispatch({
       type: "LOAD_STATE",
       payload: {
         state: {
           ...s,
+          message: null,
           screen: "invade",
           phase: "play",
           selectedTerritoryId: from,
-          territories: {
-            ...s.territories,
-            [from]: {
-              ...s.territories[from],
-              garrison: { trooper: 14, hover_tank: 2, siege_cannon: 1 },
-              garrisonHp: {},
+          plannedRoute: null,
+          territories,
+          players: {
+            ...s.players,
+            player: {
+              ...s.players.player,
+              resources: {
+                ...s.players.player.resources,
+                supply: 120,
+                energy: 520,
+              },
+              researched: [
+                ...new Set([
+                  ...(s.players.player.researched ?? []),
+                  "mech_corps",
+                  "grav_armor",
+                  "plasma_doctrine",
+                  "siege_protocols",
+                ]),
+              ],
             },
           },
         },
       },
     });
+    return { from, enemy };
   });
   await page.waitForTimeout(500);
-  // Pick a target
-  const targetBtns = page.locator(".rf-invade__row .rf-picker__list button");
+  await dismissToast(page);
+
+  // Click launch-from with large garrison (force:true — avoid actionability hangs)
+  const fromBtns = page.locator(".rf-invade__row .rf-picker").nth(0).locator(".rf-picker__list button");
+  const fromCount = await fromBtns.count();
+  let clickedFrom = false;
+  for (let i = 0; i < fromCount; i++) {
+    const label = (await fromBtns.nth(i).textContent()) ?? "";
+    if (/Garrison\s(1[0-9]|[2-9]\d)/i.test(label)) {
+      await fromBtns.nth(i).click({ force: true });
+      clickedFrom = true;
+      break;
+    }
+  }
+  if (!clickedFrom && fromCount > 0) {
+    await fromBtns.first().click({ force: true });
+  }
+  await page.waitForTimeout(200);
+
+  // Click first enemy target
+  const targetBtns = page
+    .locator(".rf-invade__row .rf-picker")
+    .nth(1)
+    .locator(".rf-picker__list button");
   if ((await targetBtns.count()) > 0) {
-    await targetBtns.first().click().catch(() => {});
+    await targetBtns.first().click({ force: true });
   }
-  // Increment force
-  const plus = page.locator(".rf-invade__stepper button");
-  const n = await plus.count();
-  for (let i = 0; i < Math.min(n, 8); i++) {
-    const btn = plus.nth(i);
-    const text = await btn.textContent();
-    if (text?.includes("+")) await btn.click().catch(() => {});
+  await page.waitForTimeout(200);
+
+  // Raise force on every row — stop when + disables (never await a disabled click)
+  const steppers = page.locator(".rf-invade__stepper");
+  const stepCount = await steppers.count();
+  for (let s = 0; s < stepCount; s++) {
+    const plusBtn = steppers.nth(s).locator("button").last();
+    for (let k = 0; k < 16; k++) {
+      if (await plusBtn.isDisabled().catch(() => true)) break;
+      await plusBtn.click({ force: true });
+    }
   }
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(300);
+  await page.locator(".rf-invade__footer").scrollIntoViewIfNeeded().catch(() => {});
+  await page.waitForTimeout(200);
+  console.log("invade setup", invadeSetup);
   await shot(page, `${tag}-invade-preview-odds-stacking`);
 
-  // Market via HUD
-  const marketBtn = page.getByRole("button", { name: /^Market$/i });
-  if (await marketBtn.count()) {
-    await marketBtn.first().click();
-    await page.waitForTimeout(400);
-    await shot(page, `${tag}-market`);
-    const close = page.locator(".rf-market button.ghost, .rf-market button").filter({ hasText: /Close/i });
-    if (await close.count()) await close.first().click().catch(() => {});
-  } else {
-    // Force market overlay by evaluating React is hard; inject via screen hack
-    await page.evaluate(() => {
-      // Click path unavailable — open by creating a temporary portal isn't possible.
-      // Use SET_SCREEN isn't enough; dispatch a message and leave a note.
-      document.body.setAttribute("data-market-missing", "1");
+  // 3) Market open with trade preview
+  await page.evaluate(() => {
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...window.__RF__.getState(),
+          message: null,
+          screen: "map",
+          phase: "play",
+        },
+      },
     });
-  }
+  });
+  await page.waitForTimeout(200);
+  await dismissToast(page);
 
-  // Capture raze/keep
+  const marketDock = page.locator('[data-tutorial="dock-market"]');
+  const marketHud = page.getByRole("button", { name: /^Market$/i });
+  const dockVisible = await marketDock.first().isVisible().catch(() => false);
+  const hudVisible = await marketHud.first().isVisible().catch(() => false);
+  if (dockVisible) {
+    await marketDock.first().click();
+  } else if (hudVisible) {
+    await marketHud.first().click();
+  } else {
+    const more = page.getByRole("button", { name: /^More$/i });
+    if (await more.first().isVisible().catch(() => false)) {
+      await more.first().click();
+      await page.waitForTimeout(200);
+      const orbital = page.getByRole("button", { name: /Orbital Market/i });
+      if (await orbital.first().isVisible().catch(() => false)) {
+        await orbital.first().click();
+      } else {
+        await page.evaluate(() => window.__RF__.openMarket?.());
+      }
+    } else {
+      await page.evaluate(() => window.__RF__.openMarket?.());
+    }
+  }
+  await page.waitForTimeout(400);
+  // Ensure preview visible — set amount
+  const amount = page.locator(".rf-market input[type='number']");
+  if (await amount.count()) {
+    await amount.fill("25");
+  }
+  await page.waitForTimeout(200);
+  await shot(page, `${tag}-market`);
+  const close = page
+    .locator(".rf-market button")
+    .filter({ hasText: /Close/i });
+  if (await close.count()) await close.first().click().catch(() => {});
+  await page.waitForTimeout(200);
+
+  // 4) Capture raze/keep with structures + reachable confirm
   await page.evaluate(() => {
     const s = window.__RF__.getState();
     const enemy = Object.entries(s.territories).find(
@@ -161,11 +290,41 @@ async function runViewport(browser, viewport, tag) {
     const home = Object.entries(s.territories).find(
       ([, t]) => t.owner === "player",
     )?.[0];
+    const buildings = [
+      {
+        instanceId: "cap-b1",
+        buildingId: "reactor",
+        x: 1,
+        y: 1,
+        hp: 80,
+        buildRemaining: 0,
+        workers: 1,
+      },
+      {
+        instanceId: "cap-b2",
+        buildingId: "barracks",
+        x: 2,
+        y: 1,
+        hp: 60,
+        buildRemaining: 0,
+        workers: 0,
+      },
+      {
+        instanceId: "cap-b3",
+        buildingId: "supply_depot",
+        x: 3,
+        y: 1,
+        hp: 40,
+        buildRemaining: 0,
+        workers: 1,
+      },
+    ];
     window.__RF__.dispatch({
       type: "LOAD_STATE",
       payload: {
         state: {
           ...s,
+          message: null,
           phase: "capture",
           screen: "capture",
           battle: null,
@@ -175,10 +334,11 @@ async function runViewport(browser, viewport, tag) {
             fromId: home,
             survivors: [
               { unitId: "trooper", count: 5, hps: [40, 40, 30, 20, 40] },
+              { unitId: "hover_tank", count: 1, hps: [70] },
             ],
             population: 8,
             workers: 2,
-            buildings: s.territories[enemy]?.buildings ?? [],
+            buildings,
             supplyStock: 10,
           },
         },
@@ -186,9 +346,12 @@ async function runViewport(browser, viewport, tag) {
     });
   });
   await page.waitForTimeout(500);
+  await dismissToast(page);
+  await page.locator(".rf-capture__panel > .primary").scrollIntoViewIfNeeded().catch(() => {});
+  await page.waitForTimeout(150);
   await shot(page, `${tag}-capture-raze-keep`);
 
-  // Battle HP + retreat
+  // 5) Battle HP + retreat + legend
   await page.evaluate(() => {
     const s = window.__RF__.getState();
     const enemy = Object.entries(s.territories).find(
@@ -227,6 +390,7 @@ async function runViewport(browser, viewport, tag) {
       payload: {
         state: {
           ...s,
+          message: null,
           phase: "battle",
           screen: "battle",
           battle,
@@ -235,48 +399,81 @@ async function runViewport(browser, viewport, tag) {
       },
     });
   });
-  await page.waitForTimeout(400);
-  for (let i = 0; i < 10; i++) {
+  await page.waitForTimeout(300);
+  await dismissToast(page);
+  // Light ticks for motion; then pause so floaters settle into one-per-target
+  for (let i = 0; i < 4; i++) {
     await page.evaluate(() =>
-      window.__RF__.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.2 } }),
+      window.__RF__.dispatch({ type: "BATTLE_TICK", payload: { dt: 0.15 } }),
     );
   }
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(700);
+  await dismissToast(page);
   await shot(page, `${tag}-battle-hp-retreat`);
 
-  // Multi-hop route on map
+  // 6) Multi-hop route on map with line + turns badge
   await page.evaluate(() => {
     const s = window.__RF__.getState();
+    const neighbors = window.__RF__.neighbors;
     const owned = Object.entries(s.territories)
       .filter(([, t]) => t.owner === "player")
       .map(([id]) => id);
-    const from = owned[0];
-    const n1 = (window.__RF__.neighbors[from] ?? []).find(
-      (n) => s.territories[n]?.owner === "player",
-    );
-    const n2 = n1
-      ? (window.__RF__.neighbors[n1] ?? []).find(
-          (n) => n !== from && s.territories[n]?.owner === "player",
-        )
-      : null;
-    const path = [from, n1, n2].filter(Boolean);
+
+    let path = null;
+    for (const a of owned) {
+      for (const b of neighbors[a] ?? []) {
+        if (s.territories[b]?.owner !== "player") continue;
+        for (const c of neighbors[b] ?? []) {
+          if (c === a) continue;
+          if (s.territories[c]?.owner !== "player") continue;
+          path = [a, b, c];
+          break;
+        }
+        if (path) break;
+      }
+      if (path) break;
+    }
+
+    // Claim a contiguous neighbor chain if player doesn't already own one
+    const territories = { ...s.territories };
+    if (!path) {
+      const a = owned[0];
+      const b = (neighbors[a] ?? [])[0];
+      const c = b
+        ? (neighbors[b] ?? []).find((n) => n !== a)
+        : null;
+      path = [a, b, c].filter(Boolean);
+      for (const id of path) {
+        if (!id) continue;
+        territories[id] = {
+          ...territories[id],
+          owner: "player",
+          control: territories[id]?.control ?? "core",
+        };
+      }
+    }
+
     window.__RF__.dispatch({
       type: "LOAD_STATE",
       payload: {
         state: {
           ...s,
+          message: null,
           phase: "play",
           screen: "map",
           battle: null,
-          plannedRoute: path.length >= 2 ? path : [from, n1].filter(Boolean),
+          pendingCapture: null,
+          economySummary: null,
+          territories,
+          plannedRoute: path.length >= 2 ? path : null,
+          selectedTerritoryId: path[0] ?? null,
         },
       },
     });
   });
-  await page.waitForTimeout(500);
-  await shot(page, `${tag}-multihop-route`);
-
-  // Economy summary
+  await page.waitForTimeout(400);
+  await dismissToast(page);
+  // Clear selection so the territory drawer doesn't cover the route line
   await page.evaluate(() => {
     const s = window.__RF__.getState();
     window.__RF__.dispatch({
@@ -284,6 +481,27 @@ async function runViewport(browser, viewport, tag) {
       payload: {
         state: {
           ...s,
+          message: null,
+          selectedTerritoryId: null,
+          screen: "map",
+          phase: "play",
+        },
+      },
+    });
+  });
+  await page.waitForTimeout(350);
+  await dismissToast(page);
+  await shot(page, `${tag}-multihop-route`);
+
+  // 7) Economy summary
+  await page.evaluate(() => {
+    const s = window.__RF__.getState();
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...s,
+          message: null,
           economySummary: {
             turn: s.turn,
             playerId: "player",
@@ -299,6 +517,7 @@ async function runViewport(browser, viewport, tag) {
     });
   });
   await page.waitForTimeout(400);
+  await dismissToast(page);
   await shot(page, `${tag}-economy-summary`);
 
   await page.close();

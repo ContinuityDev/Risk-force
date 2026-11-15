@@ -61,7 +61,7 @@ export function Hud({
     if (!state.message) return;
     const t = window.setTimeout(() => {
       dispatch({ type: "DISMISS_MESSAGE" });
-    }, 3200);
+    }, 4000);
     return () => window.clearTimeout(t);
   }, [state.message, dispatch]);
 
@@ -347,6 +347,17 @@ export function Hud({
       <Drawer open={moreOpen} onClose={() => setMoreOpen(false)} side="right">
         <span className="rf-label">Menu</span>
         <div className="rf-hud__more-list">
+          {onOpenMarket && (
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                onOpenMarket();
+              }}
+            >
+              Orbital Market
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
