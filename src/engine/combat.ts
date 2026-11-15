@@ -20,6 +20,14 @@ import type {
   PendingCapture,
   StrikeForceSlot,
 } from "./state";
+import {
+  damageScaleFromHp,
+  ensureTerritoryHp,
+  forceFromBattleUnits,
+  mergeIntoGarrison,
+  normalizeForce,
+  syncHpArray,
+} from "./garrisonHp";
 import { checkEliminationsAndVictory } from "./victory";
 
 function dist(ax: number, ay: number, bx: number, by: number): number {
@@ -38,15 +46,16 @@ export function battleEngageRange(catalogRange: number): number {
   return Math.min(10.5, Math.max(catalogRange * 3.4, 5.8));
 }
 
-function effectiveDamage(
+export function effectiveDamage(
   raw: number,
   damageType: DamageType,
   armorType: ArmorType,
   pierce?: Partial<Record<ArmorType, number>>,
+  scale = 1,
 ): number {
   const matrix = damageMultiplier(damageType, armorType);
   const unitPierce = pierce?.[armorType] ?? 1;
-  return Math.max(1, Math.round(raw * matrix * unitPierce));
+  return Math.max(1, Math.round(raw * matrix * unitPierce * scale));
 }
 
 /** Spawn a battle from an invasion order. */
@@ -55,13 +64,15 @@ export function createBattle(
   territoryId: string,
   attacker: string,
   force: StrikeForceSlot[],
+  fromId: string | null = null,
 ): BattleState {
-  const ts = state.territories[territoryId]!;
+  const ts = ensureTerritoryHp(state.territories[territoryId]!);
   const tdef = getTerritory(territoryId);
   const defenses: BattleDefense[] = [];
   let n = 0;
   const deploy = BATTLE_FIELD.attackerDeploy;
   const garrisonZ = BATTLE_FIELD.garrisonZone;
+  const normalized = normalizeForce(force);
 
   // Defender buildings — map the territory base grid onto the defender zone.
   for (const b of ts.buildings) {
@@ -94,11 +105,16 @@ export function createBattle(
 
   // Attackers — flanking echelons inside the deployment zone (ground only).
   const units: BattleUnit[] = [];
-  const forceSlots: { unitId: string; udef: ReturnType<typeof getUnit> }[] = [];
-  for (const slot of force) {
+  const forceSlots: {
+    unitId: string;
+    udef: ReturnType<typeof getUnit>;
+    hp: number;
+  }[] = [];
+  for (const slot of normalized) {
     const udef = getUnit(slot.unitId);
+    const hps = slot.hps ?? syncHpArray(slot.unitId, slot.count);
     for (let i = 0; i < slot.count; i++) {
-      forceSlots.push({ unitId: slot.unitId, udef });
+      forceSlots.push({ unitId: slot.unitId, udef, hp: hps[i]! });
     }
   }
   forceSlots.sort((a, b) => {
@@ -119,7 +135,7 @@ export function createBattle(
   const maxDepth = Math.max(1, Math.ceil(total / lanes) - 1);
   const depthStep = Math.min(0.55, (deployW - 0.7) / Math.max(1, maxDepth));
   forceSlots.forEach((slot, i) => {
-    const { unitId, udef } = slot;
+    const { unitId, udef, hp } = slot;
     const lane = i % lanes;
     const depth = Math.floor(i / lanes);
     const y =
@@ -141,7 +157,7 @@ export function createBattle(
       side: "attacker",
       x: pos.x,
       y: pos.y,
-      hp: udef.maxHp,
+      hp,
       maxHp: udef.maxHp,
       cooldown: 0.15 + (n % 7) * 0.1,
       anim: "move",
@@ -153,9 +169,12 @@ export function createBattle(
   });
 
   // Defender garrison — spread across garrison strip in front of buildings.
-  const garrisonSlots: { unitId: string }[] = [];
+  const garrisonSlots: { unitId: string; hp: number }[] = [];
   for (const [unitId, count] of Object.entries(ts.garrison ?? {})) {
-    for (let i = 0; i < count; i++) garrisonSlots.push({ unitId });
+    const hps = ts.garrisonHp?.[unitId] ?? syncHpArray(unitId, count);
+    for (let i = 0; i < count; i++) {
+      garrisonSlots.push({ unitId, hp: hps[i] ?? getUnit(unitId).maxHp });
+    }
   }
   const gTotal = Math.max(1, garrisonSlots.length);
   const gLanes = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(gTotal))));
@@ -185,7 +204,7 @@ export function createBattle(
       side: "defender",
       x: pos.x,
       y: pos.y,
-      hp: udef.maxHp,
+      hp: slot.hp,
       maxHp: udef.maxHp,
       cooldown: 0.2 + (n % 5) * 0.08,
       anim: "idle",
@@ -205,6 +224,7 @@ export function createBattle(
     territoryId,
     attacker: attacker as BattleState["attacker"],
     defender: ts.owner,
+    fromId,
     units,
     defenses,
     projectiles: [],
@@ -439,6 +459,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
     }
     next = { ...next, facing: stepFacing(next.facing, aim, dt) };
     if (next.cooldown <= 0 && d <= weaponRange * 1.02) {
+      const hpScale = damageScaleFromHp(next.hp, next.maxHp);
       if (target.kind === "defense") {
         const bdef = getBuilding(target.ref.buildingId);
         const dmg = effectiveDamage(
@@ -446,6 +467,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
           udef.damageType,
           bdef.armorType,
           udef.armorPierce,
+          hpScale,
         );
         projectiles.push(
           spawnProjectile(
@@ -468,6 +490,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
           udef.damageType,
           foeDef.armorType,
           udef.armorPierce,
+          hpScale,
         );
         projectiles.push(
           spawnProjectile(
@@ -639,24 +662,107 @@ function tallySurvivors(
   battle: BattleState,
   side: "attacker" | "defender",
 ): StrikeForceSlot[] {
-  const map: Record<string, number> = {};
-  for (const u of battle.units) {
-    if (!u.alive || u.side !== side) continue;
-    map[u.unitId] = (map[u.unitId] ?? 0) + 1;
+  return forceFromBattleUnits(battle.units, side);
+}
+
+/**
+ * Attacker retreats mid-battle: survivors march back toward origin;
+ * defender keeps the plot with surviving garrison HP + buildings.
+ */
+export function retreatBattle(state: GameState): GameState {
+  const battle = state.battle;
+  if (!battle || battle.status !== "running") return state;
+  const survivors = tallySurvivors(battle, "attacker");
+  const defForce = tallySurvivors(battle, "defender");
+  const tid = battle.territoryId;
+  const ts = state.territories[tid]!;
+  const hpByInstance = new Map(
+    battle.defenses.map((d) => [d.instanceId, d] as const),
+  );
+  const buildings = ts.buildings
+    .map((b) => {
+      const match = hpByInstance.get(b.instanceId);
+      if (!match) return b;
+      return { ...b, hp: Math.max(0, Math.round(match.hp)) };
+    })
+    .filter((b) => b.hp > 0);
+
+  let territories = {
+    ...state.territories,
+    [tid]: mergeIntoGarrison(
+      {
+        ...ts,
+        buildings,
+        garrison: {},
+        garrisonHp: {},
+      },
+      defForce,
+    ),
+  };
+
+  const fromId =
+    battle.fromId && territories[battle.fromId]?.owner === battle.attacker
+      ? battle.fromId
+      : Object.entries(territories).find(
+          ([id, t]) => t.owner === battle.attacker && id !== tid,
+        )?.[0] ?? null;
+
+  if (survivors.length && fromId) {
+    const turns = 1;
+    const army = {
+      id: `army_${state.nextInstanceId}`,
+      owner: battle.attacker,
+      fromId: tid,
+      toId: fromId,
+      force: survivors,
+      turnsRemaining: turns,
+      totalTurns: turns,
+    };
+    return {
+      ...state,
+      nextInstanceId: state.nextInstanceId + 1,
+      territories,
+      armiesInTransit: [...(state.armiesInTransit ?? []), army],
+      battle: null,
+      phase: "play",
+      screen: "map",
+      pendingCapture: null,
+      message: `Assault aborted — survivors falling back to ${fromId}.`,
+    };
   }
-  return Object.entries(map).map(([unitId, count]) => ({ unitId, count }));
+
+  // No home: dump into reserves
+  const players = { ...state.players };
+  if (survivors.length) {
+    const attacker = players[battle.attacker]!;
+    const reserves = { ...attacker.reserves };
+    for (const slot of survivors) {
+      reserves[slot.unitId] = (reserves[slot.unitId] ?? 0) + slot.count;
+    }
+    players[battle.attacker] = { ...attacker, reserves };
+  }
+
+  return {
+    ...state,
+    players,
+    territories,
+    battle: null,
+    phase: "play",
+    screen: "map",
+    pendingCapture: null,
+    message: "Assault aborted — survivors demobilized to reserves.",
+  };
 }
 
 export function applyBattleResult(state: GameState): GameState {
   const battle = state.battle;
-  if (!battle || battle.status === "running") return state;
+  if (!battle || battle.status === "running" || battle.status === "retreated") {
+    return state;
+  }
 
   const tid = battle.territoryId;
   const ts = state.territories[tid]!;
-  const defSurvivors: Record<string, number> = {};
-  for (const slot of tallySurvivors(battle, "defender")) {
-    defSurvivors[slot.unitId] = slot.count;
-  }
+  const defForce = tallySurvivors(battle, "defender");
 
   const hpByInstance = new Map(
     battle.defenses.map((d) => [d.instanceId, d] as const),
@@ -672,6 +778,7 @@ export function applyBattleResult(state: GameState): GameState {
   let territories = { ...state.territories };
   let message = battle.log[battle.log.length - 1] ?? null;
   const previousOwner = ts.owner;
+  const originId = battle.fromId;
 
   if (battle.status === "attacker_win") {
     const pop = Math.max(
@@ -688,7 +795,11 @@ export function applyBattleResult(state: GameState): GameState {
         population: pop,
         workers,
         garrison: {},
+        garrisonHp: {},
         trainingQueue: [],
+        control: "occupied",
+        occupiedTurns: 0,
+        movedThisTurn: false,
       },
     };
     const atkSurvivors = tallySurvivors(battle, "attacker");
@@ -696,7 +807,7 @@ export function applyBattleResult(state: GameState): GameState {
     const pending: PendingCapture = {
       territoryId: tid,
       attacker: battle.attacker,
-      fromId: null,
+      fromId: originId,
       survivors: atkSurvivors,
       population: pop,
       workers,
@@ -728,11 +839,15 @@ export function applyBattleResult(state: GameState): GameState {
 
   territories = {
     ...territories,
-    [tid]: {
-      ...ts,
-      buildings,
-      garrison: defSurvivors,
-    },
+    [tid]: mergeIntoGarrison(
+      {
+        ...ts,
+        buildings,
+        garrison: {},
+        garrisonHp: {},
+      },
+      defForce,
+    ),
   };
   message = `Defense of ${tid} holds.`;
 
@@ -757,30 +872,48 @@ export function confirmCaptureOccupation(
 ): GameState {
   const pending = state.pendingCapture;
   if (!pending) return state;
-  const total = pending.survivors.reduce((s, x) => s + x.count, 0);
+  const normalized = normalizeForce(pending.survivors);
+  const total = normalized.reduce((s, x) => s + x.count, 0);
   const take = Math.max(0, Math.min(total, Math.floor(occupyCount)));
-  const garrison: Record<string, number> = {};
-  const returning: Record<string, number> = {};
+
+  const occupyForce: StrikeForceSlot[] = [];
+  const returnForce: StrikeForceSlot[] = [];
   let left = take;
-  for (const slot of pending.survivors) {
+  for (const slot of normalized) {
     const occ = Math.min(slot.count, left);
     left -= occ;
-    if (occ > 0) garrison[slot.unitId] = (garrison[slot.unitId] ?? 0) + occ;
+    const hps = slot.hps ?? syncHpArray(slot.unitId, slot.count);
+    if (occ > 0) {
+      occupyForce.push({
+        unitId: slot.unitId,
+        count: occ,
+        hps: hps.slice(0, occ),
+      });
+    }
     const ret = slot.count - occ;
-    if (ret > 0) returning[slot.unitId] = (returning[slot.unitId] ?? 0) + ret;
+    if (ret > 0) {
+      returnForce.push({
+        unitId: slot.unitId,
+        count: ret,
+        hps: hps.slice(occ),
+      });
+    }
   }
 
   const tid = pending.territoryId;
   const ts = state.territories[tid]!;
   let territories = {
     ...state.territories,
-    [tid]: { ...ts, garrison },
+    [tid]: mergeIntoGarrison(
+      { ...ts, garrison: {}, garrisonHp: {} },
+      occupyForce,
+    ),
   };
 
   // Return leftover to a friendly origin if possible, else reserves
   const players = { ...state.players };
   const attacker = players[pending.attacker]!;
-  if (Object.keys(returning).length) {
+  if (returnForce.length) {
     const homeId =
       pending.fromId &&
       territories[pending.fromId]?.owner === pending.attacker
@@ -789,16 +922,14 @@ export function confirmCaptureOccupation(
             ([id, t]) => t.owner === pending.attacker && id !== tid,
           )?.[0];
     if (homeId) {
-      const home = territories[homeId]!;
-      const g = { ...home.garrison };
-      for (const [id, n] of Object.entries(returning)) {
-        g[id] = (g[id] ?? 0) + n;
-      }
-      territories = { ...territories, [homeId]: { ...home, garrison: g } };
+      territories = {
+        ...territories,
+        [homeId]: mergeIntoGarrison(territories[homeId]!, returnForce),
+      };
     } else {
       const reserves = { ...attacker.reserves };
-      for (const [id, n] of Object.entries(returning)) {
-        reserves[id] = (reserves[id] ?? 0) + n;
+      for (const slot of returnForce) {
+        reserves[slot.unitId] = (reserves[slot.unitId] ?? 0) + slot.count;
       }
       players[pending.attacker] = { ...attacker, reserves };
     }

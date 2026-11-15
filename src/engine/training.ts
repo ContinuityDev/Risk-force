@@ -3,6 +3,7 @@ import { getBuilding } from "../data/buildings";
 import { getUnit } from "../data/units";
 import type { PlayerState, TerritoryState, TrainingJob } from "./state";
 import { canAfford, spend } from "./economy";
+import { syncHpArray } from "./garrisonHp";
 import { isUnlocked } from "./research";
 
 export function workerCapForBuilding(buildingId: string): number {
@@ -150,6 +151,7 @@ export function tickTraining(
     if (ts.owner !== playerId || !ts.trainingQueue.length) continue;
     let workers = ts.workers;
     const garrison = { ...ts.garrison };
+    const garrisonHp = { ...(ts.garrisonHp ?? {}) };
     const queue: TrainingJob[] = [];
     for (const job of ts.trainingQueue) {
       const rem = job.turnsRemaining - 1;
@@ -157,12 +159,17 @@ export function tickTraining(
         if (job.kind === "worker") workers += job.count;
         else if (job.unitId) {
           garrison[job.unitId] = (garrison[job.unitId] ?? 0) + job.count;
+          const fresh = syncHpArray(job.unitId, job.count);
+          garrisonHp[job.unitId] = [
+            ...(garrisonHp[job.unitId] ?? []),
+            ...fresh,
+          ];
         }
       } else {
         queue.push({ ...job, turnsRemaining: rem });
       }
     }
-    next[tid] = { ...ts, workers, garrison, trainingQueue: queue };
+    next[tid] = { ...ts, workers, garrison, garrisonHp, trainingQueue: queue };
   }
   return next;
 }

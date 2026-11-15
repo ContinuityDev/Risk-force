@@ -211,7 +211,11 @@ export function createInitialState(payload: NewGamePayload): GameState {
               hover_tank: 1,
             }
           : { trooper: 1 },
+        garrisonHp: {},
         trainingQueue: [],
+        control: "core",
+        occupiedTurns: 0,
+        movedThisTurn: false,
       };
     });
   }
@@ -227,7 +231,11 @@ export function createInitialState(payload: NewGamePayload): GameState {
         population: GAME_LOOP.startingPopulation,
         workers: 1,
         garrison: { trooper: 1 },
+        garrisonHp: {},
         trainingQueue: [],
+        control: "core",
+        occupiedTurns: 0,
+        movedThisTurn: false,
       };
     }
   }

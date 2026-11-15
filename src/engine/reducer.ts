@@ -7,8 +7,10 @@ import {
   applyBattleResult,
   confirmCaptureOccupation,
   createBattle,
+  retreatBattle,
   tickBattle,
 } from "./combat";
+import { healGarrison } from "./garrisonHp";
 import {
   applyEconomyTick,
   canAfford,
@@ -45,12 +47,26 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "LOAD_STATE": {
       const s = action.payload.state;
+      const territories: typeof s.territories = {};
+      for (const [id, ts] of Object.entries(s.territories ?? {})) {
+        territories[id] = {
+          ...ts,
+          garrisonHp: ts.garrisonHp ?? {},
+          control: ts.control ?? "core",
+          occupiedTurns: ts.occupiedTurns ?? 0,
+          movedThisTurn: ts.movedThisTurn ?? false,
+        };
+      }
       return {
         ...s,
+        territories,
         newsFeed: s.newsFeed ?? [],
         newsUnread: s.newsUnread ?? 0,
         newsDigest: s.newsDigest ?? null,
         turnLog: s.turnLog ?? [],
+        battle: s.battle
+          ? { ...s.battle, fromId: s.battle.fromId ?? null }
+          : null,
       };
     }
 
@@ -367,6 +383,9 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "RESOLVE_BATTLE":
       return applyBattleResult(state);
+
+    case "RETREAT_BATTLE":
+      return retreatBattle(state);
 
     case "END_TURN": {
       if (state.phase !== "play") return state;

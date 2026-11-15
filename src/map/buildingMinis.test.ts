@@ -16,10 +16,14 @@ function stubTerritory(
     owner: partial.owner,
     buildings: partial.buildings ?? [],
     garrison: partial.garrison ?? {},
+    garrisonHp: partial.garrisonHp ?? {},
     population: partial.population ?? 10,
     workers: partial.workers ?? 4,
     supplyStock: partial.supplyStock ?? 0,
     trainingQueue: partial.trainingQueue ?? [],
+    control: partial.control ?? "core",
+    occupiedTurns: partial.occupiedTurns ?? 0,
+    movedThisTurn: partial.movedThisTurn ?? false,
   };
 }
 

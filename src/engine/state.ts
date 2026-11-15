@@ -34,7 +34,21 @@ export interface TerritoryState {
   workers: number;
   /** Units stationed on this plot (defend / launch invasions). */
   garrison: Record<string, number>;
+  /**
+   * Parallel HP arrays for garrison units (length === count per unitId).
+   * Omitted / short arrays are treated as full HP at battle spawn.
+   */
+  garrisonHp: Record<string, number[]>;
   trainingQueue: TrainingJob[];
+  /**
+   * Homeland core vs captured occupation.
+   * Cores: starting territories. Occupied: captured (reduced output until stabilized).
+   */
+  control: "core" | "occupied" | "stabilized";
+  /** Turns this territory has been continuously garrisoned while occupied. */
+  occupiedTurns: number;
+  /** Units that moved out or arrived this turn — no fortified bonus next battle. */
+  movedThisTurn?: boolean;
 }
 
 export interface PlayerState {
@@ -89,6 +103,8 @@ export interface AiAttackPlan {
 export interface StrikeForceSlot {
   unitId: string;
   count: number;
+  /** Current HP per unit (length === count). Omitted = all at maxHp. */
+  hps?: number[];
 }
 
 export interface BattleUnit {
@@ -168,6 +184,8 @@ export interface BattleState {
   territoryId: string;
   attacker: FactionId;
   defender: FactionId;
+  /** Origin territory of the arriving army (retreat / leftover returns). */
+  fromId: string | null;
   units: BattleUnit[];
   defenses: BattleDefense[];
   projectiles: BattleProjectile[];
@@ -175,7 +193,7 @@ export interface BattleState {
   scorches: BattleScorch[];
   time: number;
   elapsed: number;
-  status: "running" | "attacker_win" | "defender_win";
+  status: "running" | "attacker_win" | "defender_win" | "retreated";
   log: string[];
 }
 

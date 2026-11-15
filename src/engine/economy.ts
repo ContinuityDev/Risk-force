@@ -7,8 +7,10 @@ import {
 } from "./continents";
 import type { GameState, PlayerState } from "./state";
 import { emptyResources } from "./state";
+import { healGarrison } from "./garrisonHp";
 import { staffingMultiplier, workerCapForBuilding } from "./training";
 import { applyEnergyUpkeep, computeEnergyUpkeep } from "./upkeep";
+import { hasResearched } from "./research";
 
 export { computeEnergyUpkeep };
 
@@ -153,8 +155,34 @@ export function applyEconomyTick(state: GameState, playerId: string): GameState 
       return b;
     });
     const supplyStock = Math.min(200, ts.supplyStock + Math.floor(stockGain));
-    if (changed || supplyStock !== ts.supplyStock) {
-      territories[tid] = { ...ts, buildings, supplyStock };
+    let nextTs = {
+      ...ts,
+      buildings,
+      supplyStock,
+      movedThisTurn: false,
+    };
+    // Repair Bay + field_repair heal garrison HP each turn.
+    let healAmt = 0;
+    if (!insolventPrev) {
+      const hasBay = buildings.some(
+        (b) =>
+          b.buildRemaining <= 0 &&
+          b.hp > 0 &&
+          b.buildingId === "repair_bay",
+      );
+      if (hasBay) healAmt += GAME_LOOP.repair.repairBayHeal;
+      if (hasResearched(player, "field_repair")) {
+        healAmt += GAME_LOOP.repair.fieldRepairHeal;
+      }
+    }
+    if (healAmt > 0) nextTs = healGarrison(nextTs, healAmt);
+    if (
+      changed ||
+      supplyStock !== ts.supplyStock ||
+      healAmt > 0 ||
+      ts.movedThisTurn
+    ) {
+      territories[tid] = nextTs;
     }
   }
 

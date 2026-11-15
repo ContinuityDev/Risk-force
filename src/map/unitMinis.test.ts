@@ -16,6 +16,12 @@ function stubTs(
     population: 10,
     workers: 2,
     buildings: [],
+    supplyStock: 0,
+    trainingQueue: [],
+    garrisonHp: {},
+    control: "core",
+    occupiedTurns: 0,
+    movedThisTurn: false,
     ...partial,
   };
 }

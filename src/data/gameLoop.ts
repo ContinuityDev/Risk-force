@@ -65,8 +65,72 @@ export const GAME_LOOP = {
   },
 
   combat: {
-    /** On capture, all buildings are wiped (bare land). */
+    /** @deprecated Prefer raze/keep capture choice. */
     destroyBuildingsOnCapture: true,
+    /** Soft frontage cap — efficiency drops for units beyond this per side. */
+    frontageCap: 12,
+    /** Efficiency of each unit past the frontage cap (diminishing). */
+    frontageOverstackEfficiency: 0.55,
+    /** Entrenchment bonus for units that did not move this turn. */
+    fortifiedBonus: 0.18,
+    /** Extra fortified bonus from shield walls / bunkers on the plot. */
+    fortificationBuildingBonus: 0.08,
+  },
+
+  repair: {
+    /** HP restored per garrison unit per turn with a completed Repair Bay. */
+    repairBayHeal: 18,
+    /** Extra HP/turn for all garrisons after field_repair research. */
+    fieldRepairHeal: 6,
+  },
+
+  occupation: {
+    /** Turns of continuous garrison before occupied → stabilized. */
+    stabilizeTurns: 4,
+    /** Output / training multiplier while occupied (not yet stabilized). */
+    occupiedOutputMult: 0.55,
+    occupiedTrainMult: 0.7,
+    /** Cash bump (energy) when razing on capture. */
+    razeEnergyBonus: 40,
+    /** Population retained fraction when razing. */
+    razePopRetain: 0.35,
+    /** Building HP retained fraction when keeping (need repair). */
+    keepBuildingHpMult: 0.45,
+  },
+
+  logistics: {
+    /** Supply radius in neighbor hops from a completed depot. */
+    depotRadius: 2,
+    /** Per-unit attrition fraction per turn when out of supply. */
+    attritionFraction: 0.08,
+    /** Combat damage multiplier when out of supply. */
+    unsuppliedDamageMult: 0.75,
+    /** Market buy spread above mid rate. */
+    marketBuySpread: 1.12,
+    /** Market sell spread below mid rate. */
+    marketSellSpread: 0.88,
+    midRates: {
+      energyPerAlloy: 3,
+      energyPerSupply: 2,
+      alloyPerSupply: 0.7,
+    },
+  },
+
+  solvency: {
+    /** Partial energy refund when disbanding a unit (fraction of train cost). */
+    disbandRefund: 0.35,
+    /** Mothball: unit stays but upkeep × this, cannot fight until remobilized. */
+    mothballUpkeepMult: 0.25,
+    /** Warn when projected net energy after action is below this. */
+    warnNetThreshold: -40,
+  },
+
+  victory: {
+    /** Default win remains total domination; optional VP race uses these. */
+    pointsPerTerritory: 1,
+    pointsPerCore: 2,
+    pointsPerContinent: 8,
+    defaultTurnLimit: 0,
   },
 
   /**

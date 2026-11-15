@@ -26,6 +26,7 @@ export type GameAction =
     }
   | { type: "BATTLE_TICK"; payload: { dt: number } }
   | { type: "RESOLVE_BATTLE" }
+  | { type: "RETREAT_BATTLE" }
   | { type: "END_TURN" }
   | { type: "DISMISS_MESSAGE" }
   | { type: "DISMISS_TURN_LOG" }
