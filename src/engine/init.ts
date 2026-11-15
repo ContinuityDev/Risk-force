@@ -31,12 +31,13 @@ function starterBuildings(
   owner: FactionId,
 ): TerritoryState["buildings"] {
   const shift = owner === "player" ? 0 : owner === "faction_a" ? 1 : 0;
+  const row = shift % 2;
   return [
     {
       instanceId: `b${nextId.n++}`,
       buildingId: "command_nexus",
       x: 2,
-      y: 1 + (shift % 2),
+      y: 1 + row,
       hp: 900,
       buildRemaining: 0,
     },
@@ -50,9 +51,17 @@ function starterBuildings(
     },
     {
       instanceId: `b${nextId.n++}`,
+      buildingId: "refinery",
+      x: 0,
+      y: 2,
+      hp: 220,
+      buildRemaining: 0,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
       buildingId: "shield_wall",
       x: 1,
-      y: 3,
+      y: 4,
       hp: 480,
       buildRemaining: 0,
     },
@@ -61,6 +70,14 @@ function starterBuildings(
       buildingId: "laser_turret",
       x: 4,
       y: 2,
+      hp: 260,
+      buildRemaining: 0,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
+      buildingId: "laser_turret",
+      x: 5,
+      y: 3,
       hp: 260,
       buildRemaining: 0,
     },

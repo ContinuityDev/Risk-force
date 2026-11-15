@@ -365,6 +365,9 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
               t: 0,
               style: "emp",
             });
+            log.push(`EMP disrupt on ${getBuilding(d.buildingId).name}.`);
+          } else if (p.damage >= 25) {
+            log.push(`Heavy hit on ${getBuilding(d.buildingId).name}.`);
           }
           return { ...d, hp, disabledT };
         });

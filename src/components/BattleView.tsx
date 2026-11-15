@@ -13,45 +13,54 @@ interface BattleViewProps {
   dispatch: (action: GameAction) => void;
 }
 
-const FIELD_W = 640;
-const FIELD_H = 360;
+const FIELD_W = 100;
+const FIELD_H = 56;
 
-function worldToPx(x: number, y: number) {
+function worldToPct(x: number, y: number) {
   return {
-    left: (x / 16) * FIELD_W,
-    top: (y / 8) * FIELD_H,
+    left: `${(x / 14) * 100}%`,
+    top: `${(y / 7.2) * 100}%`,
   };
 }
 
-function projectileVisual(p: BattleState["projectiles"][number]) {
-  const x = p.x + (p.tx - p.x) * p.progress;
-  const y = p.y + (p.ty - p.y) * p.progress;
-  const pos = worldToPx(x, y);
+function ProjectileLayer({ p }: { p: BattleState["projectiles"][number] }) {
+  const x0 = (p.x / 14) * 100;
+  const y0 = (p.y / 7.2) * 100;
+  const x1 = (p.tx / 14) * 100;
+  const y1 = (p.ty / 7.2) * 100;
+  const cx = x0 + (x1 - x0) * p.progress;
+  const cy = y0 + (y1 - y0) * p.progress;
   const style = p.style;
 
   if (style === "laser" || style === "rail" || style === "orbital") {
-    const from = worldToPx(p.x, p.y);
-    const to = worldToPx(p.tx, p.ty);
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = Math.hypot(dx, dy);
+    const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
     return (
-      <line
-        key={p.id}
-        x1={from.left}
-        y1={from.top}
-        x2={to.left}
-        y2={to.top}
-        className={`rf-battle__beam rf-battle__beam--${style}`}
-        strokeOpacity={Math.max(0.2, 1 - p.progress)}
-      />
+      <>
+        <div
+          className={`rf-battle__beam-el rf-battle__beam-el--${style}`}
+          style={{
+            left: `${x0}%`,
+            top: `${y0}%`,
+            width: `${len}%`,
+            transform: `rotate(${ang}deg)`,
+            opacity: Math.max(0.25, 0.9 - p.progress * 0.4),
+          }}
+        />
+        <div
+          className={`rf-battle__bolt rf-battle__bolt--${style}`}
+          style={{ left: `${cx}%`, top: `${cy}%` }}
+        />
+      </>
     );
   }
 
   return (
-    <circle
-      key={p.id}
-      cx={pos.left}
-      cy={pos.top}
-      r={style === "plasma" || style === "missile" ? 5 : 3.5}
-      className={`rf-battle__orb rf-battle__orb--${style}`}
+    <div
+      className={`rf-battle__bolt rf-battle__bolt--${style}`}
+      style={{ left: `${cx}%`, top: `${cy}%` }}
     />
   );
 }
@@ -123,136 +132,172 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
       </header>
 
       <div className="rf-battle__stage">
-        <svg
-          className="rf-battle__field"
-          viewBox={`0 0 ${FIELD_W} ${FIELD_H}`}
-          width="100%"
-          height="100%"
+        <div
+          className="rf-battle__arena"
+          style={{ aspectRatio: `${FIELD_W} / ${FIELD_H}` }}
         >
-          <defs>
-            <linearGradient id="rf-field-bg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#121a24" />
-              <stop offset="100%" stopColor="#0c121a" />
-            </linearGradient>
-          </defs>
-          <rect width={FIELD_W} height={FIELD_H} fill="url(#rf-field-bg)" />
-          <line
-            x1={FIELD_W * 0.5}
-            y1={12}
-            x2={FIELD_W * 0.5}
-            y2={FIELD_H - 12}
-            stroke="#243041"
-            strokeDasharray="4 6"
-            strokeWidth="1"
-          />
+          <div className="rf-battle__sky" />
+          <div className="rf-battle__ground" />
+          <div className="rf-battle__grid-overlay" />
+          <div className="rf-battle__ridge" />
 
           {battle.defenses.map((d) => {
             if (!d.alive && d.anim !== "destroyed") return null;
-            const pos = worldToPx(d.x, d.y);
+            const pos = worldToPct(d.x, d.y);
             let spriteId = "building-shield";
+            let size = 72;
             try {
-              spriteId = getBuilding(d.buildingId).sprite.id;
+              const def = getBuilding(d.buildingId);
+              spriteId = def.sprite.id;
+              size = def.size.w >= 2 ? 96 : 76;
             } catch {
-              /* keep fallback */
+              /* */
             }
+            const wreck = !d.alive;
             return (
-              <g key={d.id} transform={`translate(${pos.left}, ${pos.top})`}>
-                <image
-                  href={getSpriteUrl(spriteId)}
-                  x={-18}
-                  y={-18}
-                  width={36}
-                  height={36}
-                  opacity={d.alive ? 1 : 0.35}
-                  className={
-                    d.anim === "firing"
-                      ? "rf-battle__flash"
-                      : d.anim === "destroyed"
-                        ? "rf-battle__fade"
-                        : undefined
-                  }
+              <div
+                key={d.id}
+                className={`rf-battle__actor rf-battle__actor--def ${
+                  d.anim === "firing"
+                    ? "is-firing"
+                    : wreck
+                      ? "is-wreck"
+                      : d.disabledT > 0
+                        ? "is-disabled"
+                        : ""
+                }`}
+                style={{
+                  left: pos.left,
+                  top: pos.top,
+                  width: size,
+                  height: size,
+                }}
+              >
+                {(d.buildingId.includes("shield") ||
+                  d.buildingId === "shield_wall") &&
+                  d.alive && <span className="rf-battle__shield-bubble" />}
+                <img
+                  src={getSpriteUrl(wreck ? "fx-wreck" : spriteId)}
+                  alt=""
+                  draggable={false}
                 />
-                {d.alive && (
-                  <g transform="translate(-16, -26)">
-                    <rect width={32} height={3} fill="#1a2330" />
-                    <rect
-                      width={32 * Math.max(0, d.hp / d.maxHp)}
-                      height={3}
-                      fill="#6aaa8a"
-                    />
-                  </g>
+                {d.anim === "firing" && d.alive && (
+                  <span className="rf-battle__muzzle" />
                 )}
-              </g>
+                {d.alive && (
+                  <span className="rf-battle__hpbar">
+                    <i style={{ width: `${(d.hp / d.maxHp) * 100}%` }} />
+                  </span>
+                )}
+              </div>
             );
           })}
 
           {battle.units.map((u) => {
             if (!u.alive && u.anim !== "destroyed") return null;
-            const pos = worldToPx(u.x, u.y);
+            const pos = worldToPct(u.x, u.y);
             let spriteId = "unit-trooper";
+            let size = 56;
             try {
-              spriteId = getUnit(u.unitId).sprite.id;
+              const def = getUnit(u.unitId);
+              spriteId = def.sprite.id;
+              size =
+                def.role === "armor" || def.role === "naval"
+                  ? 68
+                  : def.role === "air" || def.role === "orbital"
+                    ? 62
+                    : 54;
             } catch {
-              /* keep fallback */
+              /* */
             }
+            const wreck = !u.alive;
             return (
-              <g key={u.id} transform={`translate(${pos.left}, ${pos.top})`}>
-                <image
-                  href={getSpriteUrl(spriteId)}
-                  x={-14}
-                  y={-14}
-                  width={28}
-                  height={28}
-                  opacity={u.alive ? 1 : 0.3}
-                  className={
-                    u.anim === "attack"
-                      ? "rf-battle__flash"
-                      : u.anim === "destroyed"
-                        ? "rf-battle__fade"
-                        : undefined
-                  }
+              <div
+                key={u.id}
+                className={`rf-battle__actor rf-battle__actor--unit ${
+                  u.anim === "attack"
+                    ? "is-firing"
+                    : u.anim === "move"
+                      ? "is-moving"
+                      : wreck
+                        ? "is-wreck"
+                        : u.disabledT > 0
+                          ? "is-disabled"
+                          : ""
+                }`}
+                style={{
+                  left: pos.left,
+                  top: pos.top,
+                  width: size,
+                  height: size,
+                }}
+              >
+                <img
+                  src={getSpriteUrl(wreck ? "fx-wreck" : spriteId)}
+                  alt=""
+                  draggable={false}
                 />
-                {u.alive && (
-                  <g transform="translate(-14, -22)">
-                    <rect width={28} height={3} fill="#1a2330" />
-                    <rect
-                      width={28 * Math.max(0, u.hp / u.maxHp)}
-                      height={3}
-                      fill={
-                        u.side === "attacker" ? "#7eb6c9" : "#c07070"
-                      }
-                    />
-                  </g>
+                {u.anim === "attack" && u.alive && (
+                  <span className="rf-battle__muzzle" />
                 )}
-              </g>
+                {u.alive && (
+                  <span
+                    className={`rf-battle__hpbar ${
+                      u.side === "attacker" ? "is-atk" : "is-def"
+                    }`}
+                  >
+                    <i style={{ width: `${(u.hp / u.maxHp) * 100}%` }} />
+                  </span>
+                )}
+              </div>
             );
           })}
 
-          {battle.projectiles.map(projectileVisual)}
+          {battle.projectiles.map((p) => (
+            <ProjectileLayer key={p.id} p={p} />
+          ))}
 
           {battle.explosions.map((ex) => {
-            const pos = worldToPx(ex.x, ex.y);
+            const pos = worldToPct(ex.x, ex.y);
+            const scale = 1 + ex.t * 1.6;
+            const fx = ex.style === "emp" ? "fx-emp" : "fx-explosion";
             return (
-              <image
+              <img
                 key={ex.id}
-                href={getSpriteUrl("fx-explosion")}
-                x={pos.left - 16}
-                y={pos.top - 16}
-                width={32}
-                height={32}
-                opacity={Math.max(0, 1 - ex.t)}
+                className="rf-battle__explosion"
+                src={getSpriteUrl(fx)}
+                alt=""
+                style={{
+                  left: pos.left,
+                  top: pos.top,
+                  transform: `translate(-50%, -50%) scale(${scale})`,
+                  opacity: Math.max(0, 1 - ex.t * 1.5),
+                }}
               />
             );
           })}
-        </svg>
+        </div>
 
         <aside className="rf-battle__log">
           <span className="rf-label">Combat log</span>
           <ul>
-            {battle.log.slice(-12).map((line, i) => (
+            {battle.log.length === 0 && (
+              <li className="rf-text-dim">Awaiting contact…</li>
+            )}
+            {battle.log.slice(-14).map((line, i) => (
               <li key={`${i}-${line}`}>{line}</li>
             ))}
           </ul>
+          <div className="rf-battle__stats">
+            <span>
+              ATK {battle.units.filter((u) => u.alive).length}/
+              {battle.units.length}
+            </span>
+            <span>
+              DEF {battle.defenses.filter((d) => d.alive).length}/
+              {battle.defenses.length}
+            </span>
+          </div>
           {done && (
             <p className="rf-battle__result">
               {battle.status === "attacker_win"
@@ -264,8 +309,15 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
       </div>
 
       <div className="rf-battle__legend">
-        <Sprite id="fx-laser" size={20} anim="none" />
-        <span className="rf-text-dim">Live fire · {battle.elapsed.toFixed(1)}s</span>
+        <Sprite id="fx-laser" size={24} anim="none" />
+        <Sprite id="fx-plasma" size={20} anim="none" />
+        <Sprite id="fx-explosion" size={22} anim="none" />
+        <span className="rf-text-dim">
+          Live fire · {battle.elapsed.toFixed(1)}s
+          {battle.projectiles.length > 0
+            ? ` · ${battle.projectiles.length} in flight`
+            : ""}
+        </span>
       </div>
     </div>
   );
