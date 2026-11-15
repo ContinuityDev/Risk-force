@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
+import { HELP } from "../data/gameLoop";
 import { getTerritory, TERRITORIES } from "../data/map/territories";
 import { getUnit, UNIT_LIST } from "../data/units";
 import type { GameAction } from "../engine/actions";
 import { forceSupplyCost } from "../engine/economy";
-import { isUnlocked } from "../engine/research";
 import type { GameState, PlayerState, StrikeForceSlot } from "../engine/state";
 import { Sprite } from "./Sprite";
 
@@ -38,6 +38,9 @@ export function InvadeView({
   const [force, setForce] = useState<Record<string, number>>({});
 
   const fromDef = fromId ? getTerritory(fromId) : null;
+  const fromTs = fromId ? state.territories[fromId] : null;
+  const garrison = fromTs?.garrison ?? {};
+
   const targets = useMemo(() => {
     if (!fromDef) return [];
     return fromDef.neighbors.filter(
@@ -54,10 +57,10 @@ export function InvadeView({
     (id) => getUnit(id).supplyCost ?? 1,
   );
 
-  const recruitable = UNIT_LIST.filter((u) => isUnlocked(activePlayer, u.id));
+  const garrisonUnits = UNIT_LIST.filter((u) => (garrison[u.id] ?? 0) > 0);
 
   function setCount(unitId: string, count: number) {
-    const max = activePlayer.reserves[unitId] ?? 0;
+    const max = garrison[unitId] ?? 0;
     setForce((prev) => ({
       ...prev,
       [unitId]: Math.max(0, Math.min(max, count)),
@@ -70,6 +73,10 @@ export function InvadeView({
         <div>
           <span className="rf-label">Operations</span>
           <h2>Invasion Planning</h2>
+          <p className="rf-hint" title={HELP.invasion}>
+            Launch from a local garrison. Capturing razes buildings — bare land
+            + reduced population.
+          </p>
         </div>
         <p className="rf-resource">
           <span className="rf-label">Supply</span>
@@ -87,11 +94,17 @@ export function InvadeView({
             onChange={(e) => {
               setFromId(e.target.value);
               setToId("");
+              setForce({});
             }}
           >
             {owned.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.name}
+                {t.name} (garrison{" "}
+                {Object.values(state.territories[t.id]?.garrison ?? {}).reduce(
+                  (a, b) => a + b,
+                  0,
+                )}
+                )
               </option>
             ))}
           </select>
@@ -110,17 +123,20 @@ export function InvadeView({
       </div>
 
       <section className="rf-invade__force">
-        <span className="rf-label">Assemble strike force from reserves</span>
+        <span className="rf-label">Assemble strike force from local garrison</span>
+        {garrisonUnits.length === 0 && (
+          <p className="rf-hint">No units stationed here — train them in Base.</p>
+        )}
         <ul>
-          {recruitable.map((u) => {
-            const reserve = activePlayer.reserves[u.id] ?? 0;
+          {garrisonUnits.map((u) => {
+            const reserve = garrison[u.id] ?? 0;
             return (
               <li key={u.id}>
                 <Sprite id={u.sprite.id} size={32} anim="none" />
                 <div>
                   <strong>{u.name}</strong>
                   <small>
-                    Reserve {reserve} · Supply {u.supplyCost}/ea
+                    Garrison {reserve} · Supply {u.supplyCost}/ea
                   </small>
                 </div>
                 <div className="rf-invade__stepper">
@@ -140,20 +156,6 @@ export function InvadeView({
                     +
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={!canAct || reserve < 1}
-                  onClick={() =>
-                    dispatch({
-                      type: "RECRUIT",
-                      payload: { unitId: u.id, count: 1 },
-                    })
-                  }
-                  title={`Recruit (E${u.cost.energy}${u.cost.alloy ? ` A${u.cost.alloy}` : ""})`}
-                >
-                  Recruit
-                </button>
               </li>
             );
           })}

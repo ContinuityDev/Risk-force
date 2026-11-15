@@ -47,6 +47,7 @@ describe("economy", () => {
               y: 4,
               hp: 220,
               buildRemaining: 2,
+              workers: 0,
             },
           ],
         },

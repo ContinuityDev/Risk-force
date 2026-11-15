@@ -29,6 +29,7 @@ const EMPTY_MENU: GameState = {
   winner: null,
   message: null,
   nextInstanceId: 1,
+  aiAttackPlans: [],
 };
 
 /**

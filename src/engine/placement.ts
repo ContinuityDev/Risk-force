@@ -27,9 +27,10 @@ export function canPlaceBuilding(
   player: PlayerState,
 ): { ok: true } | { ok: false; reason: string } {
   if (buildingId === "command_nexus") {
-    return { ok: false, reason: "Command Nexus is unique and pre-placed." };
-  }
-  if (!isUnlocked(player, buildingId)) {
+    if (territory.buildings.some((b) => b.buildingId === "command_nexus")) {
+      return { ok: false, reason: "Command Nexus already present." };
+    }
+  } else if (!isUnlocked(player, buildingId)) {
     return { ok: false, reason: "Research required." };
   }
   const def = getBuilding(buildingId);

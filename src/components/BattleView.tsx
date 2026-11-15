@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
+import { BATTLE_FIELD } from "../data/battleField";
 import { getBuilding } from "../data/buildings";
 import { factionName } from "../data/factions";
 import { getTerritory } from "../data/map/territories";
@@ -39,21 +40,35 @@ interface BattleViewProps {
   dispatch: (action: GameAction) => void;
 }
 
-const FIELD_W = 100;
-const FIELD_H = 56;
+const FIELD_W = BATTLE_FIELD.width;
+const FIELD_H = BATTLE_FIELD.height;
 
 function worldToPct(x: number, y: number) {
   return {
-    left: `${(x / 14) * 100}%`,
-    top: `${(y / 7.2) * 100}%`,
+    left: `${(x / FIELD_W) * 100}%`,
+    top: `${(y / FIELD_H) * 100}%`,
+  };
+}
+
+function zoneStyle(z: {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}): CSSProperties {
+  return {
+    left: `${(z.x0 / FIELD_W) * 100}%`,
+    top: `${(z.y0 / FIELD_H) * 100}%`,
+    width: `${((z.x1 - z.x0) / FIELD_W) * 100}%`,
+    height: `${((z.y1 - z.y0) / FIELD_H) * 100}%`,
   };
 }
 
 function ProjectileLayer({ p }: { p: BattleState["projectiles"][number] }) {
-  const x0 = (p.x / 14) * 100;
-  const y0 = (p.y / 7.2) * 100;
-  const x1 = (p.tx / 14) * 100;
-  const y1 = (p.ty / 7.2) * 100;
+  const x0 = (p.x / FIELD_W) * 100;
+  const y0 = (p.y / FIELD_H) * 100;
+  const x1 = (p.tx / FIELD_W) * 100;
+  const y1 = (p.ty / FIELD_H) * 100;
   const cx = x0 + (x1 - x0) * p.progress;
   const cy = y0 + (y1 - y0) * p.progress;
   const style = p.style;
@@ -158,18 +173,53 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
       </header>
 
       <div className="rf-battle__stage">
-        <div
-          className="rf-battle__arena"
-          style={{ aspectRatio: `${FIELD_W} / ${FIELD_H}` }}
-        >
-          <div className="rf-battle__sky" />
-          <div className="rf-battle__horizon" />
+        <div className="rf-battle__viewport">
+          {/* Decorative sky sits ABOVE the playable ground — never under units. */}
+          <div className="rf-battle__skyband" aria-hidden />
+          <div
+            className="rf-battle__arena"
+            style={{ aspectRatio: `${FIELD_W} / ${FIELD_H}` }}
+          >
           <div className="rf-battle__ground" />
           <div className="rf-battle__tracks" />
           <div className="rf-battle__scorch" />
           <div className="rf-battle__rubble" />
+          <div
+            className="rf-battle__zone rf-battle__zone--deploy"
+            style={zoneStyle(BATTLE_FIELD.attackerDeploy)}
+            title="Attacker deployment"
+          />
+          <div
+            className="rf-battle__zone rf-battle__zone--nml"
+            style={zoneStyle(BATTLE_FIELD.noMansLand)}
+            title="No-man's-land"
+          />
+          <div
+            className="rf-battle__zone rf-battle__zone--base"
+            style={zoneStyle(BATTLE_FIELD.defenderZone)}
+            title="Defender base"
+          />
           <div className="rf-battle__smoke rf-battle__smoke--a" />
           <div className="rf-battle__smoke rf-battle__smoke--b" />
+
+          {battle.scorches.map((sc) => {
+            const pos = worldToPct(sc.x, sc.y);
+            const fade = Math.max(0, 1 - sc.t / 14);
+            const px = 72 * sc.scale;
+            return (
+              <div
+                key={sc.id}
+                className="rf-battle__scorch-decal"
+                style={{
+                  left: pos.left,
+                  top: pos.top,
+                  width: px,
+                  height: px * 0.55,
+                  opacity: 0.55 * fade,
+                }}
+              />
+            );
+          })}
 
           {battle.defenses.map((d) => {
             if (!d.alive && d.anim !== "destroyed") return null;
@@ -309,49 +359,96 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
 
           {battle.explosions.map((ex) => {
             const pos = worldToPct(ex.x, ex.y);
-            // ~1.5× tank (~168px), fade over ~0.8s
-            const life = Math.min(1, ex.t / 0.8);
-            const scale = 0.85 + life * 0.55;
-            const fx = ex.style === "emp" ? "fx-emp" : "fx-explosion";
+            // ~1.3× tank (~145px), flickery flame + rising smoke
+            const life = Math.min(1, ex.t / 0.9);
+            const flicker = 0.92 + Math.sin(ex.t * 42 + ex.x * 3) * 0.08;
+            const grow = 0.78 + life * 0.35;
+            if (ex.style === "emp") {
+              return (
+                <div
+                  key={ex.id}
+                  className="rf-battle__blast"
+                  style={{ left: pos.left, top: pos.top }}
+                >
+                  <img
+                    className="rf-battle__explosion"
+                    src={getSpriteUrl("fx-emp")}
+                    alt=""
+                    style={{
+                      width: 120,
+                      height: 120,
+                      transform: `scale(${grow})`,
+                      opacity: Math.max(0, 1 - life * 1.1),
+                    }}
+                  />
+                </div>
+              );
+            }
             return (
               <div
                 key={ex.id}
                 className="rf-battle__blast"
                 style={{ left: pos.left, top: pos.top }}
               >
-                <img
-                  className="rf-battle__explosion rf-battle__explosion--core"
-                  src={getSpriteUrl(fx)}
-                  alt=""
+                <span
+                  className="rf-battle__flame rf-battle__flame--a"
                   style={{
-                    width: 168,
-                    height: 168,
-                    transform: `scale(${scale})`,
-                    opacity: Math.max(0, 1 - life * 1.15),
+                    transform: `scale(${grow * flicker}) rotate(${life * 12}deg)`,
+                    opacity: Math.max(0, 0.95 - life * 1.05),
                   }}
                 />
-                {ex.style !== "emp" && (
-                  <>
-                    <img
-                      className="rf-battle__explosion-smoke"
-                      src={getSpriteUrl("fx-smoke")}
-                      alt=""
-                      style={{
-                        width: 180,
-                        height: 180,
-                        transform: `translateY(${-8 - life * 36}px) scale(${1 + life * 1.4})`,
-                        opacity: Math.max(0, 0.7 - life * 0.75),
-                      }}
-                    />
-                    <span
-                      className="rf-battle__sparks"
-                      style={{ opacity: Math.max(0, 0.9 - life * 1.2) }}
-                    />
-                  </>
-                )}
+                <span
+                  className="rf-battle__flame rf-battle__flame--b"
+                  style={{
+                    transform: `scale(${grow * (1.05 - flicker * 0.08)}) rotate(${-life * 18}deg)`,
+                    opacity: Math.max(0, 0.85 - life * 1.1),
+                  }}
+                />
+                <img
+                  className="rf-battle__explosion rf-battle__explosion--core"
+                  src={getSpriteUrl("fx-explosion")}
+                  alt=""
+                  style={{
+                    width: 145,
+                    height: 145,
+                    transform: `scale(${grow * flicker})`,
+                    opacity: Math.max(0, 0.9 - life * 1.2),
+                    mixBlendMode: "screen",
+                  }}
+                />
+                <img
+                  className="rf-battle__explosion-smoke rf-battle__explosion-smoke--a"
+                  src={getSpriteUrl("fx-smoke")}
+                  alt=""
+                  style={{
+                    width: 110,
+                    height: 110,
+                    transform: `translate(${life * 10}px, ${-6 - life * 48}px) scale(${0.85 + life * 1.1})`,
+                    opacity: Math.max(0, 0.65 - life * 0.7),
+                  }}
+                />
+                <img
+                  className="rf-battle__explosion-smoke rf-battle__explosion-smoke--b"
+                  src={getSpriteUrl("fx-smoke")}
+                  alt=""
+                  style={{
+                    width: 95,
+                    height: 95,
+                    transform: `translate(${-8 - life * 14}px, ${-10 - life * 56}px) scale(${0.7 + life * 1.25})`,
+                    opacity: Math.max(0, 0.55 - life * 0.65),
+                  }}
+                />
+                <span
+                  className="rf-battle__sparks"
+                  style={{
+                    opacity: Math.max(0, 0.95 - life * 1.35),
+                    transform: `scale(${0.7 + life * 0.5})`,
+                  }}
+                />
               </div>
             );
           })}
+          </div>
         </div>
 
         <aside className="rf-battle__log">

@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { factionColor } from "../data/factions";
+import { GAME_LOOP, HELP } from "../data/gameLoop";
 import type { GameAction } from "../engine/actions";
 import type { GameState, PlayerState, Screen } from "../engine/state";
 
@@ -20,6 +22,7 @@ const NAV: { screen: Screen; label: string }[] = [
 export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
   const r = activePlayer.resources;
   const color = factionColor(activePlayer.id);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   return (
     <header className="rf-hud">
@@ -46,6 +49,27 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
           <span className="rf-label">Supply</span>
           <strong>{Math.floor(r.supply)}</strong>
         </span>
+        <label
+          className="rf-resource rf-hud__campaign"
+          title={HELP.campaigning}
+        >
+          <span className="rf-label">Campaign</span>
+          <input
+            type="range"
+            min={0}
+            max={GAME_LOOP.campaigning.maxBudget}
+            step={5}
+            value={activePlayer.campaignBudget}
+            disabled={!isHumanTurn}
+            onChange={(e) =>
+              dispatch({
+                type: "SET_CAMPAIGN_BUDGET",
+                payload: { energy: Number(e.target.value) },
+              })
+            }
+          />
+          <strong>{activePlayer.campaignBudget}</strong>
+        </label>
       </div>
 
       <nav className="rf-hud__nav">
@@ -64,6 +88,14 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
         ))}
         <button
           type="button"
+          className="ghost"
+          onClick={() => setHelpOpen((v) => !v)}
+          title="Game loop help"
+        >
+          Help
+        </button>
+        <button
+          type="button"
           className="primary"
           disabled={!isHumanTurn || state.phase !== "play"}
           onClick={() => dispatch({ type: "END_TURN" })}
@@ -71,6 +103,25 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
           End Turn
         </button>
       </nav>
+
+      {helpOpen && (
+        <div className="rf-hud__help" role="dialog" aria-label="Game loop help">
+          <strong>How the theater works</strong>
+          <p>{HELP.campaigning}</p>
+          <p>{HELP.population}</p>
+          <p>{HELP.training}</p>
+          <p>{HELP.workers}</p>
+          <p>{HELP.invasion}</p>
+          <p>{HELP.ai}</p>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => setHelpOpen(false)}
+          >
+            Close
+          </button>
+        </div>
+      )}
 
       {state.message && (
         <div className="rf-hud__message" role="status">

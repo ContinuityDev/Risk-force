@@ -1,5 +1,13 @@
+import {
+  BATTLE_FIELD,
+  clampToGround,
+  clampToZone,
+  mapBaseCellToBattle,
+} from "../data/battleField";
 import { getBuilding } from "../data/buildings";
 import { damageMultiplier } from "../data/combatMatrix";
+import { GAME_LOOP } from "../data/gameLoop";
+import { getTerritory } from "../data/map/territories";
 import type { ArmorType, DamageType, ProjectileStyle } from "../data/types";
 import { getUnit } from "../data/units";
 import { facingFromDelta, stepFacing } from "../sprites/facing";
@@ -39,35 +47,30 @@ export function createBattle(
   force: StrikeForceSlot[],
 ): BattleState {
   const ts = state.territories[territoryId]!;
+  const tdef = getTerritory(territoryId);
   const defenses: BattleDefense[] = [];
   let n = 0;
+  const deploy = BATTLE_FIELD.attackerDeploy;
+  const garrisonZ = BATTLE_FIELD.garrisonZone;
 
-  // Defender base on the RIGHT — structured lanes, not raw grid scatter.
-  const armed: typeof ts.buildings = [];
-  const walls: typeof ts.buildings = [];
-  const econ: typeof ts.buildings = [];
-  const command: typeof ts.buildings = [];
+  // Defender buildings — map the territory base grid onto the defender zone.
   for (const b of ts.buildings) {
     if (b.buildRemaining > 0 || b.hp <= 0) continue;
     const def = getBuilding(b.buildingId);
-    if (def.category === "command") command.push(b);
-    else if (def.damage) armed.push(b);
-    else if (def.category === "defense") walls.push(b);
-    else econ.push(b);
-  }
-
-  const placeDef = (
-    b: (typeof ts.buildings)[number],
-    x: number,
-    y: number,
-  ) => {
-    const def = getBuilding(b.buildingId);
+    const pos = mapBaseCellToBattle(
+      b.x,
+      b.y,
+      def.size.w,
+      def.size.h,
+      tdef.grid.cols,
+      tdef.grid.rows,
+    );
     defenses.push({
       id: uid("d", n++),
       buildingId: b.buildingId,
       instanceId: b.instanceId,
-      x,
-      y,
+      x: pos.x,
+      y: pos.y,
       hp: b.hp,
       maxHp: def.maxHp,
       cooldown: 0.1 * (n % 4),
@@ -75,28 +78,11 @@ export function createBattle(
       animT: 0,
       alive: true,
       disabledT: 0,
-      // Face west toward attacking force
       facing: Math.PI,
     });
-  };
+  }
 
-  // Defensive positions — spread across the RIGHT half of the field
-  armed.forEach((b, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
-    placeDef(b, 8.2 + col * 1.4, 0.9 + row * 1.55);
-  });
-  walls.forEach((b, i) => {
-    placeDef(b, 10.1 + (i % 2) * 1.05, 1.1 + Math.floor(i / 2) * 1.55);
-  });
-  econ.forEach((b, i) => {
-    placeDef(b, 11.6 + (i % 2) * 0.95, 1.0 + Math.floor(i / 2) * 1.5);
-  });
-  command.forEach((b, i) => {
-    placeDef(b, 12.7, 2.2 + i * 1.5);
-  });
-
-  // Attackers — spread across FULL field height in attacking echelons
+  // Attackers — flanking echelons inside the deployment zone (ground only).
   const units: BattleUnit[] = [];
   const forceSlots: { unitId: string; udef: ReturnType<typeof getUnit> }[] = [];
   for (const slot of force) {
@@ -105,7 +91,6 @@ export function createBattle(
       forceSlots.push({ unitId: slot.unitId, udef });
     }
   }
-  // Sort into front-line (infantry/armor/mech) then support (arty/air)
   forceSlots.sort((a, b) => {
     const rank = (u: (typeof forceSlots)[0]) => {
       if (u.udef.role === "infantry") return 0;
@@ -118,24 +103,30 @@ export function createBattle(
     return rank(a) - rank(b);
   });
   const total = Math.max(1, forceSlots.length);
+  const lanes = Math.min(5, Math.max(3, Math.ceil(Math.sqrt(total))));
+  const deployH = deploy.y1 - deploy.y0;
+  const deployW = deploy.x1 - deploy.x0;
   forceSlots.forEach((slot, i) => {
     const { unitId, udef } = slot;
-    // Distribute evenly across y ∈ [0.7, 6.4]
-    const y = 0.7 + (i / Math.max(1, total - 1)) * 5.7;
-    let x = 1.1;
-    if (udef.role === "artillery") x = 0.55;
-    else if (udef.role === "air" || udef.role === "orbital") x = 2.4;
-    else if (udef.role === "armor" || /hover|tank|rail/i.test(unitId)) x = 0.85;
-    else if (/mech|walker|spider/i.test(unitId)) x = 1.35;
-    else if (udef.role === "infantry") x = 1.85;
-    // Alternate depth so columns form a wedge, not a single file
-    x += (i % 3) * 1.15 + (i % 2) * 0.25;
+    const lane = i % lanes;
+    const depth = Math.floor(i / lanes);
+    const y =
+      deploy.y0 +
+      0.15 +
+      (lane / Math.max(1, lanes - 1)) * (deployH - 0.3);
+    let x = deploy.x0 + 0.2 + depth * (deployW * 0.28);
+    if (udef.role === "artillery") x = deploy.x0 + 0.15 + depth * 0.35;
+    else if (udef.role === "air" || udef.role === "orbital")
+      x = deploy.x0 + deployW * 0.45 + (lane % 2) * 0.35;
+    else if (udef.role === "armor" || /hover|tank|rail/i.test(unitId)) x += 0.2;
+    if (lane === 0 || lane === lanes - 1) x += 0.35;
+    const pos = clampToZone(x, y, deploy);
     units.push({
       id: uid("u", n++),
       unitId,
       side: "attacker",
-      x: Math.min(5.6, x),
-      y: Math.min(6.5, y),
+      x: pos.x,
+      y: pos.y,
       hp: udef.maxHp,
       maxHp: udef.maxHp,
       cooldown: 0.15 + (n % 7) * 0.1,
@@ -143,13 +134,58 @@ export function createBattle(
       animT: 0,
       alive: true,
       disabledT: 0,
-      // Face east toward defenses
       facing: 0,
     });
   });
 
-  const forceCount = units.length;
-  const defCount = defenses.filter((d) => getBuilding(d.buildingId).damage).length;
+  // Defender garrison — spread across garrison strip in front of buildings.
+  const garrisonSlots: { unitId: string }[] = [];
+  for (const [unitId, count] of Object.entries(ts.garrison ?? {})) {
+    for (let i = 0; i < count; i++) garrisonSlots.push({ unitId });
+  }
+  const gTotal = Math.max(1, garrisonSlots.length);
+  const gLanes = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(gTotal))));
+  const gH = garrisonZ.y1 - garrisonZ.y0;
+  const gW = garrisonZ.x1 - garrisonZ.x0;
+  garrisonSlots.forEach((slot, i) => {
+    let udef;
+    try {
+      udef = getUnit(slot.unitId);
+    } catch {
+      return;
+    }
+    const lane = i % gLanes;
+    const depth = Math.floor(i / gLanes);
+    const y =
+      garrisonZ.y0 +
+      0.2 +
+      (lane / Math.max(1, gLanes - 1)) * (gH - 0.4);
+    const x =
+      garrisonZ.x0 +
+      depth * (gW * 0.35) +
+      (lane === 0 || lane === gLanes - 1 ? 0.2 : 0);
+    const pos = clampToZone(x, y, garrisonZ);
+    units.push({
+      id: uid("u", n++),
+      unitId: slot.unitId,
+      side: "defender",
+      x: pos.x,
+      y: pos.y,
+      hp: udef.maxHp,
+      maxHp: udef.maxHp,
+      cooldown: 0.2 + (n % 5) * 0.08,
+      anim: "idle",
+      animT: 0,
+      alive: true,
+      disabledT: 0,
+      facing: Math.PI,
+    });
+  });
+
+  const atkCount = units.filter((u) => u.side === "attacker").length;
+  const defUnitCount = units.filter((u) => u.side === "defender").length;
+  const defCount = defenses.filter((d) => getBuilding(d.buildingId).damage)
+    .length;
 
   return {
     territoryId,
@@ -159,46 +195,64 @@ export function createBattle(
     defenses,
     projectiles: [],
     explosions: [],
+    scorches: [],
     time: 0,
     elapsed: 0,
     status: "running",
     log: [
       `Assault on ${territoryId} initiated.`,
-      `Strike force: ${forceCount} units · Defenses online: ${defCount}.`,
+      `Strike force: ${atkCount} · Garrison: ${defUnitCount} · Turrets: ${defCount}.`,
     ],
   };
 }
 
+type FightTarget =
+  | { kind: "defense"; ref: BattleDefense }
+  | { kind: "unit"; ref: BattleUnit };
+
 function pickTargetForUnit(
   u: BattleUnit,
   battle: BattleState,
-): BattleDefense | null {
+): FightTarget | null {
   const udef = getUnit(u.unitId);
-  const alive = battle.defenses.filter((d) => d.alive);
-  if (!alive.length) return null;
+  const scored: { t: FightTarget; score: number }[] = [];
 
-  const scored = alive.map((d) => {
-    const bdef = getBuilding(d.buildingId);
-    let score = dist(u.x, u.y, d.x, d.y);
-    // Role-aware preferences.
-    if (bdef.damage) score -= 2.2;
-    if (bdef.category === "command") score -= 1.2;
-    if (udef.role === "artillery" && bdef.category === "defense") score -= 1.8;
-    if (udef.role === "cyber" && bdef.armorType === "shielded") score -= 2.5;
-    if (udef.damageType === "emp" && bdef.armorType === "shielded") score -= 2;
-    if (udef.damageType === "explosive" && bdef.armorType === "fortified")
-      score -= 1.5;
-    // Flak/AA are dangerous to air — prioritize if air.
-    if (
-      (udef.role === "air" || udef.role === "orbital") &&
-      bdef.targetPreference === "air"
-    ) {
-      score -= 3;
+  if (u.side === "attacker") {
+    for (const d of battle.defenses) {
+      if (!d.alive) continue;
+      const bdef = getBuilding(d.buildingId);
+      let score = dist(u.x, u.y, d.x, d.y);
+      if (bdef.damage) score -= 2.2;
+      if (bdef.category === "command") score -= 1.2;
+      if (udef.role === "artillery" && bdef.category === "defense") score -= 1.8;
+      if (udef.role === "cyber" && bdef.armorType === "shielded") score -= 2.5;
+      if (udef.damageType === "emp" && bdef.armorType === "shielded") score -= 2;
+      if (udef.damageType === "explosive" && bdef.armorType === "fortified")
+        score -= 1.5;
+      if (
+        (udef.role === "air" || udef.role === "orbital") &&
+        bdef.targetPreference === "air"
+      ) {
+        score -= 3;
+      }
+      scored.push({ t: { kind: "defense", ref: d }, score });
     }
-    return { d, score };
-  });
+    for (const foe of battle.units) {
+      if (!foe.alive || foe.side !== "defender" || foe.disabledT > 0) continue;
+      let score = dist(u.x, u.y, foe.x, foe.y) - 1.4;
+      scored.push({ t: { kind: "unit", ref: foe }, score });
+    }
+  } else {
+    for (const foe of battle.units) {
+      if (!foe.alive || foe.side !== "attacker" || foe.disabledT > 0) continue;
+      let score = dist(u.x, u.y, foe.x, foe.y);
+      scored.push({ t: { kind: "unit", ref: foe }, score });
+    }
+  }
+
+  if (!scored.length) return null;
   scored.sort((a, b) => a.score - b.score);
-  return scored[0]!.d;
+  return scored[0]!.t;
 }
 
 function pickTargetForDefense(
@@ -210,7 +264,7 @@ function pickTargetForDefense(
   const pref = bdef.targetPreference ?? "any";
   const range = bdef.range ?? 3;
   const candidates = battle.units.filter((u) => {
-    if (!u.alive || u.disabledT > 0) return false;
+    if (!u.alive || u.disabledT > 0 || u.side !== "attacker") return false;
     const role = getUnit(u.unitId).role;
     const isAir = role === "air" || role === "orbital";
     const isNaval = role === "naval";
@@ -290,8 +344,35 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
   let projectiles = [...battle.projectiles];
   let explosions = battle.explosions
     .map((e) => ({ ...e, t: e.t + dt }))
-    .filter((e) => e.t < 0.85);
+    .filter((e) => e.t < 0.95);
+  let scorches = battle.scorches
+    .map((s) => ({ ...s, t: s.t + dt }))
+    .filter((s) => s.t < 14);
   const log = [...battle.log];
+
+  const spawnBlast = (
+    x: number,
+    y: number,
+    style: string,
+    withScorch: boolean,
+  ) => {
+    explosions.push({
+      id: uid("e", idCounter.n++),
+      x,
+      y,
+      t: 0,
+      style,
+    });
+    if (withScorch) {
+      scorches.push({
+        id: uid("sc", idCounter.n++),
+        x,
+        y,
+        t: 0,
+        scale: 0.85 + Math.random() * 0.45,
+      });
+    }
+  };
 
   const snapshot = (): BattleState => ({
     ...battle,
@@ -312,48 +393,74 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
     };
     const target = pickTargetForUnit(next, snapshot());
     if (!target) return { ...next, anim: "idle" };
+    const tx = target.ref.x;
+    const ty = target.ref.y;
 
-    const aim = facingFromDelta(target.x - next.x, target.y - next.y);
-    const d = dist(next.x, next.y, target.x, target.y);
+    const aim = facingFromDelta(tx - next.x, ty - next.y);
+    const d = dist(next.x, next.y, tx, ty);
     const ideal = Math.max(0.9, udef.range * 0.78);
-    if (d > ideal) {
+    // Defenders hold position; attackers close distance
+    if (u.side === "attacker" && d > ideal) {
       const step = udef.speed * dt;
-      // Prefer lateral advance — hold lane Y so the line does not collapse
-      const dx = ((target.x - next.x) / d) * step;
-      const dy = ((target.y - next.y) / d) * step * 0.22;
+      const dx = ((tx - next.x) / d) * step;
+      const dy = ((ty - next.y) / d) * step * 0.45;
       const moveFacing = facingFromDelta(dx, dy);
+      const pos = clampToGround(next.x + dx, next.y + dy);
       return {
         ...next,
-        x: next.x + dx,
-        y: Math.max(0.4, Math.min(6.7, next.y + dy)),
+        x: pos.x,
+        y: pos.y,
         facing: stepFacing(next.facing, moveFacing, dt),
         anim: "move",
       };
     }
-    // In range — face the target while firing / holding
     next = { ...next, facing: stepFacing(next.facing, aim, dt) };
-    if (next.cooldown <= 0) {
-      const bdef = getBuilding(target.buildingId);
-      const dmg = effectiveDamage(
-        udef.damage,
-        udef.damageType,
-        bdef.armorType,
-        udef.armorPierce,
-      );
-      projectiles.push(
-        spawnProjectile(
-          udef.projectile ?? "bolt",
-          next.x,
-          next.y,
-          target.x,
-          target.y,
-          dmg,
+    if (next.cooldown <= 0 && d <= udef.range * 1.05) {
+      if (target.kind === "defense") {
+        const bdef = getBuilding(target.ref.buildingId);
+        const dmg = effectiveDamage(
+          udef.damage,
           udef.damageType,
-          "defense",
-          target.id,
-          idCounter,
-        ),
-      );
+          bdef.armorType,
+          udef.armorPierce,
+        );
+        projectiles.push(
+          spawnProjectile(
+            udef.projectile ?? "bolt",
+            next.x,
+            next.y,
+            tx,
+            ty,
+            dmg,
+            udef.damageType,
+            "defense",
+            target.ref.id,
+            idCounter,
+          ),
+        );
+      } else {
+        const foeDef = getUnit(target.ref.unitId);
+        const dmg = effectiveDamage(
+          udef.damage,
+          udef.damageType,
+          foeDef.armorType,
+          udef.armorPierce,
+        );
+        projectiles.push(
+          spawnProjectile(
+            udef.projectile ?? "bolt",
+            next.x,
+            next.y,
+            tx,
+            ty,
+            dmg,
+            udef.damageType,
+            "unit",
+            target.ref.id,
+            idCounter,
+          ),
+        );
+      }
       return { ...next, cooldown: 1 / udef.fireRate, anim: "attack", animT: 0 };
     }
     return {
@@ -422,24 +529,12 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
           const hp = d.hp - p.damage;
           const disabledT = isEmp ? Math.max(d.disabledT, 2.2) : d.disabledT;
           if (hp <= 0) {
-            explosions.push({
-              id: uid("e", idCounter.n++),
-              x: d.x,
-              y: d.y,
-              t: 0,
-              style: isEmp ? "emp" : "structure",
-            });
+            spawnBlast(d.x, d.y, isEmp ? "emp" : "structure", !isEmp);
             log.push(`${getBuilding(d.buildingId).name} destroyed.`);
             return { ...d, hp: 0, alive: false, anim: "destroyed", animT: 0, disabledT: 0 };
           }
           if (isEmp) {
-            explosions.push({
-              id: uid("e", idCounter.n++),
-              x: d.x,
-              y: d.y,
-              t: 0,
-              style: "emp",
-            });
+            spawnBlast(d.x, d.y, "emp", false);
             log.push(`EMP disrupt → ${getBuilding(d.buildingId).name}.`);
           } else {
             log.push(
@@ -454,13 +549,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
           const hp = u.hp - p.damage;
           const disabledT = isEmp ? Math.max(u.disabledT, 1.8) : u.disabledT;
           if (hp <= 0) {
-            explosions.push({
-              id: uid("e", idCounter.n++),
-              x: u.x,
-              y: u.y,
-              t: 0,
-              style: isEmp ? "emp" : "unit",
-            });
+            spawnBlast(u.x, u.y, isEmp ? "emp" : "unit", !isEmp);
             log.push(`${getUnit(u.unitId).name} destroyed.`);
             return { ...u, hp: 0, alive: false, anim: "destroyed", animT: 0, disabledT: 0 };
           }
@@ -478,7 +567,8 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
     }
   }
 
-  const attackersAlive = units.some((u) => u.alive);
+  const attackersAlive = units.some((u) => u.alive && u.side === "attacker");
+  const defendersAlive = units.some((u) => u.alive && u.side === "defender");
   const criticalLeft = defenses.some((d) => {
     if (!d.alive) return false;
     const b = getBuilding(d.buildingId);
@@ -490,7 +580,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
   if (!attackersAlive) {
     status = "defender_win";
     log.push("Assault collapsed.");
-  } else if (!criticalLeft || !anyBuildingLeft) {
+  } else if ((!criticalLeft && !defendersAlive) || !anyBuildingLeft) {
     status = "attacker_win";
     log.push("Territory secured.");
   }
@@ -513,6 +603,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
     defenses,
     projectiles: nextProjectiles,
     explosions,
+    scorches,
     time: battle.time + 1,
     elapsed,
     status,
@@ -526,6 +617,12 @@ export function applyBattleResult(state: GameState): GameState {
 
   const tid = battle.territoryId;
   const ts = state.territories[tid]!;
+  // Surviving defender units → garrison
+  const survivors: Record<string, number> = {};
+  for (const u of battle.units) {
+    if (!u.alive || u.side !== "defender") continue;
+    survivors[u.unitId] = (survivors[u.unitId] ?? 0) + 1;
+  }
 
   // Map defense HP back by instanceId.
   const hpByInstance = new Map(
@@ -537,45 +634,40 @@ export function applyBattleResult(state: GameState): GameState {
       if (!match) return b;
       return { ...b, hp: Math.max(0, Math.round(match.hp)) };
     })
-    .filter((b) => b.hp > 0 || b.buildingId === "command_nexus");
+    .filter((b) => b.hp > 0);
 
   let territories = { ...state.territories };
   let message = battle.log[battle.log.length - 1] ?? null;
   const players = state.players;
+  const nextInstanceId = state.nextInstanceId;
 
   if (battle.status === "attacker_win") {
-    buildings = buildings.map((b) =>
-      b.buildingId === "command_nexus"
-        ? { ...b, hp: getBuilding("command_nexus").maxHp, buildRemaining: 0 }
-        : b,
+    // Bare land — buildings destroyed; local population remains (reduced)
+    const pop = Math.max(
+      1,
+      Math.floor(ts.population * GAME_LOOP.population.captureRetain),
     );
-    const hasNexus = buildings.some((b) => b.buildingId === "command_nexus");
-    if (!hasNexus) {
-      buildings = [
-        {
-          instanceId: `b${state.nextInstanceId}`,
-          buildingId: "command_nexus",
-          x: 2,
-          y: 2,
-          hp: getBuilding("command_nexus").maxHp,
-          buildRemaining: 0,
-        },
-        ...buildings,
-      ];
-    }
     territories = {
       ...territories,
       [tid]: {
         owner: battle.attacker,
-        buildings,
-        supplyStock: Math.floor(ts.supplyStock * 0.35),
+        buildings: [],
+        supplyStock: Math.floor(ts.supplyStock * 0.2),
+        population: pop,
+        workers: Math.floor(ts.workers * 0.35),
+        garrison: {},
+        trainingQueue: [],
       },
     };
-    message = `${tid} captured by ${players[battle.attacker]?.displayName ?? battle.attacker}.`;
+    message = `${tid} captured — structures razed. Population ${pop} remains.`;
   } else {
     territories = {
       ...territories,
-      [tid]: { ...ts, buildings },
+      [tid]: {
+        ...ts,
+        buildings,
+        garrison: survivors,
+      },
     };
     message = `Defense of ${tid} holds.`;
   }
@@ -599,6 +691,6 @@ export function applyBattleResult(state: GameState): GameState {
     winner,
     screen,
     message,
-    nextInstanceId: state.nextInstanceId + (battle.status === "attacker_win" ? 1 : 0),
+    nextInstanceId,
   };
 }

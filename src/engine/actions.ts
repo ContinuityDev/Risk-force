@@ -1,5 +1,5 @@
 import type { FactionId } from "../data/types";
-import type { Screen, StrikeForceSlot } from "./state";
+import type { AiAttackPlan, Screen, StrikeForceSlot } from "./state";
 
 /**
  * All game mutations go through these commands.
@@ -18,6 +18,7 @@ export type GameAction =
       payload: { territoryId: string; instanceId: string };
     }
   | { type: "RESEARCH"; payload: { nodeId: string } }
+  /** @deprecated Prefer TRAIN_UNIT into a territory garrison. */
   | { type: "RECRUIT"; payload: { unitId: string; count: number } }
   | {
       type: "START_INVASION";
@@ -27,7 +28,30 @@ export type GameAction =
   | { type: "RESOLVE_BATTLE" }
   | { type: "END_TURN" }
   | { type: "DISMISS_MESSAGE" }
-  | { type: "LOAD_STATE"; payload: { state: import("./state").GameState } };
+  | { type: "LOAD_STATE"; payload: { state: import("./state").GameState } }
+  | { type: "SET_CAMPAIGN_BUDGET"; payload: { energy: number } }
+  | {
+      type: "TRAIN_WORKER";
+      payload: { territoryId: string; count: number };
+    }
+  | {
+      type: "TRAIN_UNIT";
+      payload: { territoryId: string; unitId: string; count: number };
+    }
+  | {
+      type: "ASSIGN_WORKERS";
+      payload: { territoryId: string; instanceId: string; workers: number };
+    }
+  | {
+      type: "MOVE_GARRISON";
+      payload: {
+        fromId: string;
+        toId: string;
+        unitId: string;
+        count: number;
+      };
+    }
+  | { type: "SET_AI_ATTACK_PLANS"; payload: { plans: AiAttackPlan[] } };
 
 export interface NewGamePayload {
   humanCount: number;

@@ -7,51 +7,97 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { PALETTES } from "./recipes.mjs";
 
-function makeNoiseMap(size = 128, strength = 55) {
-  const data = new Uint8Array(size * size * 4);
-  for (let i = 0; i < size * size; i++) {
-    const n = 160 + Math.floor(Math.random() * strength);
-    const dirt = Math.random() > 0.88 ? 55 : Math.random() > 0.7 ? 18 : 0;
-    data[i * 4] = Math.max(40, n - dirt);
-    data[i * 4 + 1] = Math.max(40, n - dirt * 0.65);
-    data[i * 4 + 2] = Math.max(35, n - dirt * 1.1);
-    data[i * 4 + 3] = 255;
+/**
+ * Soft large-scale paint variation (not granite grain).
+ * Low-amplitude albedo tint + faint edge-wear darkening in roughness.
+ */
+function makePaintMaps(size = 64) {
+  const albedo = new Uint8Array(size * size * 4);
+  const rough = new Uint8Array(size * size * 4);
+  const normal = new Uint8Array(size * size * 4);
+  // Coarse value grid then bilinear upsample feel via large cells
+  const cells = 6;
+  const grid = [];
+  for (let gy = 0; gy <= cells; gy++) {
+    grid[gy] = [];
+    for (let gx = 0; gx <= cells; gx++) {
+      grid[gy][gx] = Math.random();
+    }
   }
-  const tex = new THREE.DataTexture(data, size, size);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
+  const sample = (u, v) => {
+    const x = u * cells;
+    const y = v * cells;
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const fx = x - x0;
+    const fy = y - y0;
+    const x1 = Math.min(cells, x0 + 1);
+    const y1 = Math.min(cells, y0 + 1);
+    const a = grid[y0][x0] * (1 - fx) + grid[y0][x1] * fx;
+    const b = grid[y1][x0] * (1 - fx) + grid[y1][x1] * fx;
+    return a * (1 - fy) + b * fy;
+  };
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const u = x / size;
+      const v = y / size;
+      const soft = sample(u, v);
+      // Edge-ish wear: darker near cell boundaries
+      const edge =
+        Math.abs(Math.sin(u * Math.PI * cells)) *
+        Math.abs(Math.sin(v * Math.PI * cells));
+      const wear = edge * 0.12;
+      // Albedo stays near-white so paint color dominates (±3%)
+      const n = Math.round(248 + soft * 7 - wear * 18);
+      albedo[i] = n;
+      albedo[i + 1] = n;
+      albedo[i + 2] = Math.max(230, n - 2);
+      albedo[i + 3] = 255;
+      // Roughness: slightly higher in wear zones (matte chips)
+      const r = Math.round(140 + soft * 25 + wear * 50);
+      rough[i] = r;
+      rough[i + 1] = r;
+      rough[i + 2] = r;
+      rough[i + 3] = 255;
+      // Very subtle normals
+      normal[i] = 128 + Math.round((soft - 0.5) * 10);
+      normal[i + 1] = 128 + Math.round((sample(u + 0.02, v) - 0.5) * 10);
+      normal[i + 2] = 255;
+      normal[i + 3] = 255;
+    }
+  }
+  const makeTex = (data, srgb) => {
+    const tex = new THREE.DataTexture(data, size, size);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.repeat.set(0.55, 0.55);
+    tex.needsUpdate = true;
+    return tex;
+  };
+  return {
+    albedo: makeTex(albedo, true),
+    rough: makeTex(rough, false),
+    normal: makeTex(normal, false),
+  };
 }
 
-function makeNormalNoise(size = 64) {
-  const data = new Uint8Array(size * size * 4);
-  for (let i = 0; i < size * size; i++) {
-    data[i * 4] = 128 + ((Math.random() * 40) | 0) - 20;
-    data[i * 4 + 1] = 128 + ((Math.random() * 40) | 0) - 20;
-    data[i * 4 + 2] = 255;
-    data[i * 4 + 3] = 255;
-  }
-  const tex = new THREE.DataTexture(data, size, size);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-const NOISE = makeNoiseMap();
-const NORMAL = makeNormalNoise();
+const PAINT = makePaintMaps();
 
 function mat(color, opts = {}) {
   const { weather = true, ...rest } = opts;
   return new THREE.MeshStandardMaterial({
     color,
-    roughness: rest.roughness ?? 0.55,
-    metalness: rest.metalness ?? 0.38,
+    roughness: rest.roughness ?? 0.48,
+    metalness: rest.metalness ?? 0.42,
     flatShading: false,
-    map: weather ? NOISE : null,
-    roughnessMap: weather ? NOISE : null,
-    normalMap: weather ? NORMAL : null,
-    normalScale: weather ? new THREE.Vector2(0.35, 0.35) : undefined,
+    map: weather ? PAINT.albedo : null,
+    roughnessMap: weather ? PAINT.rough : null,
+    normalMap: weather ? PAINT.normal : null,
+    normalScale: weather ? new THREE.Vector2(0.08, 0.08) : undefined,
     ...rest,
   });
 }
@@ -637,18 +683,18 @@ function buildOrbitalPad(recipe, palette) {
 
 function buildExplosion() {
   const g = new THREE.Group();
-  // Layered fireball: white core → orange flame → dark smoke → sparks
-  g.add(sphere(0.28, mat(0xfff8e0, { emissive: 0xffe080, emissiveIntensity: 2.2, transparent: true, opacity: 0.95, weather: false }), 0, 0.75, 0));
-  g.add(sphere(0.55, mat(0xff9030, { emissive: 0xff6010, emissiveIntensity: 1.4, transparent: true, opacity: 0.88, weather: false }), 0, 0.7, 0));
-  g.add(sphere(0.75, mat(0xe05018, { emissive: 0xc03008, emissiveIntensity: 0.7, transparent: true, opacity: 0.55, weather: false }), 0.05, 0.65, 0.05, 1.1, 0.95, 1.05));
-  const smoke = mat(0x3a3834, { transparent: true, opacity: 0.42, roughness: 1, weather: false });
-  g.add(sphere(0.48, smoke, -0.35, 1.25, 0.15, 1.5, 1.3, 1.4));
-  g.add(sphere(0.42, smoke, 0.4, 1.45, -0.12, 1.35, 1.55, 1.25));
-  g.add(sphere(0.38, smoke, 0.05, 1.75, 0.08, 1.25, 1.5, 1.2));
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const r = 0.55 + (i % 3) * 0.12;
-    g.add(rbox(0.06, 0.06, 0.06, mat(0xffc060, { emissive: 0xff8020, emissiveIntensity: 1.2, weather: false }), Math.cos(a) * r, 0.55 + (i % 4) * 0.18, Math.sin(a) * r, 0.01));
+  // Compact irregular fireball (~tank-sized when rendered), not a soft bubble
+  g.add(sphere(0.18, mat(0xfff8e0, { emissive: 0xffe080, emissiveIntensity: 2.4, transparent: true, opacity: 0.95, weather: false }), 0.02, 0.55, -0.02, 1.1, 0.85, 0.95));
+  g.add(sphere(0.32, mat(0xff9030, { emissive: 0xff6010, emissiveIntensity: 1.5, transparent: true, opacity: 0.9, weather: false }), -0.04, 0.5, 0.03, 1.25, 0.9, 1.05));
+  g.add(sphere(0.28, mat(0xe04810, { emissive: 0xc02808, emissiveIntensity: 0.85, transparent: true, opacity: 0.65, weather: false }), 0.08, 0.48, -0.06, 0.9, 1.2, 0.85));
+  g.add(sphere(0.22, mat(0xff7020, { emissive: 0xff4010, emissiveIntensity: 1.1, transparent: true, opacity: 0.7, weather: false }), -0.12, 0.62, 0.08, 1.15, 0.7, 0.9));
+  const smoke = mat(0x2a2824, { transparent: true, opacity: 0.5, roughness: 1, weather: false });
+  g.add(sphere(0.28, smoke, -0.22, 0.95, 0.1, 1.4, 1.1, 1.2));
+  g.add(sphere(0.24, smoke, 0.2, 1.1, -0.08, 1.2, 1.35, 1.1));
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.2;
+    const r = 0.32 + (i % 3) * 0.08;
+    g.add(rbox(0.05, 0.05, 0.05, mat(0xffc060, { emissive: 0xff8020, emissiveIntensity: 1.3, weather: false }), Math.cos(a) * r, 0.42 + (i % 3) * 0.12, Math.sin(a) * r, 0.01));
   }
   return g;
 }

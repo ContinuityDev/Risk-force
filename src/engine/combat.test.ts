@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isOnGround } from "../data/battleField";
 import { damageMultiplier } from "../data/combatMatrix";
 import { getTerritory } from "../data/map/territories";
 import { createInitialState } from "./init";
@@ -34,7 +35,9 @@ describe("battle simulation", () => {
       { unitId: "trooper", count: 4 },
       { unitId: "hover_tank", count: 1 },
     ]);
-    expect(battle.units.length).toBe(5);
+    const attackers = battle.units.filter((u) => u.side === "attacker");
+    expect(attackers.length).toBe(5);
+    expect(battle.units.some((u) => u.side === "defender")).toBe(true);
     expect(battle.defenses.length).toBeGreaterThan(0);
     expect(battle.status).toBe("running");
   });
@@ -82,7 +85,65 @@ describe("battle simulation", () => {
     state = { ...state, battle, phase: "battle" };
     state = applyBattleResult(state);
     expect(state.territories[enemy]!.owner).toBe("player");
+    expect(state.territories[enemy]!.buildings.length).toBe(0);
     expect(state.battle).toBeNull();
+  });
+
+  it("all spawned units and buildings lie on the ground plane", () => {
+    const state = createInitialState({
+      humanCount: 1,
+      aiCount: 2,
+      multiplayerMode: "solo",
+      seed: 42,
+    });
+    const enemy = Object.entries(state.territories).find(
+      ([, t]) => t.owner !== "player" && t.buildings.length > 0,
+    )![0];
+    const battle = createBattle(state, enemy, "player", [
+      { unitId: "trooper", count: 8 },
+      { unitId: "hover_tank", count: 2 },
+      { unitId: "siege_cannon", count: 2 },
+      { unitId: "drone", count: 2 },
+    ]);
+    for (const u of battle.units) {
+      expect(isOnGround(u.x, u.y), `unit ${u.id} at ${u.x},${u.y}`).toBe(true);
+    }
+    for (const d of battle.defenses) {
+      expect(isOnGround(d.x, d.y), `def ${d.id} at ${d.x},${d.y}`).toBe(true);
+    }
+    // After movement ticks, attackers stay on ground
+    let b = battle;
+    for (let i = 0; i < 40; i++) b = tickBattle(b, 0.2);
+    for (const u of b.units.filter((x) => x.alive)) {
+      expect(isOnGround(u.x, u.y), `moved ${u.id}`).toBe(true);
+    }
+  });
+
+  it("defender buildings preserve relative base-grid layout", () => {
+    const state = createInitialState({
+      humanCount: 1,
+      aiCount: 1,
+      multiplayerMode: "solo",
+      seed: 5,
+    });
+    const enemy = Object.entries(state.territories).find(
+      ([, t]) => t.owner !== "player" && t.buildings.length >= 2,
+    )![0];
+    const ts = state.territories[enemy]!;
+    const battle = createBattle(state, enemy, "player", [
+      { unitId: "trooper", count: 1 },
+    ]);
+    const a = ts.buildings[0]!;
+    const b = ts.buildings[1]!;
+    const da = battle.defenses.find((d) => d.instanceId === a.instanceId)!;
+    const db = battle.defenses.find((d) => d.instanceId === b.instanceId)!;
+    // Relative X order from base grid should match battle X order
+    if (a.x !== b.x) {
+      expect(Math.sign(db.x - da.x)).toBe(Math.sign(b.x - a.x));
+    }
+    if (a.y !== b.y) {
+      expect(Math.sign(db.y - da.y)).toBe(Math.sign(b.y - a.y));
+    }
   });
 
   it("START_INVASION through reducer enters battle phase", () => {
@@ -92,20 +153,26 @@ describe("battle simulation", () => {
       multiplayerMode: "solo",
       seed: 11,
     });
+    const from = Object.entries(state.territories).find(
+      ([, t]) => t.owner === "player",
+    )![0];
     state = {
       ...state,
       players: {
         ...state.players,
         player: {
           ...state.players.player!,
-          reserves: { trooper: 6 },
           resources: { ...state.players.player!.resources, supply: 50 },
         },
       },
+      territories: {
+        ...state.territories,
+        [from]: {
+          ...state.territories[from]!,
+          garrison: { trooper: 6 },
+        },
+      },
     };
-    const from = Object.entries(state.territories).find(
-      ([, t]) => t.owner === "player",
-    )![0];
     const to = getTerritory(from).neighbors.find(
       (n) => state.territories[n]?.owner !== "player",
     );
@@ -119,6 +186,8 @@ describe("battle simulation", () => {
       },
     });
     expect(state.phase).toBe("battle");
-    expect(state.battle?.units.length).toBe(4);
+    expect(
+      state.battle?.units.filter((u) => u.side === "attacker").length,
+    ).toBe(4);
   });
 });

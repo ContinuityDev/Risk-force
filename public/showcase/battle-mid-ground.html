@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>Battle Mid-Fight</title>
+<style>
+html,body{margin:0;background:#0a1016;font-family:Georgia,serif;color:#e8eef4}
+h2{text-align:center;font-weight:500;letter-spacing:.1em;opacity:.8;margin:12px 0 4px;font-size:.9rem}
+.note{text-align:center;opacity:.5;font-size:.75rem;margin:0 0 8px}
+.viewport{width:1280px;margin:0 auto 16px;border:1px solid #2a3848;overflow:hidden}
+.skyband{height:38px;background:linear-gradient(180deg,#152838,#1e3340 55%,#243628);border-bottom:1px solid rgba(40,55,38,.85)}
+.arena{position:relative;width:100%;aspect-ratio:14/8;background:#1a2418;overflow:hidden}
+.ground{position:absolute;inset:0;background:
+  radial-gradient(ellipse 110px 70px at 12% 28%,transparent 30%,#1a2214 34%,#050704 42%,transparent 65%),
+  radial-gradient(ellipse 200px 140px at 22% 48%,rgba(72,86,48,.42),transparent 72%),
+  radial-gradient(ellipse 220px 150px at 74% 52%,rgba(58,68,42,.48),transparent 72%),
+  linear-gradient(180deg,#3a4834 0%,#2a3828 28%,#1c2618 62%,#141a10 100%)}
+.actor{position:absolute;transform:translate(-50%,-50%)}
+.dir{width:100%;height:100%;display:block;background-repeat:no-repeat;
+  filter:contrast(1.08) saturate(1.12) brightness(1.12) drop-shadow(0 6px 8px rgba(0,0,0,.5))}
+.blast{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center}
+.blast>*{grid-area:1/1}
+</style></head><body>
+<h2>MID ENGAGEMENT · GROUND PLANE ONLY</h2>
+<p class="note">Units and buildings stay on dirt — sky is outside the arena</p>
+<div class="viewport">
+  <div class="skyband"></div>
+  <div class="arena" id="stage"><div class="ground"></div></div>
+</div>
+<script>
+const stage=document.getElementById('stage');
+const W=14,H=8,DIRS=8;
+function dirSprite(sheet,frame,size){
+  const s=document.createElement('span');
+  s.className='dir';
+  s.style.width=size+'px';s.style.height=size+'px';
+  s.style.backgroundImage='url('+sheet+')';
+  s.style.backgroundSize=(DIRS*100)+'% 100%';
+  s.style.backgroundPosition=((frame/(DIRS-1))*100)+'% 0%';
+  return s;
+}
+function place(sheet,frame,x,y,size){
+  const d=document.createElement('div');
+  d.className='actor';
+  d.style.left=(x/W*100)+'%';d.style.top=(y/H*100)+'%';
+  d.style.width=size+'px';d.style.height=size+'px';
+  d.appendChild(dirSprite(sheet,frame,size));
+  stage.appendChild(d);
+}
+const U='/sprites/units/',B='/sprites/buildings/';
+place(U+'unit-rail-tank-dirs.png',0,4.2,2.6,112);
+place(U+'unit-hover-dirs.png',1,5.0,4.0,112);
+place(U+'unit-trooper-dirs.png',0,4.8,1.6,94);
+place(U+'unit-mech-dirs.png',1,5.6,6.0,120);
+place(U+'unit-siege-dirs.png',0,3.2,5.2,108);
+place(B+'building-laser-dirs.png',4,9.0,2.0,130);
+place(B+'building-missile-dirs.png',5,9.8,3.8,130);
+place(B+'building-flak-dirs.png',4,8.6,5.4,128);
+place(B+'building-railgun-dirs.png',4,10.2,6.2,130);
+const d=document.createElement('div');
+d.className='blast';
+d.style.left=(6.4/W*100)+'%';d.style.top=(3.2/H*100)+'%';
+d.innerHTML='<img src="/sprites/effects/fx-explosion.png" style="width:145px;height:145px;filter:brightness(1.2) saturate(1.3)"/>'
+  +'<img src="/sprites/effects/fx-smoke.png" style="width:120px;height:120px;transform:translateY(-30px) scale(1.2);opacity:.55"/>';
+stage.appendChild(d);
+const beam=document.createElement('div');
+beam.style.cssText='position:absolute;left:36%;top:40%;width:28%;height:3px;background:linear-gradient(90deg,transparent,#9fd4e4,#fff);box-shadow:0 0 8px #7eb6c9;transform:rotate(4deg);opacity:.85';
+stage.appendChild(beam);
+</script>
+</body></html>

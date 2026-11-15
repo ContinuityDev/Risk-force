@@ -1,9 +1,11 @@
 import { getBuilding } from "../data/buildings";
+import { GAME_LOOP } from "../data/gameLoop";
 import type { ResourceId } from "../data/types";
 import type { GameState, PlayerState } from "./state";
 import { emptyResources } from "./state";
+import { staffingMultiplier, workerCapForBuilding } from "./training";
 
-/** Sum economy output for one player's completed buildings. */
+/** Sum economy output for one player's completed buildings (worker-boosted). */
 export function computeIncome(
   state: GameState,
   playerId: string,
@@ -15,10 +17,16 @@ export function computeIncome(
       if (b.buildRemaining > 0 || b.hp <= 0) continue;
       const def = getBuilding(b.buildingId);
       if (!def.output) continue;
+      const cap = workerCapForBuilding(b.buildingId);
+      const mult = staffingMultiplier(b.workers ?? 0, cap);
       for (const [k, v] of Object.entries(def.output) as [ResourceId, number][]) {
-        income[k] += v;
+        income[k] += v * mult;
       }
     }
+  }
+  // Round down for banked resources
+  for (const k of Object.keys(income) as ResourceId[]) {
+    income[k] = Math.floor(income[k]);
   }
   return income;
 }
@@ -31,8 +39,10 @@ export function computeSupplyUpkeep(state: GameState, playerId: string): number 
       if (b.buildRemaining > 0 || b.hp <= 0) continue;
       upkeep += getBuilding(b.buildingId).supplyUpkeep ?? 0;
     }
+    for (const count of Object.values(ts.garrison)) {
+      upkeep += Math.ceil(count * 0.25);
+    }
   }
-  // Reserve units also draw supply.
   const player = state.players[playerId];
   if (player) {
     for (const count of Object.values(player.reserves)) {
@@ -42,7 +52,7 @@ export function computeSupplyUpkeep(state: GameState, playerId: string): number 
   return upkeep;
 }
 
-/** Apply income, upkeep, construction, and local supply stockpiles. */
+/** Apply income, upkeep, construction (worker-sped), and local supply stockpiles. */
 export function applyEconomyTick(state: GameState, playerId: string): GameState {
   const player = state.players[playerId];
   if (!player) return state;
@@ -57,23 +67,39 @@ export function applyEconomyTick(state: GameState, playerId: string): GameState 
     supply: Math.max(0, player.resources.supply + income.supply - upkeep),
   };
 
-  // Low supply degrades readiness: soft cap message handled by UI; here we
-  // still bank territorial supply stock from depots.
   const territories = { ...state.territories };
   for (const [tid, ts] of Object.entries(territories)) {
     if (ts.owner !== playerId) continue;
     let stockGain = 0;
     let changed = false;
+    const assigned = ts.buildings.reduce((s, b) => s + (b.workers ?? 0), 0);
+    const freeWorkers = Math.max(0, (ts.workers ?? 0) - assigned);
+    const buildBonus = Math.min(
+      GAME_LOOP.workers.maxBuildSpeedBonus,
+      freeWorkers * GAME_LOOP.workers.buildSpeedPerWorker,
+    );
+    // Integers only for buildRemaining so tests / UI stay predictable.
+    // Free workers may grant +1 extra drain when bonus is significant.
+    const drain = 1 + (buildBonus >= 0.5 ? 1 : 0);
+
     const buildings = ts.buildings.map((b) => {
       if (b.buildRemaining > 0) {
         changed = true;
-        return { ...b, buildRemaining: b.buildRemaining - 1 };
+        return {
+          ...b,
+          workers: b.workers ?? 0,
+          buildRemaining: Math.max(0, b.buildRemaining - drain),
+        };
       }
       const def = getBuilding(b.buildingId);
-      if (def.output?.supply) stockGain += def.output.supply;
+      if (def.output?.supply) {
+        const cap = workerCapForBuilding(b.buildingId);
+        stockGain +=
+          def.output.supply * staffingMultiplier(b.workers ?? 0, cap);
+      }
       return b;
     });
-    const supplyStock = Math.min(200, ts.supplyStock + stockGain);
+    const supplyStock = Math.min(200, ts.supplyStock + Math.floor(stockGain));
     if (changed || supplyStock !== ts.supplyStock) {
       territories[tid] = { ...ts, buildings, supplyStock };
     }

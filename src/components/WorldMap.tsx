@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { factionColor } from "../data/factions";
+import { territoryAbbrev } from "../data/map/abbreviations";
 import {
   LAND_PATH,
   OCEAN_VIEW,
@@ -19,14 +20,19 @@ interface WorldMapProps {
 
 interface PlacedLabel {
   id: string;
-  name: string;
+  /** Display text (full name or abbrev). */
+  text: string;
   x: number;
   y: number;
+  /** Font size in SVG user units (already zoom-compensated). */
   size: number;
-  hidden: boolean;
   w: number;
   h: number;
 }
+
+/** Preferred on-screen label height in px at full-world framing. */
+const BASE_SCREEN_PX = 12;
+const MIN_SCREEN_PX = 8;
 
 function hexToRgba(hex: string, a: number): string {
   const h = hex.replace("#", "");
@@ -37,15 +43,14 @@ function hexToRgba(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-function approxTextWidth(name: string, size: number): number {
-  // Slightly generous — accounts for bold weight + label halo
-  return name.length * size * 0.58 + 6;
+function approxTextWidth(text: string, size: number): number {
+  return text.length * size * 0.56 + 4;
 }
 
 function overlaps(
   a: { x: number; y: number; w: number; h: number },
   b: { x: number; y: number; w: number; h: number },
-  pad = 5,
+  pad = 2.5,
 ): boolean {
   return !(
     a.x + a.w / 2 + pad < b.x - b.w / 2 ||
@@ -55,69 +60,79 @@ function overlaps(
   );
 }
 
-/** Place labels largest-first; nudge then hide on unresolved collisions. */
-function layoutLabels(territories: TerritoryDef[]): PlacedLabel[] {
+function parseViewBox(vb: string): { x: number; y: number; w: number; h: number } {
+  const [x, y, w, h] = vb.trim().split(/[\s,]+/).map(Number);
+  return {
+    x: x || 0,
+    y: y || 0,
+    w: w || OCEAN_VIEW.w,
+    h: h || OCEAN_VIEW.h,
+  };
+}
+
+/**
+ * Place every territory label at its polylabel. Never hide —
+ * resolve collisions by shrinking then abbreviating. Sizes are in
+ * SVG user units already compensated so on-screen px stays ~constant
+ * under zoom (`userSize = screenPx * viewBoxW / worldW`).
+ */
+function layoutLabels(
+  territories: TerritoryDef[],
+  zoomScale: number,
+): PlacedLabel[] {
+  // zoomScale = viewBoxW / worldW  (≤ 1 when zoomed in)
   const ranked = [...territories].sort((a, b) => b.area - a.area);
   const placed: PlacedLabel[] = [];
-  const nudges = [
-    [0, 0],
-    [0, -10],
-    [0, 10],
-    [-12, 0],
-    [12, 0],
-    [-10, -8],
-    [10, -8],
-    [-10, 8],
-    [10, 8],
-    [0, -18],
-    [0, 18],
-    [-18, 0],
-    [18, 0],
-    [-14, -14],
-    [14, -14],
-    [-14, 14],
-    [14, 14],
-    [0, -26],
-    [0, 26],
-    [-8, -20],
-    [8, -20],
-    [-8, 20],
-    [8, 20],
-  ];
 
   for (const t of ranked) {
-    const size = t.labelSize ?? 12;
-    const w = approxTextWidth(t.name, size);
-    const h = size + 4;
+    const full = t.name;
+    const short = territoryAbbrev(t.id, t.name);
+    // Prefer slightly larger text for bigger territories at full zoom
+    const preferScreen = Math.min(
+      14,
+      Math.max(BASE_SCREEN_PX, 10 + Math.sqrt(t.area) * 8),
+    );
+    const candidates: Array<{ text: string; screenPx: number }> = [
+      { text: full, screenPx: preferScreen },
+      { text: full, screenPx: BASE_SCREEN_PX },
+      { text: full, screenPx: 10 },
+      { text: full, screenPx: MIN_SCREEN_PX },
+      { text: short, screenPx: BASE_SCREEN_PX },
+      { text: short, screenPx: 10 },
+      { text: short, screenPx: MIN_SCREEN_PX },
+    ];
+
     let chosen: PlacedLabel | null = null;
-    for (const [dx, dy] of nudges) {
-      const cand = {
+    for (const c of candidates) {
+      const size = c.screenPx * zoomScale;
+      const cand: PlacedLabel = {
         id: t.id,
-        name: t.name,
-        x: t.label.x + dx,
-        y: t.label.y + dy,
+        text: c.text,
+        x: t.label.x,
+        y: t.label.y,
         size,
-        hidden: false,
-        w,
-        h,
+        w: approxTextWidth(c.text, size),
+        h: size + 2 * zoomScale,
       };
-      if (!placed.some((p) => !p.hidden && overlaps(cand, p))) {
+      if (!placed.some((p) => overlaps(cand, p))) {
         chosen = cand;
         break;
       }
     }
-    placed.push(
-      chosen ?? {
+    // Last resort: always show abbreviated at min size (may slightly overlap)
+    if (!chosen) {
+      const size = MIN_SCREEN_PX * zoomScale;
+      chosen = {
         id: t.id,
-        name: t.name,
+        text: short,
         x: t.label.x,
         y: t.label.y,
         size,
-        hidden: true,
-        w,
-        h,
-      },
-    );
+        w: approxTextWidth(short, size),
+        h: size + 2 * zoomScale,
+      };
+    }
+    placed.push(chosen);
   }
   return placed;
 }
@@ -125,13 +140,37 @@ function layoutLabels(territories: TerritoryDef[]): PlacedLabel[] {
 export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const { w, h } = OCEAN_VIEW;
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  const viewBox = useMemo(() => {
+  const propViewBox = useMemo(() => {
     if (focusViewBox) return focusViewBox;
     return `0 0 ${w} ${h}`;
   }, [focusViewBox, w, h]);
 
-  const labels = useMemo(() => layoutLabels(TERRITORIES), []);
+  // Track live viewBox so zoom (incl. screenshot DOM tweaks) counter-scales labels
+  const [liveViewBox, setLiveViewBox] = useState(propViewBox);
+  useEffect(() => {
+    setLiveViewBox(propViewBox);
+  }, [propViewBox]);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const sync = () => {
+      const v = el.getAttribute("viewBox");
+      if (v) setLiveViewBox(v);
+    };
+    const obs = new MutationObserver(sync);
+    obs.observe(el, { attributes: true, attributeFilter: ["viewBox"] });
+    return () => obs.disconnect();
+  }, []);
+
+  const vb = useMemo(() => parseViewBox(liveViewBox), [liveViewBox]);
+  const zoomScale = vb.w / w;
+
+  const labels = useMemo(
+    () => layoutLabels(TERRITORIES, zoomScale),
+    [zoomScale],
+  );
   const labelById = useMemo(
     () => Object.fromEntries(labels.map((l) => [l.id, l])),
     [labels],
@@ -140,8 +179,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   return (
     <div className="rf-map rf-fade-in">
       <svg
+        ref={svgRef}
         className="rf-map__svg"
-        viewBox={viewBox}
+        viewBox={propViewBox}
         role="img"
         aria-label="Earth theater holographic map"
       >
@@ -185,35 +225,43 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             </feMerge>
           </filter>
           {/* Soft contrast halo — no stroke-outline ghosting */}
-          <filter id="rf-label-halo" x="-30%" y="-40%" width="160%" height="180%">
+          <filter id="rf-label-halo" x="-40%" y="-50%" width="180%" height="200%">
             <feDropShadow
               dx="0"
               dy="0"
-              stdDeviation="1.1"
+              stdDeviation={Math.max(0.35, 0.9 * zoomScale)}
               floodColor="#040a10"
-              floodOpacity="0.95"
+              floodOpacity="0.92"
             />
           </filter>
+          <marker
+            id="rf-ai-arrow"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e8b060" />
+          </marker>
         </defs>
 
         <rect width={w} height={h} fill="url(#rf-ocean)" />
-        <rect width={w} height={h} fill="url(#rf-holo-grid)" />
-        <rect width={w} height={h} fill="url(#rf-holo-sheen)" />
+        <rect width={w} height={h} fill="url(#rf-holo-sheen)" pointerEvents="none" />
 
-        {[41.7, 83.3, 125, 166.7, 208.3, 250, 291.7, 333.3, 375, 416.7, 458.3].map(
-          (y) => (
-            <line
-              key={`lat-${y}`}
-              x1="0"
-              y1={y}
-              x2={w}
-              y2={y}
-              stroke="#7eb6c9"
-              strokeWidth="0.3"
-              opacity="0.07"
-            />
-          ),
-        )}
+        {[83.3, 166.7, 250, 333.3, 416.7, 500].map((y) => (
+          <line
+            key={`lat-${y}`}
+            x1="0"
+            y1={y}
+            x2={w}
+            y2={y}
+            stroke="#7eb6c9"
+            strokeWidth="0.3"
+            opacity="0.07"
+          />
+        ))}
         {[83.3, 166.7, 250, 333.3, 416.7, 500, 583.3, 666.7, 750, 833.3, 916.7].map(
           (x) => (
             <line
@@ -261,14 +309,42 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           ))}
         </g>
 
+        {/* AI multi-front attack plan arrows */}
+        {state.aiAttackPlans.length > 0 && (
+          <g className="rf-map__ai-plans" pointerEvents="none">
+            {state.aiAttackPlans.map((plan, i) => {
+              const from = TERRITORIES.find((t) => t.id === plan.fromId);
+              const to = TERRITORIES.find((t) => t.id === plan.toId);
+              if (!from || !to) return null;
+              const x1 = from.label.x;
+              const y1 = from.label.y;
+              const x2 = to.label.x;
+              const y2 = to.label.y;
+              const mx = (x1 + x2) / 2;
+              const my = (y1 + y2) / 2 - 8;
+              return (
+                <g key={`${plan.fromId}-${plan.toId}-${i}`}>
+                  <path
+                    d={`M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`}
+                    fill="none"
+                    stroke="#e8b060"
+                    strokeWidth={Math.max(1.2, 2.2 * zoomScale)}
+                    strokeDasharray="4 3"
+                    opacity="0.9"
+                    markerEnd="url(#rf-ai-arrow)"
+                  />
+                </g>
+              );
+            })}
+          </g>
+        )}
+
         {TERRITORIES.map((t) => {
           const ts = state.territories[t.id];
           const owner = ts?.owner ?? t.startingOwner;
           const base = factionColor(owner);
           const selected = state.selectedTerritoryId === t.id;
           const lbl = labelById[t.id];
-          const showLabel =
-            lbl && (!lbl.hidden || hoveredId === t.id || selected);
           return (
             <g
               key={t.id}
@@ -292,18 +368,20 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   })
                 }
               />
-              {showLabel && (
+              {lbl && (
                 <text
                   x={lbl.x}
                   y={lbl.y}
-                  className="rf-map__label"
+                  className={`rf-map__label${
+                    hoveredId === t.id || selected ? " is-hot" : ""
+                  }`}
                   fontSize={lbl.size}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   pointerEvents="none"
                   filter="url(#rf-label-halo)"
                 >
-                  {t.name}
+                  {hoveredId === t.id || selected ? t.name : lbl.text}
                 </text>
               )}
             </g>

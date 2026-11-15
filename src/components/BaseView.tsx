@@ -1,11 +1,15 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { BUILDING_LIST, getBuilding } from "../data/buildings";
 import { factionColor } from "../data/factions";
+import { GAME_LOOP, HELP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
+import { UNIT_LIST } from "../data/units";
 import type { GameAction } from "../engine/actions";
 import { canAfford } from "../engine/economy";
+import { canPlaceBuilding } from "../engine/placement";
 import { isUnlocked } from "../engine/research";
 import type { GameState, PlayerState } from "../engine/state";
+import { workerCapForBuilding } from "../engine/training";
 import { Sprite } from "./Sprite";
 
 interface BaseViewProps {
@@ -49,7 +53,20 @@ export function BaseView({
   const ts = state.territories[tid]!;
   const owned = ts.owner === activePlayer.id;
   const accent = factionColor(ts.owner);
-  const catalog = BUILDING_LIST.filter((b) => b.id !== "command_nexus");
+  const hasNexus = ts.buildings.some((b) => b.buildingId === "command_nexus");
+  const catalog = BUILDING_LIST.filter(
+    (b) => b.id !== "command_nexus" || !hasNexus,
+  );
+  const assignedWorkers = ts.buildings.reduce(
+    (s, b) => s + (b.workers ?? 0),
+    0,
+  );
+  const freeWorkers = Math.max(0, (ts.workers ?? 0) - assignedWorkers);
+  const trainables = UNIT_LIST.filter(
+    (u) =>
+      u.id === GAME_LOOP.training.basicUnitId ||
+      isUnlocked(activePlayer, u.id),
+  ).slice(0, 8);
 
   const occupied = useMemo(() => {
     const cells = new Set<string>();
@@ -65,14 +82,37 @@ export function BaseView({
   }, [ts.buildings]);
 
   const ghost = useMemo(() => {
-    if (!selectedBuilding || !hover) return null;
+    if (!selectedBuilding || !hover || !tid) return null;
     const def = getBuilding(selectedBuilding);
-    return { ...hover, w: def.size.w, h: def.size.h, def };
-  }, [selectedBuilding, hover]);
+    const check = canPlaceBuilding(
+      ts,
+      tid,
+      selectedBuilding,
+      hover.x,
+      hover.y,
+      activePlayer,
+    );
+    return {
+      ...hover,
+      w: def.size.w,
+      h: def.size.h,
+      def,
+      valid: check.ok,
+      reason: check.ok ? null : check.reason,
+    };
+  }, [selectedBuilding, hover, tid, ts, activePlayer]);
 
   function placeAt(x: number, y: number) {
     if (!canAct || !owned || !selectedBuilding || !tid) return;
-    if (occupied.has(`${x},${y}`)) return;
+    const check = canPlaceBuilding(
+      ts,
+      tid,
+      selectedBuilding,
+      x,
+      y,
+      activePlayer,
+    );
+    if (!check.ok) return;
     dispatch({
       type: "PLACE_BUILDING",
       payload: { territoryId: tid, buildingId: selectedBuilding, x, y },
@@ -90,8 +130,10 @@ export function BaseView({
           <h2>{tdef.name} Base</h2>
           {!owned && <p className="rf-text-dim">Enemy-controlled sector</p>}
         </div>
-        <p className="rf-text-dim">
-          Local supply stock: {Math.floor(ts.supplyStock)}
+        <p className="rf-text-dim" title={HELP.population}>
+          Pop {ts.population} · Workers {ts.workers} ({freeWorkers} free) ·
+          Supply {Math.floor(ts.supplyStock)} · Garrison{" "}
+          {Object.values(ts.garrison).reduce((a, b) => a + b, 0)}
         </p>
       </header>
 
@@ -160,16 +202,19 @@ export function BaseView({
             })}
           </div>
 
-          {/* Ghost placement preview */}
+          {/* Ghost placement preview — green valid / red invalid */}
           {ghost && owned && (
             <div
-              className="rf-base__ghost"
+              className={`rf-base__ghost ${
+                ghost.valid ? "is-valid" : "is-invalid"
+              }`}
               style={{
                 left: ghost.x * CELL,
                 top: ghost.y * CELL,
                 width: ghost.w * CELL,
                 height: ghost.h * CELL,
               }}
+              title={ghost.reason ?? "Place here"}
             />
           )}
 
@@ -211,8 +256,32 @@ export function BaseView({
                 />
                 {constructing && (
                   <span className="rf-base__progress">
-                    Constructing · T-{inst.buildRemaining}
+                    Constructing · T-{Math.ceil(inst.buildRemaining)}
                   </span>
+                )}
+                {!constructing && owned && (
+                  <label className="rf-base__staff" title={HELP.workers}>
+                    Staff
+                    <input
+                      type="number"
+                      min={0}
+                      max={workerCapForBuilding(inst.buildingId)}
+                      value={inst.workers ?? 0}
+                      disabled={!canAct}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        dispatch({
+                          type: "ASSIGN_WORKERS",
+                          payload: {
+                            territoryId: tid,
+                            instanceId: inst.instanceId,
+                            workers: Number(e.target.value),
+                          },
+                        })
+                      }
+                    />
+                    /{workerCapForBuilding(inst.buildingId)}
+                  </label>
                 )}
                 <span className="rf-base__hp">
                   {Math.ceil(inst.hp)}/{def.maxHp}
@@ -224,6 +293,63 @@ export function BaseView({
         </div>
 
         <aside className="rf-base__catalog">
+          {owned && (
+            <section className="rf-base__pop" title={HELP.training}>
+              <span className="rf-label">Population & Training</span>
+              <p className="rf-hint">
+                Untrained pop: <strong>{ts.population}</strong>. Train locally —
+                advanced units need research.
+              </p>
+              <div className="rf-base__train-row">
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={!canAct || ts.population < 1}
+                  onClick={() =>
+                    dispatch({
+                      type: "TRAIN_WORKER",
+                      payload: { territoryId: tid, count: 1 },
+                    })
+                  }
+                >
+                  +Worker (E{GAME_LOOP.training.worker.energy})
+                </button>
+              </div>
+              <ul className="rf-base__train-list">
+                {trainables.map((u) => (
+                  <li key={u.id}>
+                    <button
+                      type="button"
+                      disabled={!canAct || ts.population < 1}
+                      onClick={() =>
+                        dispatch({
+                          type: "TRAIN_UNIT",
+                          payload: {
+                            territoryId: tid,
+                            unitId: u.id,
+                            count: 1,
+                          },
+                        })
+                      }
+                    >
+                      Train {u.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {ts.trainingQueue.length > 0 && (
+                <p className="rf-hint">
+                  Queue:{" "}
+                  {ts.trainingQueue
+                    .map(
+                      (j) =>
+                        `${j.kind}${j.unitId ? `:${j.unitId}` : ""}×${j.count} (T-${j.turnsRemaining})`,
+                    )
+                    .join(", ")}
+                </p>
+              )}
+            </section>
+          )}
           <span className="rf-label">Structures</span>
           <ul>
             {catalog.map((b) => {
