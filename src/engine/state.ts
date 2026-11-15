@@ -47,6 +47,8 @@ export interface BattleUnit {
   alive: boolean;
   /** Temporary EMP disable timer (seconds). */
   disabledT: number;
+  /** Smooth facing angle (radians); 0 = +X / east. */
+  facing: number;
 }
 
 export interface BattleDefense {
@@ -62,6 +64,8 @@ export interface BattleDefense {
   animT: number;
   alive: boolean;
   disabledT: number;
+  /** Turret aim angle (radians); 0 = +X. */
+  facing: number;
 }
 
 export interface BattleProjectile {

@@ -5,8 +5,34 @@ import { getTerritory } from "../data/map/territories";
 import { getUnit } from "../data/units";
 import type { GameAction } from "../engine/actions";
 import type { BattleState, GameState } from "../engine/state";
-import { getSpriteUrl } from "../sprites/registry";
+import { angleToDirFrame } from "../sprites/facing";
+import {
+  getDirectionCount,
+  getSpriteUrl,
+} from "../sprites/registry";
+import { DirSprite } from "./DirSprite";
 import { Sprite } from "./Sprite";
+
+/** Muzzle flash offset as % of actor box, keyed by 8-dir frame. */
+const MUZZLE_8: Array<{ left: string; top: string }> = [
+  { left: "88%", top: "42%" }, // E
+  { left: "78%", top: "72%" }, // SE
+  { left: "50%", top: "88%" }, // S
+  { left: "22%", top: "72%" }, // SW
+  { left: "12%", top: "42%" }, // W
+  { left: "22%", top: "18%" }, // NW
+  { left: "50%", top: "10%" }, // N
+  { left: "78%", top: "18%" }, // NE
+];
+
+function muzzleStyle(facing: number, spriteId: string) {
+  const n = getDirectionCount(spriteId);
+  const frame = angleToDirFrame(facing, n);
+  if (n === 8) return MUZZLE_8[frame] ?? MUZZLE_8[0];
+  // Approximate for other counts via 8-dir table
+  const mapped = angleToDirFrame(facing, 8);
+  return MUZZLE_8[mapped] ?? MUZZLE_8[0];
+}
 
 interface BattleViewProps {
   state: GameState;
@@ -137,12 +163,13 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
           style={{ aspectRatio: `${FIELD_W} / ${FIELD_H}` }}
         >
           <div className="rf-battle__sky" />
+          <div className="rf-battle__horizon" />
           <div className="rf-battle__ground" />
+          <div className="rf-battle__tracks" />
           <div className="rf-battle__scorch" />
           <div className="rf-battle__rubble" />
           <div className="rf-battle__smoke rf-battle__smoke--a" />
           <div className="rf-battle__smoke rf-battle__smoke--b" />
-          <div className="rf-battle__ridge" />
 
           {battle.defenses.map((d) => {
             if (!d.alive && d.anim !== "destroyed") return null;
@@ -179,15 +206,22 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                 {(d.buildingId.includes("shield") ||
                   d.buildingId === "shield_wall") &&
                   d.alive && <span className="rf-battle__shield-bubble" />}
-                <img
-                  src={getSpriteUrl(wreck ? "fx-wreck" : spriteId)}
-                  alt=""
-                  draggable={false}
-                />
-                {d.anim === "firing" && d.alive && (
-                  <span className="rf-battle__muzzle" />
+                {wreck ? (
+                  <img
+                    src={getSpriteUrl("fx-wreck")}
+                    alt=""
+                    draggable={false}
+                  />
+                ) : (
+                  <DirSprite id={spriteId} facing={d.facing} size={size} />
                 )}
-                {d.alive && (
+                {d.anim === "firing" && d.alive && (
+                  <span
+                    className="rf-battle__muzzle"
+                    style={muzzleStyle(d.facing, spriteId)}
+                  />
+                )}
+                {d.alive && d.hp < d.maxHp && (
                   <span className="rf-battle__hpbar">
                     <i style={{ width: `${(d.hp / d.maxHp) * 100}%` }} />
                   </span>
@@ -241,15 +275,22 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   height: size,
                 }}
               >
-                <img
-                  src={getSpriteUrl(wreck ? "fx-wreck" : spriteId)}
-                  alt=""
-                  draggable={false}
-                />
-                {u.anim === "attack" && u.alive && (
-                  <span className="rf-battle__muzzle" />
+                {wreck ? (
+                  <img
+                    src={getSpriteUrl("fx-wreck")}
+                    alt=""
+                    draggable={false}
+                  />
+                ) : (
+                  <DirSprite id={spriteId} facing={u.facing} size={size} />
                 )}
-                {u.alive && (
+                {u.anim === "attack" && u.alive && (
+                  <span
+                    className="rf-battle__muzzle"
+                    style={muzzleStyle(u.facing, spriteId)}
+                  />
+                )}
+                {u.alive && u.hp < u.maxHp && (
                   <span
                     className={`rf-battle__hpbar ${
                       u.side === "attacker" ? "is-atk" : "is-def"
@@ -268,7 +309,9 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
 
           {battle.explosions.map((ex) => {
             const pos = worldToPct(ex.x, ex.y);
-            const scale = 1.4 + ex.t * 2.6;
+            // ~1.5× tank (~168px), fade over ~0.8s
+            const life = Math.min(1, ex.t / 0.8);
+            const scale = 0.85 + life * 0.55;
             const fx = ex.style === "emp" ? "fx-emp" : "fx-explosion";
             return (
               <div
@@ -277,28 +320,34 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                 style={{ left: pos.left, top: pos.top }}
               >
                 <img
-                  className="rf-battle__explosion"
+                  className="rf-battle__explosion rf-battle__explosion--core"
                   src={getSpriteUrl(fx)}
                   alt=""
                   style={{
-                    width: 148,
-                    height: 148,
+                    width: 168,
+                    height: 168,
                     transform: `scale(${scale})`,
-                    opacity: Math.max(0, 1 - ex.t * 1.05),
+                    opacity: Math.max(0, 1 - life * 1.15),
                   }}
                 />
                 {ex.style !== "emp" && (
-                  <img
-                    className="rf-battle__explosion-smoke"
-                    src={getSpriteUrl("fx-smoke")}
-                    alt=""
-                    style={{
-                      width: 160,
-                      height: 160,
-                      transform: `translateY(${-12 - ex.t * 28}px) scale(${1.1 + ex.t * 1.8})`,
-                      opacity: Math.max(0, 0.75 - ex.t * 0.7),
-                    }}
-                  />
+                  <>
+                    <img
+                      className="rf-battle__explosion-smoke"
+                      src={getSpriteUrl("fx-smoke")}
+                      alt=""
+                      style={{
+                        width: 180,
+                        height: 180,
+                        transform: `translateY(${-8 - life * 36}px) scale(${1 + life * 1.4})`,
+                        opacity: Math.max(0, 0.7 - life * 0.75),
+                      }}
+                    />
+                    <span
+                      className="rf-battle__sparks"
+                      style={{ opacity: Math.max(0, 0.9 - life * 1.2) }}
+                    />
+                  </>
                 )}
               </div>
             );

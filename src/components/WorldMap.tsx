@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { factionColor } from "../data/factions";
 import {
   LAND_PATH,
@@ -6,6 +6,7 @@ import {
   SEA_ROUTES,
 } from "../data/map/earthPaths";
 import { TERRITORIES } from "../data/map/territories";
+import type { TerritoryDef } from "../data/types";
 import type { GameAction } from "../engine/actions";
 import type { GameState } from "../engine/state";
 
@@ -14,6 +15,17 @@ interface WorldMapProps {
   dispatch: (action: GameAction) => void;
   /** Optional viewBox override for focused screenshots / regional zoom. */
   focusViewBox?: string;
+}
+
+interface PlacedLabel {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  size: number;
+  hidden: boolean;
+  w: number;
+  h: number;
 }
 
 function hexToRgba(hex: string, a: number): string {
@@ -25,13 +37,105 @@ function hexToRgba(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+function approxTextWidth(name: string, size: number): number {
+  // Slightly generous — accounts for bold weight + label halo
+  return name.length * size * 0.58 + 6;
+}
+
+function overlaps(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+  pad = 5,
+): boolean {
+  return !(
+    a.x + a.w / 2 + pad < b.x - b.w / 2 ||
+    a.x - a.w / 2 - pad > b.x + b.w / 2 ||
+    a.y + a.h / 2 + pad < b.y - b.h / 2 ||
+    a.y - a.h / 2 - pad > b.y + b.h / 2
+  );
+}
+
+/** Place labels largest-first; nudge then hide on unresolved collisions. */
+function layoutLabels(territories: TerritoryDef[]): PlacedLabel[] {
+  const ranked = [...territories].sort((a, b) => b.area - a.area);
+  const placed: PlacedLabel[] = [];
+  const nudges = [
+    [0, 0],
+    [0, -10],
+    [0, 10],
+    [-12, 0],
+    [12, 0],
+    [-10, -8],
+    [10, -8],
+    [-10, 8],
+    [10, 8],
+    [0, -18],
+    [0, 18],
+    [-18, 0],
+    [18, 0],
+    [-14, -14],
+    [14, -14],
+    [-14, 14],
+    [14, 14],
+    [0, -26],
+    [0, 26],
+    [-8, -20],
+    [8, -20],
+    [-8, 20],
+    [8, 20],
+  ];
+
+  for (const t of ranked) {
+    const size = t.labelSize ?? 12;
+    const w = approxTextWidth(t.name, size);
+    const h = size + 4;
+    let chosen: PlacedLabel | null = null;
+    for (const [dx, dy] of nudges) {
+      const cand = {
+        id: t.id,
+        name: t.name,
+        x: t.label.x + dx,
+        y: t.label.y + dy,
+        size,
+        hidden: false,
+        w,
+        h,
+      };
+      if (!placed.some((p) => !p.hidden && overlaps(cand, p))) {
+        chosen = cand;
+        break;
+      }
+    }
+    placed.push(
+      chosen ?? {
+        id: t.id,
+        name: t.name,
+        x: t.label.x,
+        y: t.label.y,
+        size,
+        hidden: true,
+        w,
+        h,
+      },
+    );
+  }
+  return placed;
+}
+
 export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const { w, h } = OCEAN_VIEW;
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const viewBox = useMemo(() => {
     if (focusViewBox) return focusViewBox;
     return `0 0 ${w} ${h}`;
   }, [focusViewBox, w, h]);
+
+  const labels = useMemo(() => layoutLabels(TERRITORIES), []);
+  const labelById = useMemo(
+    () => Object.fromEntries(labels.map((l) => [l.id, l])),
+    [labels],
+  );
 
   return (
     <div className="rf-map rf-fade-in">
@@ -80,13 +184,22 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+          {/* Soft contrast halo — no stroke-outline ghosting */}
+          <filter id="rf-label-halo" x="-30%" y="-40%" width="160%" height="180%">
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation="1.1"
+              floodColor="#040a10"
+              floodOpacity="0.95"
+            />
+          </filter>
         </defs>
 
         <rect width={w} height={h} fill="url(#rf-ocean)" />
         <rect width={w} height={h} fill="url(#rf-holo-grid)" />
         <rect width={w} height={h} fill="url(#rf-holo-sheen)" />
 
-        {/* Latitude lines (approx every 30°) */}
         {[41.7, 83.3, 125, 166.7, 208.3, 250, 291.7, 333.3, 375, 416.7, 458.3].map(
           (y) => (
             <line
@@ -101,7 +214,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             />
           ),
         )}
-        {/* Longitude lines (approx every 30°) */}
         {[83.3, 166.7, 250, 333.3, 416.7, 500, 583.3, 666.7, 750, 833.3, 916.7].map(
           (x) => (
             <line
@@ -117,7 +229,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           ),
         )}
 
-        {/* Land underlay — true coastlines */}
         <path
           d={LAND_PATH}
           fill="#152838"
@@ -136,7 +247,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           pointerEvents="none"
         />
 
-        {/* Sea invasion arcs */}
         <g className="rf-map__routes" fill="none">
           {SEA_ROUTES.map((r, i) => (
             <path
@@ -151,14 +261,21 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           ))}
         </g>
 
-        {/* Faction territories — real country borders */}
         {TERRITORIES.map((t) => {
           const ts = state.territories[t.id];
           const owner = ts?.owner ?? t.startingOwner;
           const base = factionColor(owner);
           const selected = state.selectedTerritoryId === t.id;
+          const lbl = labelById[t.id];
+          const showLabel =
+            lbl && (!lbl.hidden || hoveredId === t.id || selected);
           return (
-            <g key={t.id} className="rf-map__territory-group">
+            <g
+              key={t.id}
+              className="rf-map__territory-group"
+              onMouseEnter={() => setHoveredId(t.id)}
+              onMouseLeave={() => setHoveredId(null)}
+            >
               <path
                 d={t.path}
                 className={`rf-map__territory${selected ? " is-selected" : ""}`}
@@ -175,16 +292,20 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   })
                 }
               />
-              <text
-                x={t.label.x}
-                y={t.label.y}
-                className="rf-map__label"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                pointerEvents="none"
-              >
-                {t.name}
-              </text>
+              {showLabel && (
+                <text
+                  x={lbl.x}
+                  y={lbl.y}
+                  className="rf-map__label"
+                  fontSize={lbl.size}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  pointerEvents="none"
+                  filter="url(#rf-label-halo)"
+                >
+                  {t.name}
+                </text>
+              )}
             </g>
           );
         })}

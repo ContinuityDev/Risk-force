@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>Rail Tank — 8 Directions</title>
+<style>
+html,body{margin:0;background:#0c1218;color:#e8eef4;font-family:Georgia,serif}
+h1{font-weight:500;letter-spacing:.08em;font-size:1.25rem;margin:1.25rem 2rem .35rem}
+p{margin:0 2rem 1.25rem;opacity:.65;font-size:.9rem}
+.sheet{display:block;margin:0 auto 1.5rem;width:min(96vw,1280px);height:auto;image-rendering:auto;
+  filter:drop-shadow(0 12px 18px rgba(0,0,0,.55));background:#141c24;border:1px solid #2a3848;padding:12px;box-sizing:border-box}
+.grid{display:flex;flex-wrap:wrap;gap:1rem;padding:0 2rem 2.5rem;justify-content:center}
+.cell{display:flex;flex-direction:column;align-items:center;gap:.35rem;width:140px}
+.cell .dir{width:128px;height:128px;background-repeat:no-repeat;background-size:800% 100%;
+  filter:contrast(1.08) saturate(1.12) brightness(1.12) drop-shadow(0 8px 10px rgba(0,0,0,.5))}
+.cell span{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+</style></head><body>
+<h1>RAIL TANK — 8-DIRECTION BAKE</h1>
+<p>Frame 0 = east (screen-right) · clockwise through SE · S · SW · W · NW · N · NE</p>
+<img class="sheet" src="/sprites/units/unit-rail-tank-dirs.png" alt="Rail tank direction strip"/>
+<div class="grid" id="grid"></div>
+<script>
+const labels=['E','SE','S','SW','W','NW','N','NE'];
+const g=document.getElementById('grid');
+for(let i=0;i<8;i++){
+  const c=document.createElement('div');
+  c.className='cell';
+  const s=document.createElement('span');
+  s.className='dir';
+  s.style.backgroundImage='url(/sprites/units/unit-rail-tank-dirs.png)';
+  s.style.backgroundPosition=((i/7)*100)+'% 0%';
+  c.appendChild(s);
+  const lab=document.createElement('span');
+  lab.textContent='Dir '+i+' · '+labels[i];
+  c.appendChild(lab);
+  g.appendChild(c);
+}
+</script>
+</body></html>

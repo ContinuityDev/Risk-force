@@ -70,7 +70,7 @@ const browser = await chromium.launch({
   args: ["--use-gl=angle", "--enable-webgl", "--ignore-gpu-blocklist"],
 });
 const page = await browser.newPage({
-  viewport: { width: 256, height: 256 },
+  viewport: { width: 512, height: 512 },
   deviceScaleFactor: 1,
 });
 
@@ -121,7 +121,17 @@ async function bakeList(items, category) {
     const sheetFile = item.file.replace(/\.png$/, "-sheet.png");
     saveDataUrl(sheetUrl, sheetFile);
     count++;
-    console.log("baked", item.id);
+
+    const dirs = item.directions ?? (category === "units" ? 8 : 1);
+    if (dirs > 1) {
+      const dirSheet = await page.evaluate(
+        ({ id, category }) => window.SpriteLab.renderDirections(id, category),
+        { id: item.id, category },
+      );
+      saveDataUrl(dirSheet.dataUrl, dirSheet.file);
+      count++;
+    }
+    console.log("baked", item.id, dirs > 1 ? `(${dirs} dirs)` : "");
   }
 }
 

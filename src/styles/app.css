@@ -452,14 +452,13 @@
 }
 
 .rf-map__label {
-  fill: rgba(244, 248, 252, 0.98);
-  font-size: 15px;
+  fill: rgba(248, 252, 255, 0.96);
   font-family: var(--rf-font-body);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  paint-order: stroke;
-  stroke: rgba(4, 10, 16, 0.92);
-  stroke-width: 4px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  /* font-size set per-territory via attribute; no stroke outline (avoids ghosting) */
+  stroke: none;
+  paint-order: normal;
 }
 
 .rf-map__detail {
@@ -868,42 +867,75 @@
 
 .rf-battle__sky {
   position: absolute;
-  inset: 0 0 45% 0;
+  inset: 0 0 52% 0;
   background:
-    radial-gradient(ellipse at 70% 20%, rgba(126, 182, 201, 0.08), transparent 50%),
-    linear-gradient(180deg, #152838 0%, #101c28 100%);
+    radial-gradient(ellipse 80% 50% at 60% 30%, rgba(180, 200, 160, 0.12), transparent 60%),
+    radial-gradient(ellipse at 75% 15%, rgba(126, 182, 201, 0.14), transparent 45%),
+    linear-gradient(180deg, #1a3040 0%, #243848 40%, #2a4030 100%);
+}
+
+.rf-battle__horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 48%;
+  height: 14%;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(40, 55, 38, 0.55) 35%,
+      rgba(28, 38, 24, 0.9) 70%,
+      #1a2418 100%
+    ),
+    radial-gradient(ellipse 120% 40% at 30% 80%, #3a4830 0%, transparent 55%),
+    radial-gradient(ellipse 80% 35% at 70% 90%, #2a3828 0%, transparent 50%);
 }
 
 .rf-battle__ground {
   position: absolute;
-  inset: 34% 0 0 0;
+  inset: 52% 0 0 0;
   background:
-    /* large craters — high contrast */
-    radial-gradient(ellipse 90px 36px at 14% 52%, #050704 0 28%, #1a2214 45%, transparent 70%),
-    radial-gradient(ellipse 70px 30px at 40% 74%, #060806 0 30%, #181e12 48%, transparent 72%),
-    radial-gradient(ellipse 80px 32px at 66% 40%, #070a05 0 26%, #1c2416 44%, transparent 68%),
-    radial-gradient(ellipse 55px 24px at 86% 66%, #0a0e08 0 32%, #202818 50%, transparent 72%),
-    radial-gradient(ellipse 48px 22px at 52% 24%, #0c1008 0 30%, transparent 68%),
-    /* packed earth mottling */
-    radial-gradient(ellipse 160px 100px at 22% 58%, rgba(72, 66, 48, 0.45), transparent 70%),
-    radial-gradient(ellipse 180px 110px at 72% 62%, rgba(52, 58, 40, 0.5), transparent 70%),
-    /* berm / trench line mid-field */
+    /* crater rims */
+    radial-gradient(ellipse 90px 36px at 14% 42%, transparent 28%, #1a2214 32%, #050704 40%, transparent 62%),
+    radial-gradient(ellipse 70px 30px at 40% 68%, transparent 30%, #181e12 34%, #060806 42%, transparent 65%),
+    radial-gradient(ellipse 80px 32px at 66% 32%, transparent 26%, #1c2416 30%, #070a05 38%, transparent 60%),
+    radial-gradient(ellipse 55px 24px at 86% 58%, transparent 32%, #202818 36%, #0a0e08 44%, transparent 65%),
+    /* dirt / grass noise patches */
+    radial-gradient(ellipse 160px 100px at 22% 50%, rgba(72, 86, 48, 0.4), transparent 70%),
+    radial-gradient(ellipse 180px 110px at 72% 55%, rgba(58, 68, 42, 0.45), transparent 70%),
+    radial-gradient(ellipse 100px 60px at 50% 80%, rgba(90, 78, 52, 0.35), transparent 65%),
+    /* berm */
     linear-gradient(
       0deg,
-      transparent 36%,
-      rgba(30, 36, 24, 0.85) 39%,
-      rgba(58, 62, 44, 0.65) 43%,
-      transparent 48%
+      transparent 18%,
+      rgba(30, 36, 24, 0.75) 22%,
+      rgba(58, 62, 44, 0.55) 28%,
+      transparent 34%
     ),
-    /* approach road */
+    linear-gradient(185deg, #3a4834 0%, #243028 35%, #161c12 100%);
+}
+
+.rf-battle__tracks {
+  position: absolute;
+  inset: 52% 0 0 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background:
+    repeating-linear-gradient(
+      92deg,
+      transparent 0 10px,
+      rgba(30, 28, 22, 0.35) 10px 12px,
+      transparent 12px 22px
+    ),
     linear-gradient(
       95deg,
-      transparent 6%,
-      rgba(78, 70, 52, 0.5) 10%,
-      rgba(78, 70, 52, 0.42) 24%,
-      transparent 30%
-    ),
-    linear-gradient(185deg, #324038 0%, #1e281c 38%, #10140c 100%);
+      transparent 8%,
+      rgba(55, 48, 36, 0.4) 12%,
+      rgba(55, 48, 36, 0.35) 26%,
+      transparent 32%
+    );
 }
 
 .rf-battle__ground::before {
@@ -932,7 +964,7 @@
 
 .rf-battle__scorch {
   position: absolute;
-  inset: 34% 0 0 0;
+  inset: 52% 0 0 0;
   pointer-events: none;
   background:
     radial-gradient(ellipse 50px 18px at 22% 52%, rgba(20, 12, 8, 0.7) 0 40%, transparent 70%),
@@ -944,7 +976,7 @@
 
 .rf-battle__rubble {
   position: absolute;
-  inset: 34% 0 0 0;
+  inset: 52% 0 0 0;
   pointer-events: none;
   background:
     radial-gradient(ellipse 18px 10px at 24% 44%, rgba(55, 50, 40, 0.55) 0 40%, transparent 70%),
@@ -1018,19 +1050,22 @@
   pointer-events: none;
 }
 
-.rf-battle__actor img {
+.rf-battle__actor img,
+.rf-battle__actor .rf-dir-sprite {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: contrast(1.06) saturate(1.08)
-    drop-shadow(0 8px 10px rgba(0, 0, 0, 0.6));
+  filter: contrast(1.08) saturate(1.12) brightness(1.12)
+    drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5));
 }
 
-.rf-battle__actor.is-firing img {
+.rf-battle__actor.is-firing img,
+.rf-battle__actor.is-firing .rf-dir-sprite {
   animation: rf-flash 0.28s ease;
 }
 
-.rf-battle__actor.is-moving img {
+.rf-battle__actor.is-moving img,
+.rf-battle__actor.is-moving .rf-dir-sprite {
   animation: rf-bob 0.5s ease-in-out infinite;
 }
 
@@ -1039,7 +1074,8 @@
   filter: grayscale(0.7) drop-shadow(0 4px 4px rgba(0, 0, 0, 0.4));
 }
 
-.rf-battle__actor.is-disabled img {
+.rf-battle__actor.is-disabled img,
+.rf-battle__actor.is-disabled .rf-dir-sprite {
   opacity: 0.55;
   filter: saturate(0.4) brightness(1.2);
 }
@@ -1055,24 +1091,27 @@
 
 .rf-battle__muzzle {
   position: absolute;
-  right: 8%;
-  top: 35%;
   width: 14px;
   height: 14px;
   border-radius: 50%;
+  transform: translate(-50%, -50%);
   background: radial-gradient(circle, #fff 0%, #a8d4e0 40%, transparent 70%);
   box-shadow: 0 0 12px #7eb6c9;
+  pointer-events: none;
+  z-index: 5;
 }
 
 .rf-battle__hpbar {
   position: absolute;
-  left: 10%;
-  right: 10%;
-  top: 0;
-  height: 4px;
-  background: #0a1018;
+  left: 28%;
+  right: 28%;
+  top: 4%;
+  height: 3px;
+  background: rgba(8, 12, 16, 0.75);
   border-radius: 1px;
   overflow: hidden;
+  z-index: 4;
+  pointer-events: none;
 }
 
 .rf-battle__hpbar i {
@@ -1192,7 +1231,25 @@
 .rf-battle__explosion-smoke {
   pointer-events: none;
   object-fit: contain;
-  filter: blur(1px);
+  filter: blur(1.5px);
+}
+
+.rf-battle__explosion--core {
+  filter: brightness(1.25) saturate(1.3) contrast(1.05)
+    drop-shadow(0 0 10px rgba(255, 120, 40, 0.5));
+}
+
+.rf-battle__sparks {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 40%, #ffe090 0 1.5px, transparent 2px),
+    radial-gradient(circle at 70% 35%, #ffc060 0 1.5px, transparent 2px),
+    radial-gradient(circle at 45% 70%, #fff0c0 0 1px, transparent 2px),
+    radial-gradient(circle at 60% 55%, #ff9030 0 1.5px, transparent 2px),
+    radial-gradient(circle at 25% 60%, #ffd070 0 1px, transparent 2px);
+  pointer-events: none;
 }
 
 .rf-battle__beam {

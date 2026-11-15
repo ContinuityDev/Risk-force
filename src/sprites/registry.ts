@@ -1,11 +1,11 @@
 /**
  * Maps sprite ids from building/unit defs to public `/sprites/...` URLs.
- * Aliases cover catalog ids that differ slightly from on-disk filenames.
- * Assets are pre-rendered PNG sheets from the three.js sprite lab.
+ * Directional sheets: `<id>-dirs.png` horizontal strips (N × 256).
  */
 
+import { DEFAULT_DIRECTIONS } from "./facing";
+
 const ALIASES: Record<string, string> = {
-  // Buildings
   "building-supply-depot": "buildings/building-supply.png",
   "building-fusion-foundry": "buildings/building-fabricator.png",
   "building-missile-battery": "buildings/building-missile.png",
@@ -19,7 +19,6 @@ const ALIASES: Record<string, string> = {
   "building-ammo-factory": "buildings/building-supply.png",
   "building-sensor-dome": "buildings/building-sonar.png",
 
-  // Units
   "unit-power-trooper": "units/unit-power-trooper.png",
   "unit-heavy-walker": "units/unit-walker.png",
   "unit-stealth-op": "units/unit-stealth.png",
@@ -40,6 +39,61 @@ const ALIASES: Record<string, string> = {
   "unit-data-spike": "units/unit-ew-drone.png",
 };
 
+/** Sprite ids that rotate to face targets (turrets / all units). */
+const DIRECTION_COUNTS: Record<string, number> = {
+  // Units — 8 dirs
+  "unit-trooper": 8,
+  "unit-power-trooper": 8,
+  "unit-mech": 8,
+  "unit-walker": 8,
+  "unit-heavy-walker": 8,
+  "unit-siege-mech": 8,
+  "unit-spider": 8,
+  "unit-spider-mech": 8,
+  "unit-hover": 8,
+  "unit-shield-tank": 8,
+  "unit-rail-tank": 8,
+  "unit-siege": 8,
+  "unit-howitzer": 8,
+  "unit-plasma-howitzer": 8,
+  "unit-cruise-launcher": 8,
+  "unit-drone": 8,
+  "unit-ew-drone": 8,
+  "unit-gunship": 8,
+  "unit-bomber": 8,
+  "unit-stealth-bomber": 8,
+  "unit-interceptor": 8,
+  "unit-dropship": 8,
+  "unit-assault-dropship": 8,
+  "unit-commando": 8,
+  "unit-cyber-commando": 8,
+  "unit-stealth": 8,
+  "unit-stealth-op": 8,
+  "unit-destroyer": 8,
+  "unit-carrier-barge": 8,
+  "unit-hydrofoil": 8,
+  "unit-torpedo-boat": 8,
+  "unit-submarine": 8,
+  "unit-orbital": 8,
+  "unit-orbital-laser": 8,
+  "unit-kinetic-rod": 8,
+  "unit-sat-relay": 8,
+  "unit-virus-probe": 8,
+  "unit-data-spike": 8,
+  // Rotating defense turrets
+  "building-laser": 8,
+  "building-flak": 8,
+  "building-plasma": 8,
+  "building-railgun": 8,
+  "building-emp": 8,
+  "building-emp-tower": 8,
+  "building-point-defense": 8,
+  "building-coastal": 8,
+  "building-coastal-battery": 8,
+  "building-missile": 8,
+  "building-missile-battery": 8,
+};
+
 const PLACEHOLDER =
   "data:image/svg+xml," +
   encodeURIComponent(
@@ -56,11 +110,31 @@ function defaultPath(id: string): string {
   return `${id}.png`;
 }
 
+function resolveRelative(id: string): string {
+  return ALIASES[id] ?? defaultPath(id);
+}
+
 /** Resolve a sprite id to a public URL under `/sprites/`. */
 export function getSpriteUrl(id: string): string {
   if (!id) return PLACEHOLDER;
-  const relative = ALIASES[id] ?? defaultPath(id);
-  return `/sprites/${relative}`;
+  return `/sprites/${resolveRelative(id)}`;
+}
+
+/** Directional sheet URL (`…-dirs.png`), or null if single-facing. */
+export function getDirectionalSheetUrl(id: string): string | null {
+  if (!id || getDirectionCount(id) <= 1) return null;
+  const rel = resolveRelative(id);
+  return `/sprites/${rel.replace(/\.png$/, "-dirs.png")}`;
+}
+
+export function getDirectionCount(id: string): number {
+  if (!id) return 1;
+  if (DIRECTION_COUNTS[id] != null) return DIRECTION_COUNTS[id]!;
+  const rel = resolveRelative(id);
+  const base = rel.split("/").pop()?.replace(/\.png$/, "") ?? id;
+  if (DIRECTION_COUNTS[base] != null) return DIRECTION_COUNTS[base]!;
+  if (id.startsWith("unit-")) return DEFAULT_DIRECTIONS;
+  return 1;
 }
 
 export function getPlaceholderSpriteUrl(): string {

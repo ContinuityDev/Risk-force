@@ -155,7 +155,12 @@ export interface TerritoryDef {
   continent: string;
   /** SVG path on the world map viewBox (0 0 1000 500, equirectangular). */
   path: string;
+  /** Pole-of-inaccessibility label anchor (projected px). */
   label: { x: number; y: number };
+  /** Suggested label font size in SVG user units (~10–15). */
+  labelSize: number;
+  /** Spherical area proxy for priority / sizing (larger = more important). */
+  area: number;
   neighbors: string[];
   startingOwner: FactionId;
   grid: { cols: number; rows: number };

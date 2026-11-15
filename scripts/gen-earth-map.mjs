@@ -13,6 +13,7 @@ import {
   geoEquirectangular,
   geoPath,
 } from "d3-geo";
+import polylabel from "polylabel";
 import { feature, merge as topoMerge } from "topojson-client";
 import { presimplify, quantile, simplify } from "topojson-simplify";
 
@@ -819,37 +820,65 @@ function pathFromGeom(geom) {
   return pathGen(geom) || "";
 }
 
-function labelFor(geom) {
-  try {
-    const c = pathGen.centroid(geom);
-    if (!c || Number.isNaN(c[0])) throw new Error("bad centroid");
-    // Prefer largest polygon centroid if multipoly centroid looks off-map
-    if (c[0] < 0 || c[0] > OUT_W || c[1] < 0 || c[1] > OUT_H) {
-      throw new Error("oob");
-    }
-    return { x: Math.round(c[0] * 10) / 10, y: Math.round(c[1] * 10) / 10 };
-  } catch {
-    // Fallback: largest-area polygon
-    const m = toMulti(geom);
-    let best = null;
-    let bestA = -1;
-    for (const poly of m.coordinates) {
-      const g = { type: "Polygon", coordinates: poly };
-      const a = geoArea(g);
-      if (a > bestA) {
-        bestA = a;
-        best = g;
-      }
-    }
-    const c = best ? pathGen.centroid(best) : [OUT_W / 2, OUT_H / 2];
-    return {
-      x: Math.round(c[0] * 10) / 10,
-      y: Math.round(c[1] * 10) / 10,
-    };
-  }
+/** Project lon/lat ring → screen px for polylabel. */
+function projectRing(ring) {
+  return ring.map(([lon, lat]) => {
+    const p = projection([lon, lat]);
+    return p ? [p[0], p[1]] : [0, 0];
+  });
 }
 
-const territories = [];
+/**
+ * Pole of inaccessibility (polylabel) on the largest projected polygon.
+ * Falls back to path centroid when geometry is degenerate.
+ */
+function labelFor(geom) {
+  const m = toMulti(geom);
+  let bestRings = null;
+  let bestA = -1;
+  for (const poly of m.coordinates) {
+    const g = { type: "Polygon", coordinates: poly };
+    const a = geoArea(g);
+    if (a > bestA) {
+      bestA = a;
+      bestRings = poly;
+    }
+  }
+  if (bestRings?.length) {
+    try {
+      const projected = bestRings.map(projectRing);
+      const [x, y] = polylabel(projected, 1.0);
+      if (
+        Number.isFinite(x) &&
+        Number.isFinite(y) &&
+        x >= -20 &&
+        x <= OUT_W + 20 &&
+        y >= -20 &&
+        y <= OUT_H + 20
+      ) {
+        return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  const c = pathGen.centroid(geom) || [OUT_W / 2, OUT_H / 2];
+  return {
+    x: Math.round(c[0] * 10) / 10,
+    y: Math.round(c[1] * 10) / 10,
+  };
+}
+
+/** Map spherical area → label font size in [10, 15]. */
+function labelSizeFor(area, allAreas) {
+  const sorted = [...allAreas].sort((a, b) => a - b);
+  const lo = sorted[Math.floor(sorted.length * 0.15)] ?? area;
+  const hi = sorted[Math.floor(sorted.length * 0.85)] ?? area;
+  const t = hi > lo ? Math.min(1, Math.max(0, (area - lo) / (hi - lo))) : 0.5;
+  return Math.round((10 + t * 5) * 10) / 10;
+}
+
+const draft = [];
 for (const d of DEFS) {
   if (!d.geom || !toMulti(d.geom).coordinates.length) {
     console.warn("empty geom:", d.id);
@@ -865,17 +894,23 @@ for (const d of DEFS) {
     console.warn("no path:", d.id);
     continue;
   }
-  territories.push({
+  draft.push({
     id: d.id,
     name: d.name,
     continent: d.continent,
     path,
     label: labelFor(d.geom),
+    area,
     neighbors: d.neighbors,
     startingOwner: d.startingOwner,
     coastal: d.coastal,
   });
 }
+const areas = draft.map((t) => t.area);
+const territories = draft.map((t) => ({
+  ...t,
+  labelSize: labelSizeFor(t.area, areas),
+}));
 
 console.log("territories:", territories.length);
 for (const id of [
@@ -943,6 +978,8 @@ for (const t of territories) {
     continent: ${JSON.stringify(t.continent)},
     path: ${JSON.stringify(t.path)},
     label: { x: ${t.label.x}, y: ${t.label.y} },
+    labelSize: ${t.labelSize},
+    area: ${t.area},
     neighbors: ${JSON.stringify(t.neighbors)},
     startingOwner: ${JSON.stringify(t.startingOwner)},
     coastal: ${t.coastal},

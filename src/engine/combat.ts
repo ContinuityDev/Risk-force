@@ -2,6 +2,7 @@ import { getBuilding } from "../data/buildings";
 import { damageMultiplier } from "../data/combatMatrix";
 import type { ArmorType, DamageType, ProjectileStyle } from "../data/types";
 import { getUnit } from "../data/units";
+import { facingFromDelta, stepFacing } from "../sprites/facing";
 import type {
   BattleDefense,
   BattleProjectile,
@@ -74,6 +75,8 @@ export function createBattle(
       animT: 0,
       alive: true,
       disabledT: 0,
+      // Face west toward attacking force
+      facing: Math.PI,
     });
   };
 
@@ -140,6 +143,8 @@ export function createBattle(
       animT: 0,
       alive: true,
       disabledT: 0,
+      // Face east toward defenses
+      facing: 0,
     });
   });
 
@@ -285,7 +290,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
   let projectiles = [...battle.projectiles];
   let explosions = battle.explosions
     .map((e) => ({ ...e, t: e.t + dt }))
-    .filter((e) => e.t < 0.95);
+    .filter((e) => e.t < 0.85);
   const log = [...battle.log];
 
   const snapshot = (): BattleState => ({
@@ -308,6 +313,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
     const target = pickTargetForUnit(next, snapshot());
     if (!target) return { ...next, anim: "idle" };
 
+    const aim = facingFromDelta(target.x - next.x, target.y - next.y);
     const d = dist(next.x, next.y, target.x, target.y);
     const ideal = Math.max(0.9, udef.range * 0.78);
     if (d > ideal) {
@@ -315,13 +321,17 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
       // Prefer lateral advance — hold lane Y so the line does not collapse
       const dx = ((target.x - next.x) / d) * step;
       const dy = ((target.y - next.y) / d) * step * 0.22;
+      const moveFacing = facingFromDelta(dx, dy);
       return {
         ...next,
         x: next.x + dx,
         y: Math.max(0.4, Math.min(6.7, next.y + dy)),
+        facing: stepFacing(next.facing, moveFacing, dt),
         anim: "move",
       };
     }
+    // In range — face the target while firing / holding
+    next = { ...next, facing: stepFacing(next.facing, aim, dt) };
     if (next.cooldown <= 0) {
       const bdef = getBuilding(target.buildingId);
       const dmg = effectiveDamage(
@@ -365,6 +375,8 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
     }
     const target = pickTargetForDefense(next, snapshot());
     if (!target) return { ...next, anim: "idle" };
+    const aim = facingFromDelta(target.x - next.x, target.y - next.y);
+    next = { ...next, facing: stepFacing(next.facing, aim, dt, 6.5) };
     if (next.cooldown <= 0) {
       const udef = getUnit(target.unitId);
       const dmg = effectiveDamage(
