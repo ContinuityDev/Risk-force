@@ -7,6 +7,10 @@ interface MenuScreenProps {
   onLoad: () => void;
   onResume?: () => void;
   canResume?: boolean;
+  onTutorial?: () => void;
+  onReplayTutorial?: () => void;
+  canResumeTutorial?: boolean;
+  canReplayTutorial?: boolean;
 }
 
 export function MenuScreen({
@@ -16,6 +20,10 @@ export function MenuScreen({
   onLoad,
   onResume,
   canResume = false,
+  onTutorial,
+  onReplayTutorial,
+  canResumeTutorial = false,
+  canReplayTutorial = false,
 }: MenuScreenProps) {
   return (
     <div className="rf-menu">
@@ -37,6 +45,16 @@ export function MenuScreen({
           >
             New Campaign
           </button>
+          {onTutorial && (
+            <button type="button" onClick={onTutorial}>
+              {canResumeTutorial ? "Resume Tutorial" : "Tutorial"}
+            </button>
+          )}
+          {onReplayTutorial && (canReplayTutorial || canResumeTutorial) && (
+            <button type="button" className="ghost" onClick={onReplayTutorial}>
+              Replay Tutorial
+            </button>
+          )}
           <button type="button" onClick={onHotSeat}>
             Hot-Seat
           </button>

@@ -14,6 +14,12 @@ import {
   loadSession,
   saveSession,
 } from "./persistence/session";
+import {
+  clearTutorialProgress,
+  hasCompletedTutorial,
+  hasTutorialProgress,
+  loadTutorialProgress,
+} from "./tutorial/progress";
 import { BaseView } from "./components/BaseView";
 import { BattleView } from "./components/BattleView";
 import { CaptureView } from "./components/CaptureView";
@@ -21,9 +27,11 @@ import { Hud } from "./components/Hud";
 import { InvadeView } from "./components/InvadeView";
 import { LobbyScreen } from "./components/LobbyScreen";
 import { MenuScreen } from "./components/MenuScreen";
+import { MobileDock } from "./components/MobileDock";
 import { ResearchView } from "./components/ResearchView";
 import { RotateOverlay } from "./components/RotateOverlay";
 import { SaveScreen } from "./components/SaveScreen";
+import { TutorialOverlay } from "./components/TutorialOverlay";
 import { VictoryScreen } from "./components/VictoryScreen";
 import { WorldMap } from "./components/WorldMap";
 
@@ -44,10 +52,61 @@ export default function App() {
   const [menuSave, setMenuSave] = useState(false);
   const [campaignActive, setCampaignActive] = useState(false);
   const [canResume, setCanResume] = useState(() => hasSession());
+  const [tutorialActive, setTutorialActive] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [canResumeTutorial, setCanResumeTutorial] = useState(() =>
+    hasTutorialProgress(),
+  );
+  const [canReplayTutorial, setCanReplayTutorial] = useState(() =>
+    hasCompletedTutorial() || hasTutorialProgress(),
+  );
   const aiBusy = useRef(false);
   const { requestLandscape } = useLandscapeLock();
 
   const { state, dispatch, activePlayer, isHumanTurn } = useGame(transport);
+
+  function startTutorial(fromResume = false) {
+    const progress = fromResume ? loadTutorialProgress() : null;
+    const idx =
+      progress && !progress.completed ? progress.stepIndex : 0;
+    setTutorialStep(idx);
+    setTutorialActive(true);
+    setLobbyMode(null);
+    setMenuSave(false);
+    setCampaignActive(true);
+    aiBusy.current = false;
+    // Fresh solo campaign for a guided first game (unless resuming mid-campaign session).
+    if (!fromResume || !hasSession()) {
+      const initial = createMenuState();
+      const t = createLocalTransport(initial);
+      setTransport(t);
+      t.dispatch({
+        type: "NEW_GAME",
+        payload: {
+          humanCount: 1,
+          aiCount: 2,
+          multiplayerMode: "solo",
+          seed: 9001,
+        },
+      });
+    } else {
+      resumeSession();
+    }
+  }
+
+  function closeTutorial(_completed: boolean) {
+    setTutorialActive(false);
+    setCanResumeTutorial(hasTutorialProgress());
+    setCanReplayTutorial(
+      hasCompletedTutorial() || hasTutorialProgress(),
+    );
+  }
+
+  function replayTutorial() {
+    clearTutorialProgress();
+    setCanResumeTutorial(false);
+    startTutorial(false);
+  }
 
   useEffect(() => {
     document.documentElement.classList.remove("rf-booting");
@@ -300,7 +359,9 @@ export default function App() {
         <MenuScreen
           onNewCampaign={() => {
             clearSession();
+            clearTutorialProgress();
             setCanResume(false);
+            setCanResumeTutorial(false);
             openLobby("solo");
           }}
           onHotSeat={() => openLobby("hotseat")}
@@ -308,6 +369,10 @@ export default function App() {
           onLoad={() => setMenuSave(true)}
           canResume={canResume}
           onResume={resumeSession}
+          onTutorial={() => startTutorial(canResumeTutorial)}
+          onReplayTutorial={replayTutorial}
+          canResumeTutorial={canResumeTutorial}
+          canReplayTutorial={canReplayTutorial}
         />
       </div>
     );
@@ -355,6 +420,10 @@ export default function App() {
           onLoad={() => setMenuSave(true)}
           canResume={canResume}
           onResume={resumeSession}
+          onTutorial={() => startTutorial(false)}
+          onReplayTutorial={replayTutorial}
+          canResumeTutorial={canResumeTutorial}
+          canReplayTutorial={canReplayTutorial}
         />
       </div>
     );
@@ -369,6 +438,10 @@ export default function App() {
           activePlayer={activePlayer}
           isHumanTurn={isHumanTurn}
           dispatch={dispatch}
+          onTutorial={() => {
+            setTutorialStep(0);
+            setTutorialActive(true);
+          }}
         />
         <main className="rf-main">
           {state.screen === "map" && (
@@ -407,6 +480,20 @@ export default function App() {
             <SaveScreen state={state} dispatch={dispatch} />
           )}
         </main>
+        <MobileDock
+          state={state}
+          isHumanTurn={isHumanTurn}
+          dispatch={dispatch}
+        />
+        {tutorialActive && (
+          <TutorialOverlay
+            stepIndex={tutorialStep}
+            state={state}
+            dispatch={dispatch}
+            onStep={setTutorialStep}
+            onClose={closeTutorial}
+          />
+        )}
       </div>
     </div>
   );

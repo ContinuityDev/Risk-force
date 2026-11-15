@@ -19,6 +19,7 @@ import { TERRITORIES } from "../data/map/territories";
 import type { TerritoryDef } from "../data/types";
 import type { GameAction } from "../engine/actions";
 import type { GameState } from "../engine/state";
+import { Drawer } from "./Drawer";
 
 interface WorldMapProps {
   state: GameState;
@@ -181,6 +182,20 @@ const PAN_SELECT_SLOP_PX = 10;
 
 export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  /** Continent bonuses drawer — collapsed by default on short landscape. */
+  const [legendOpen, setLegendOpen] = useState(false);
+  /** Selected-territory right sheet (always used on short landscape). */
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [shortLandscape, setShortLandscape] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)",
+    );
+    const sync = () => setShortLandscape(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
   const svgRef = useRef<SVGSVGElement>(null);
   /** Active pointers for one-finger pan + two-finger pinch. */
   const pointersRef = useRef<
@@ -215,6 +230,39 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     setCamera(initialCam);
     cameraRef.current = initialCam;
   }, [initialCam]);
+
+  useEffect(() => {
+    const id = state.selectedTerritoryId;
+    if (!id) return;
+    setDetailOpen(true);
+    const t = TERRITORIES.find((x) => x.id === id);
+    if (!t) return;
+    // Frame selection in the left ~58% so the right drawer does not cover it.
+    const focusW = Math.min(WORLD_W, Math.max(MIN_VIEW_W * 1.6, WORLD_W * 0.32));
+    const focusH = focusW * (WORLD_H / WORLD_W);
+    const cx = t.label.x + focusW * 0.14;
+    const cy = t.label.y;
+    const next = clampCamera({
+      x: cx - focusW / 2,
+      y: cy - focusH / 2,
+      w: focusW,
+      h: focusH,
+    });
+    cameraRef.current = next;
+    setCamera(next);
+  }, [state.selectedTerritoryId]);
+
+  const humanId = useMemo(
+    () => Object.values(state.players).find((p) => p.kind === "human")?.id,
+    [state.players],
+  );
+  const ownedTerritories = useMemo(
+    () =>
+      TERRITORIES.filter(
+        (t) => humanId && state.territories[t.id]?.owner === humanId,
+      ),
+    [state.territories, humanId],
+  );
 
   const zoomScale = camera.w / WORLD_W;
   const viewBox = camToViewBox(camera);
@@ -464,6 +512,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         className={`rf-map__svg${dragging ? " is-dragging" : ""}`}
         viewBox={viewBox}
         role="img"
+        data-tutorial="map-svg"
         aria-label="Earth theater strategic map — scroll or pinch to zoom, drag to pan, tap to select"
         onWheel={onWheel}
         onPointerDown={onPointerDown}
@@ -704,7 +753,175 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         Invade are explicit actions
       </div>
 
-      <aside className="rf-map__legend" title={HELP.continents}>
+      <button
+        type="button"
+        className="ghost rf-map__sheet-toggle rf-map__continents-btn"
+        data-tutorial="map-continents"
+        aria-expanded={legendOpen}
+        onClick={() => setLegendOpen(true)}
+      >
+        Continents
+      </button>
+
+      <Drawer
+        open={legendOpen}
+        onClose={() => setLegendOpen(false)}
+        side="left"
+        className="rf-map__legend-drawer"
+        tutorialId="map-continents-panel"
+      >
+        <span className="rf-label">Continent bonuses</span>
+        <ul className="rf-map__legend-list" title={HELP.continents}>
+          {CONTINENT_LIST.map((c) => (
+            <li key={c.id}>
+              <i style={{ background: c.color }} />
+              <span>
+                {c.name}
+                <small>
+                  +E{c.energy} A{c.alloy} Pop{c.population}
+                </small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Drawer>
+
+      {/* Desktop hover chip (hidden on short landscape via CSS) */}
+      {hovered && !selected && (
+        <aside className="rf-map__hover-chip">
+          <strong>{hovered.name}</strong>
+          <span className="rf-text-dim">{hovered.continent}</span>
+        </aside>
+      )}
+
+      <Drawer
+        open={Boolean(selected) && (shortLandscape ? detailOpen : true)}
+        onClose={() => {
+          setDetailOpen(false);
+          if (!shortLandscape) {
+            dispatch({
+              type: "SELECT_TERRITORY",
+              payload: { territoryId: null },
+            });
+          }
+        }}
+        side="right"
+        inline={!shortLandscape}
+        className="rf-map__territory-drawer"
+        tutorialId="territory-sheet"
+      >
+        {selected && (
+          <>
+            <span className="rf-label">Selected</span>
+            <h3 className="rf-map__sheet-title">{selected.name}</h3>
+            <p className="rf-text-dim">
+              {selected.continent}
+              {selectedTs
+                ? ` · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
+                : ""}
+            </p>
+
+            <div className="rf-map__sheet-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() =>
+                  dispatch({
+                    type: "SET_SCREEN",
+                    payload: { screen: "base" },
+                  })
+                }
+              >
+                Open Base
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  dispatch({
+                    type: "SET_SCREEN",
+                    payload: { screen: "invade" },
+                  })
+                }
+              >
+                Army
+              </button>
+            </div>
+
+            <span className="rf-label">Your territories</span>
+            <ul className="rf-picker__list rf-map__owned-list">
+              {ownedTerritories.map((t) => {
+                const ts = state.territories[t.id]!;
+                const g = Object.values(ts.garrison).reduce((a, b) => a + b, 0);
+                return (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      className={
+                        t.id === selected.id ? "primary" : "ghost"
+                      }
+                      onClick={() =>
+                        dispatch({
+                          type: "SELECT_TERRITORY",
+                          payload: { territoryId: t.id },
+                        })
+                      }
+                    >
+                      <strong>{t.name}</strong>
+                      <small>
+                        {t.continent} · Gar {g}
+                      </small>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {marchTargets.length > 0 && (
+              <div className="rf-map__march">
+                <span className="rf-label">March to (friendly)</span>
+                <ul className="rf-picker__list">
+                  {marchTargets.map((nid) => {
+                    const nName =
+                      TERRITORIES.find((t) => t.id === nid)?.name ?? nid;
+                    const g = selectedTs?.garrison ?? {};
+                    const force = Object.entries(g)
+                      .filter(([, c]) => c > 0)
+                      .map(([unitId, count]) => ({
+                        unitId,
+                        count: Math.max(1, Math.floor(count / 2)),
+                      }));
+                    return (
+                      <li key={nid}>
+                        <button
+                          type="button"
+                          className="ghost"
+                          disabled={!force.length}
+                          onClick={() =>
+                            dispatch({
+                              type: "ORDER_MOVE",
+                              payload: {
+                                fromId: selected.id,
+                                toId: nid,
+                                force,
+                              },
+                            })
+                          }
+                        >
+                          <strong>→ {nName}</strong>
+                          <small>Half garrison marches</small>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </Drawer>
+
+      {/* Desktop-only static legend (short landscape uses Drawer) */}
+      <aside className="rf-map__legend rf-map__legend--desktop" title={HELP.continents}>
         <span className="rf-label">Continent bonuses</span>
         <ul>
           {CONTINENT_LIST.map((c) => (
@@ -720,69 +937,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           ))}
         </ul>
       </aside>
-
-      {(selected || hovered) && (
-        <aside className="rf-map__detail">
-          <span className="rf-label">{selected ? "Selected" : "Hover"}</span>
-          <strong>{(selected ?? hovered)!.name}</strong>
-          <span className="rf-text-dim">{(selected ?? hovered)!.continent}</span>
-          {selected && selectedTs && (
-            <span className="rf-text-dim">
-              Pop {selectedTs.population} · Garrison{" "}
-              {Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}
-            </span>
-          )}
-          {selected && (
-            <>
-              <button
-                type="button"
-                className="primary"
-                onClick={() =>
-                  dispatch({ type: "SET_SCREEN", payload: { screen: "base" } })
-                }
-              >
-                Open Base
-              </button>
-              {marchTargets.length > 0 && (
-                <div className="rf-map__march">
-                  <span className="rf-label">March to</span>
-                  {marchTargets.slice(0, 4).map((nid) => {
-                    const nName =
-                      TERRITORIES.find((t) => t.id === nid)?.name ?? nid;
-                    const g = selectedTs?.garrison ?? {};
-                    const force = Object.entries(g)
-                      .filter(([, c]) => c > 0)
-                      .map(([unitId, count]) => ({
-                        unitId,
-                        count: Math.max(1, Math.floor(count / 2)),
-                      }));
-                    return (
-                      <button
-                        key={nid}
-                        type="button"
-                        className="ghost"
-                        disabled={!force.length}
-                        onClick={() =>
-                          dispatch({
-                            type: "ORDER_MOVE",
-                            payload: {
-                              fromId: selected.id,
-                              toId: nid,
-                              force,
-                            },
-                          })
-                        }
-                      >
-                        → {nName}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
-        </aside>
-      )}
     </div>
   );
 }

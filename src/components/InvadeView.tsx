@@ -5,6 +5,7 @@ import { getUnit, UNIT_LIST } from "../data/units";
 import type { GameAction } from "../engine/actions";
 import { forceSupplyCost } from "../engine/economy";
 import type { GameState, PlayerState, StrikeForceSlot } from "../engine/state";
+import { PickerList } from "./PickerList";
 import { Sprite } from "./Sprite";
 
 interface InvadeViewProps {
@@ -68,7 +69,7 @@ export function InvadeView({
   }
 
   return (
-    <div className="rf-invade rf-fade-in">
+    <div className="rf-invade rf-fade-in" data-tutorial="invade-view">
       <header className="rf-view-header">
         <div>
           <span className="rf-label">Operations</span>
@@ -87,39 +88,40 @@ export function InvadeView({
       </header>
 
       <div className="rf-invade__row">
-        <label className="rf-field">
-          <span className="rf-label">Launch from</span>
-          <select
-            value={fromId}
-            onChange={(e) => {
-              setFromId(e.target.value);
-              setToId("");
-              setForce({});
-            }}
-          >
-            {owned.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} (garrison{" "}
-                {Object.values(state.territories[t.id]?.garrison ?? {}).reduce(
-                  (a, b) => a + b,
-                  0,
-                )}
-                )
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="rf-field">
-          <span className="rf-label">Target (adjacent enemy)</span>
-          <select value={toId} onChange={(e) => setToId(e.target.value)}>
-            <option value="">Select…</option>
-            {targets.map((nid) => (
-              <option key={nid} value={nid}>
-                {getTerritory(nid).name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <PickerList
+          label="Launch from"
+          value={fromId}
+          onChange={(id) => {
+            setFromId(id);
+            setToId("");
+            setForce({});
+            dispatch({
+              type: "SELECT_TERRITORY",
+              payload: { territoryId: id },
+            });
+          }}
+          options={owned.map((t) => {
+            const g = Object.values(
+              state.territories[t.id]?.garrison ?? {},
+            ).reduce((a, b) => a + b, 0);
+            return {
+              id: t.id,
+              label: t.name,
+              meta: `Garrison ${g}`,
+            };
+          })}
+        />
+        <PickerList
+          label="Target (adjacent enemy)"
+          value={toId}
+          onChange={setToId}
+          emptyText="No adjacent enemies from this launch point"
+          options={targets.map((nid) => ({
+            id: nid,
+            label: getTerritory(nid).name,
+            meta: state.territories[nid]?.owner ?? "neutral",
+          }))}
+        />
       </div>
 
       <section className="rf-invade__force">
