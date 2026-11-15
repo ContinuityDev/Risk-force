@@ -98,6 +98,13 @@ export interface BuildingDef {
   targetPreference?: TargetPreference;
   projectile?: ProjectileStyle;
   requiresResearch?: string;
+  /**
+   * Unit ids this structure can train (Barracks → infantry, Factory → armor…).
+   * Empty / omitted = not a training building.
+   */
+  produces?: string[];
+  /** When true, the building can train workers from local population. */
+  producesWorkers?: boolean;
   sprite: SpriteRef;
   anims: {
     construction: AnimClip;

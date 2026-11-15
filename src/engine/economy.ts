@@ -188,11 +188,68 @@ export function canAfford(
   player: PlayerState,
   cost: { energy: number; alloy?: number; research?: number; supply?: number },
 ): boolean {
-  if (player.resources.energy < cost.energy) return false;
-  if ((cost.alloy ?? 0) > player.resources.alloy) return false;
-  if ((cost.research ?? 0) > player.resources.research) return false;
-  if ((cost.supply ?? 0) > player.resources.supply) return false;
-  return true;
+  return costShortfalls(player, cost).length === 0;
+}
+
+export type ResourceShortfall = {
+  resource: import("../data/types").ResourceId;
+  need: number;
+  have: number;
+  missing: number;
+};
+
+/** Which resources are short for a cost, and by how much. */
+export function costShortfalls(
+  player: PlayerState,
+  cost: { energy: number; alloy?: number; research?: number; supply?: number },
+): ResourceShortfall[] {
+  const checks: {
+    resource: import("../data/types").ResourceId;
+    need: number;
+    have: number;
+  }[] = [
+    { resource: "energy", need: cost.energy, have: player.resources.energy },
+    {
+      resource: "alloy",
+      need: cost.alloy ?? 0,
+      have: player.resources.alloy,
+    },
+    {
+      resource: "research",
+      need: cost.research ?? 0,
+      have: player.resources.research,
+    },
+    {
+      resource: "supply",
+      need: cost.supply ?? 0,
+      have: player.resources.supply,
+    },
+  ];
+  return checks
+    .filter((c) => c.need > 0 && c.have < c.need)
+    .map((c) => ({
+      ...c,
+      missing: Math.ceil(c.need - c.have),
+    }));
+}
+
+const RESOURCE_LABEL: Record<import("../data/types").ResourceId, string> = {
+  energy: "Energy",
+  alloy: "Alloy",
+  research: "Research",
+  supply: "Supply",
+};
+
+/** e.g. "Need 40 more Alloy" / "Need 20 Energy and 10 Alloy". */
+export function formatShortfallMessage(shortfalls: ResourceShortfall[]): string {
+  if (!shortfalls.length) return "";
+  if (shortfalls.length === 1) {
+    const s = shortfalls[0]!;
+    return `Need ${s.missing} more ${RESOURCE_LABEL[s.resource]}`;
+  }
+  return `Need ${shortfalls
+    .map((s) => `${s.missing} ${RESOURCE_LABEL[s.resource]}`)
+    .join(" and ")}`;
 }
 
 export function spend(

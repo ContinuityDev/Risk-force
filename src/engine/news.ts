@@ -40,6 +40,16 @@ export function makeNewsItem(
   };
 }
 
+const CATEGORY_RANK: Record<NewsItem["category"], number> = {
+  territory: 0,
+  battle: 1,
+  research: 2,
+  movement: 3,
+  build: 4,
+  economy: 5,
+  general: 6,
+};
+
 /** Convert a dispatched AI action into a news item (or null if mundane). */
 export function newsFromAiAction(
   turn: number,
@@ -59,6 +69,8 @@ export function newsFromAiAction(
       } catch {
         /* */
       }
+      // Skip minor support pads — keep major economy / defense / research
+      if (cat === "support") return null;
       const where = territoryLabel(action.payload.territoryId);
       const isEconomy = cat === "economy";
       return makeNewsItem({
@@ -66,8 +78,8 @@ export function newsFromAiAction(
         category: "build",
         factionId,
         headline: isEconomy
-          ? `${displayName} expands industry in ${where}`
-          : `${displayName} fortifies ${where}`,
+          ? `${displayName} builds ${bName} in ${where}`
+          : `${displayName} fortifies ${where} (${bName})`,
         body: `Construction begins on a ${bName}.`,
       });
     }
@@ -77,52 +89,33 @@ export function newsFromAiAction(
         turn,
         category: "research",
         factionId,
-        headline: `${displayName} opens research: ${node}`,
+        headline: `${displayName} researching ${node}`,
         body: `Labs begin work on ${node}.`,
       });
     }
-    case "TRAIN_UNIT": {
-      let uName = action.payload.unitId;
-      try {
-        uName = getUnit(action.payload.unitId).name;
-      } catch {
-        /* */
-      }
-      return makeNewsItem({
-        turn,
-        category: "movement",
-        factionId,
-        headline: `${displayName} musters ${uName}s`,
-        body: `${action.payload.count}× ${uName} enter training in ${territoryLabel(action.payload.territoryId)}.`,
-      });
-    }
+    case "TRAIN_UNIT":
+      // Training is routine — omit from headline wire
+      return null;
     case "ORDER_MOVE":
     case "MOVE_GARRISON": {
-      const to =
-        action.type === "ORDER_MOVE"
-          ? action.payload.toId
-          : action.payload.toId;
-      const from =
-        action.type === "ORDER_MOVE"
-          ? action.payload.fromId
-          : action.payload.fromId;
+      const to = action.payload.toId;
+      const from = action.payload.fromId;
       const humanId = Object.values(state.players).find(
         (p) => p.kind === "human",
       )?.id;
       const towardHuman =
         humanId &&
-        TERRITORIES.find((t) => t.id === to)?.neighbors.some(
-          (n) => state.territories[n]?.owner === humanId,
-        );
-      if (!towardHuman && action.type === "MOVE_GARRISON") return null;
+        (state.territories[to]?.owner === humanId ||
+          TERRITORIES.find((t) => t.id === to)?.neighbors.some(
+            (n) => state.territories[n]?.owner === humanId,
+          ));
+      if (!towardHuman) return null;
       return makeNewsItem({
         turn,
         category: "movement",
         factionId,
-        headline: towardHuman
-          ? `${displayName} shifts forces toward your border`
-          : `${displayName} redeploys troops`,
-        body: `Movement reported ${territoryLabel(from)} → ${territoryLabel(to)}.`,
+        headline: `${displayName} moves on your border`,
+        body: `${territoryLabel(from)} → ${territoryLabel(to)}.`,
       });
     }
     case "START_INVASION": {
@@ -131,18 +124,12 @@ export function newsFromAiAction(
         category: "battle",
         factionId,
         headline: `${displayName} invades ${territoryLabel(action.payload.toId)}`,
-        body: `Strike force from ${territoryLabel(action.payload.fromId)}: ${forceSummary(action.payload.force)}.`,
+        body: `From ${territoryLabel(action.payload.fromId)}: ${forceSummary(action.payload.force)}.`,
       });
     }
     case "SET_CAMPAIGN_BUDGET":
-      if (action.payload.energy < 20) return null;
-      return makeNewsItem({
-        turn,
-        category: "economy",
-        factionId,
-        headline: `${displayName} sets campaign spend at ${action.payload.energy}`,
-        body: `Recruitment budget locked for the coming cycle.`,
-      });
+      // Collapsed later into a single economy line — skip raw noise
+      return null;
     default:
       return null;
   }
@@ -175,14 +162,64 @@ export function newsFromBattleResult(
   });
 }
 
+/**
+ * Sort by importance and collapse economy noise into one line.
+ */
+export function prioritizeNews(items: NewsItem[]): NewsItem[] {
+  const economy = items.filter((i) => i.category === "economy");
+  const rest = items.filter((i) => i.category !== "economy");
+  const sorted = [...rest].sort((a, b) => {
+    const ra = CATEGORY_RANK[a.category] - CATEGORY_RANK[b.category];
+    if (ra !== 0) return ra;
+    return a.timestamp - b.timestamp;
+  });
+  if (economy.length) {
+    const factions = [
+      ...new Set(economy.map((e) => e.factionId).filter(Boolean)),
+    ] as FactionId[];
+    sorted.push(
+      makeNewsItem({
+        turn: economy[0]!.turn,
+        category: "economy",
+        factionId: factions[0],
+        headline:
+          factions.length > 1
+            ? `Enemy economies adjusted (${factions.length} factions)`
+            : `${factionName(factions[0]!)} adjusted campaign spend`,
+        body: "Routine budget and upkeep tweaks collapsed.",
+      }),
+    );
+  }
+  return sorted;
+}
+
 export function digestHeadline(items: NewsItem[]): string {
-  const battles = items.filter((i) => i.category === "battle" || i.category === "territory");
-  const builds = items.filter((i) => i.category === "build");
-  const research = items.filter((i) => i.category === "research");
+  const prioritized = prioritizeNews(items);
+  const territories = prioritized.filter((i) => i.category === "territory");
+  const battles = prioritized.filter((i) => i.category === "battle");
+  const research = prioritized.filter((i) => i.category === "research");
+  const builds = prioritized.filter((i) => i.category === "build");
   const parts: string[] = [];
-  if (battles.length) parts.push(`${battles.length} engagement${battles.length > 1 ? "s" : ""}`);
-  if (builds.length) parts.push(`${builds.length} construction report${builds.length > 1 ? "s" : ""}`);
-  if (research.length) parts.push(`${research.length} research note${research.length > 1 ? "s" : ""}`);
+  if (territories.length)
+    parts.push(
+      `${territories.length} territor${territories.length > 1 ? "ies" : "y"}`,
+    );
+  if (battles.length)
+    parts.push(`${battles.length} battle${battles.length > 1 ? "s" : ""}`);
+  if (research.length)
+    parts.push(`${research.length} research`);
+  if (builds.length)
+    parts.push(`${builds.length} build${builds.length > 1 ? "s" : ""}`);
   if (!parts.length) return "Theater brief — quiet sector";
   return `Theater brief — ${parts.join(", ")}`;
 }
+
+export const NEWS_ICON: Record<NewsItem["category"], string> = {
+  territory: "⚑",
+  battle: "⚔",
+  research: "◈",
+  movement: "⇢",
+  build: "⌂",
+  economy: "¤",
+  general: "·",
+};

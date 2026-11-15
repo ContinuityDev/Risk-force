@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
+import { RESOURCE_META } from "../data/resources";
+import type { ResourceId } from "../data/types";
 import type { GameAction } from "../engine/actions";
 import { computeEnergyLedger } from "../engine/economy";
 import type { GameState, PlayerState, Screen } from "../engine/state";
 import { useLongPress } from "../hooks/useLongPress";
+import { subscribeResourcePulse } from "../ui/resourcePulse";
 import { Drawer } from "./Drawer";
+import { ResourceIcon } from "./ResourceIcon";
 
 interface HudProps {
   state: GameState;
@@ -36,21 +40,20 @@ export function Hud({
   const color = factionColor(activePlayer.id);
   const [helpOpen, setHelpOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [ledgerHeld, setLedgerHeld] = useState(false);
+  const [tipId, setTipId] = useState<ResourceId | "campaign" | null>(null);
+  const [pulse, setPulse] = useState<Partial<Record<ResourceId, boolean>>>({});
   const ledger = computeEnergyLedger(state, activePlayer.id);
   const netSign = ledger.net >= 0 ? "+" : "−";
   const netAbs = Math.abs(ledger.net);
-  const energyTitle = [
-    `Income +${ledger.income}/t`,
-    `Upkeep −${ledger.upkeep}/t`,
-    `Campaign −${ledger.campaign}/t`,
-    `Net ${ledger.net >= 0 ? "+" : ""}${ledger.net}/t`,
-    HELP.upkeep,
-  ].join(" · ");
-  const longPress = useLongPress(
-    () => setLedgerHeld(true),
-    () => setLedgerHeld(false),
-  );
+
+  useEffect(() => {
+    return subscribeResourcePulse((ids) => {
+      const next: Partial<Record<ResourceId, boolean>> = {};
+      for (const id of ids) next[id] = true;
+      setPulse(next);
+      window.setTimeout(() => setPulse({}), 900);
+    });
+  }, []);
 
   useEffect(() => {
     if (!state.message) return;
@@ -59,6 +62,27 @@ export function Hud({
     }, 3200);
     return () => window.clearTimeout(t);
   }, [state.message, dispatch]);
+
+  const energyPress = useLongPress(
+    () => setTipId("energy"),
+    () => setTipId(null),
+  );
+  const alloyPress = useLongPress(
+    () => setTipId("alloy"),
+    () => setTipId(null),
+  );
+  const researchPress = useLongPress(
+    () => setTipId("research"),
+    () => setTipId(null),
+  );
+  const supplyPress = useLongPress(
+    () => setTipId("supply"),
+    () => setTipId(null),
+  );
+  const campaignPress = useLongPress(
+    () => setTipId("campaign"),
+    () => setTipId(null),
+  );
 
   return (
     <header className="rf-hud">
@@ -73,70 +97,155 @@ export function Hud({
         )}
       </div>
 
-      <div className="rf-hud__resources" aria-label="Resources">
-        <span
+      <div className="rf-hud__resources" aria-label="Resources" data-tutorial="hud-resources">
+        <button
+          type="button"
           className={`rf-resource rf-tick rf-resource--energy${
-            ledgerHeld ? " is-held" : ""
-          }`}
-          title={energyTitle}
+            tipId === "energy" ? " is-held" : ""
+          }${pulse.energy ? " is-pulse" : ""}`}
           data-tutorial="hud-energy"
-          {...longPress}
+          aria-label={`Energy ${Math.floor(r.energy)}, ${netSign}${netAbs} per turn`}
+          {...energyPress}
+          onClick={() =>
+            setTipId((cur) => (cur === "energy" ? null : "energy"))
+          }
         >
-          <span className="rf-label">Energy</span>
-          <strong>{Math.floor(r.energy)}</strong>
-          <small
-            className={`rf-hud__upkeep${ledger.net >= 0 ? " is-pos" : " is-neg"}`}
-          >
-            {netSign}
-            {netAbs}/t
-          </small>
-          <span className="rf-hud__ledger" role="tooltip">
-            <span>+{ledger.income} income</span>
-            <span>−{ledger.upkeep} upkeep</span>
-            <span>−{ledger.campaign} campaign</span>
-            <span className={ledger.net >= 0 ? "is-pos" : "is-neg"}>
-              = {ledger.net >= 0 ? "+" : ""}
-              {ledger.net} net
-            </span>
+          <ResourceIcon id="energy" />
+          <span className="rf-resource__text">
+            <span className="rf-label">{RESOURCE_META.energy.short}</span>
+            <strong>{Math.floor(r.energy)}</strong>
+            <small
+              className={`rf-hud__upkeep${ledger.net >= 0 ? " is-pos" : " is-neg"}`}
+            >
+              {netSign}
+              {netAbs}/t
+            </small>
           </span>
-        </span>
-        <span className="rf-resource rf-tick">
-          <span className="rf-label">Alloy</span>
-          <strong>{Math.floor(r.alloy)}</strong>
-        </span>
-        <span className="rf-resource rf-tick">
-          <span className="rf-label">Research</span>
-          <strong>{Math.floor(r.research)}</strong>
-        </span>
-        <span className="rf-resource rf-tick">
-          <span className="rf-label">Supply</span>
-          <strong>{Math.floor(r.supply)}</strong>
-        </span>
-        <label
-          className="rf-resource rf-hud__campaign"
-          title={HELP.campaigning}
-          data-tutorial="hud-campaign"
+          {tipId === "energy" && (
+            <span className="rf-hud__ledger is-open" role="tooltip">
+              <strong>{RESOURCE_META.energy.label}</strong>
+              <span>+{ledger.income} income</span>
+              <span>−{ledger.upkeep} upkeep</span>
+              <span>−{ledger.campaign} campaign</span>
+              <span className={ledger.net >= 0 ? "is-pos" : "is-neg"}>
+                = {ledger.net >= 0 ? "+" : ""}
+                {ledger.net} net
+              </span>
+              <span className="rf-hud__ledger-tip">{RESOURCE_META.energy.tip}</span>
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`rf-resource rf-tick${pulse.alloy ? " is-pulse" : ""}${
+            tipId === "alloy" ? " is-held" : ""
+          }`}
+          aria-label={`Alloy ${Math.floor(r.alloy)}`}
+          {...alloyPress}
+          onClick={() => setTipId((cur) => (cur === "alloy" ? null : "alloy"))}
         >
-          <span className="rf-label">Campaign</span>
-          <input
-            type="range"
-            min={0}
-            max={GAME_LOOP.campaigning.maxBudget}
-            step={5}
-            value={activePlayer.campaignBudget}
-            disabled={!isHumanTurn}
-            onChange={(e) =>
-              dispatch({
-                type: "SET_CAMPAIGN_BUDGET",
-                payload: { energy: Number(e.target.value) },
-              })
-            }
-          />
-          <strong>{activePlayer.campaignBudget}</strong>
+          <ResourceIcon id="alloy" />
+          <span className="rf-resource__text">
+            <span className="rf-label">{RESOURCE_META.alloy.short}</span>
+            <strong>{Math.floor(r.alloy)}</strong>
+          </span>
+          {tipId === "alloy" && (
+            <span className="rf-hud__ledger is-open" role="tooltip">
+              <strong>{RESOURCE_META.alloy.label}</strong>
+              <span className="rf-hud__ledger-tip">{RESOURCE_META.alloy.tip}</span>
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`rf-resource rf-tick${pulse.research ? " is-pulse" : ""}${
+            tipId === "research" ? " is-held" : ""
+          }`}
+          aria-label={`Research ${Math.floor(r.research)}`}
+          {...researchPress}
+          onClick={() =>
+            setTipId((cur) => (cur === "research" ? null : "research"))
+          }
+        >
+          <ResourceIcon id="research" />
+          <span className="rf-resource__text">
+            <span className="rf-label">{RESOURCE_META.research.short}</span>
+            <strong>{Math.floor(r.research)}</strong>
+          </span>
+          {tipId === "research" && (
+            <span className="rf-hud__ledger is-open" role="tooltip">
+              <strong>{RESOURCE_META.research.label}</strong>
+              <span className="rf-hud__ledger-tip">
+                {RESOURCE_META.research.tip}
+              </span>
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          className={`rf-resource rf-tick${pulse.supply ? " is-pulse" : ""}${
+            tipId === "supply" ? " is-held" : ""
+          }`}
+          aria-label={`Supply ${Math.floor(r.supply)}`}
+          {...supplyPress}
+          onClick={() =>
+            setTipId((cur) => (cur === "supply" ? null : "supply"))
+          }
+        >
+          <ResourceIcon id="supply" />
+          <span className="rf-resource__text">
+            <span className="rf-label">{RESOURCE_META.supply.short}</span>
+            <strong>{Math.floor(r.supply)}</strong>
+          </span>
+          {tipId === "supply" && (
+            <span className="rf-hud__ledger is-open" role="tooltip">
+              <strong>{RESOURCE_META.supply.label}</strong>
+              <span className="rf-hud__ledger-tip">{RESOURCE_META.supply.tip}</span>
+            </span>
+          )}
+        </button>
+
+        <label
+          className={`rf-resource rf-hud__campaign${
+            tipId === "campaign" ? " is-held" : ""
+          }`}
+          data-tutorial="hud-campaign"
+          {...campaignPress}
+        >
+          <ResourceIcon id="campaign" />
+          <span className="rf-resource__text">
+            <span className="rf-label">{RESOURCE_META.campaign.short}</span>
+            <input
+              type="range"
+              min={0}
+              max={GAME_LOOP.campaigning.maxBudget}
+              step={5}
+              value={activePlayer.campaignBudget}
+              disabled={!isHumanTurn}
+              onChange={(e) =>
+                dispatch({
+                  type: "SET_CAMPAIGN_BUDGET",
+                  payload: { energy: Number(e.target.value) },
+                })
+              }
+              onFocus={() => setTipId("campaign")}
+            />
+            <strong>{activePlayer.campaignBudget}</strong>
+          </span>
+          {tipId === "campaign" && (
+            <span className="rf-hud__ledger is-open" role="tooltip">
+              <strong>{RESOURCE_META.campaign.label}</strong>
+              <span className="rf-hud__ledger-tip">
+                {RESOURCE_META.campaign.tip}
+              </span>
+            </span>
+          )}
         </label>
       </div>
 
-      {/* News — top-right, thumb-reachable on mobile */}
       {onOpenNews && (
         <button
           type="button"
@@ -156,7 +265,6 @@ export function Hud({
         </button>
       )}
 
-      {/* Desktop nav — hidden on short landscape (MobileDock replaces it) */}
       <nav className="rf-hud__nav rf-hud__nav--desktop">
         {NAV.map(({ screen, label }) => (
           <button
@@ -194,7 +302,6 @@ export function Hud({
         </button>
       </nav>
 
-      {/* Mobile "More" opens a drawer (Save / Help / Tutorial) */}
       <button
         type="button"
         className="ghost rf-hud__more"

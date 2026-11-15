@@ -18,6 +18,9 @@ const ALIASES: Record<string, string> = {
   "building-repair-bay": "buildings/building-repair.png",
   "building-ammo-factory": "buildings/building-supply.png",
   "building-sensor-dome": "buildings/building-sonar.png",
+  "building-barracks": "buildings/building-war-college.png",
+  "building-vehicle-factory": "buildings/building-fabricator.png",
+  "building-airfield": "buildings/building-uplink.png",
 
   "unit-power-trooper": "units/unit-power-trooper.png",
   "unit-heavy-walker": "units/unit-walker.png",

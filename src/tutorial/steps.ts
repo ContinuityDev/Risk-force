@@ -36,9 +36,9 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: "economy",
-    title: "Energy & the ledger",
-    body: "Top HUD shows Energy (with net /turn), Alloy, Research, and Supply. Long-press Energy for income, upkeep, and campaign spend. Keep net energy from going deeply negative.",
-    target: "hud-energy",
+    title: "Resources at a glance",
+    body: "Top HUD chips are Energy, Alloy, Research, Supply, and Campaign — each with an icon and short label. Green/red deltas show per-turn Energy. Tap or long-press a chip for what it is, where it comes from, and what spends it. Unaffordable actions highlight the short resource and pulse that chip.",
+    target: "hud-resources",
     screen: "map",
   },
   {
@@ -66,8 +66,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: "train",
-    title: "Train units",
-    body: "Untrained population becomes workers or combat units in the Population & Training list. Advanced units unlock through Research.",
+    title: "Train from buildings",
+    body: "Tap a Barracks, Vehicle Factory, Airfield, or Command Nexus on the grid. Choose Train unit to see what that building produces — costs, turns, upkeep, and research locks. Queue progress shows on the building badge.",
     target: "base-train",
     screen: "base",
     needSelection: true,

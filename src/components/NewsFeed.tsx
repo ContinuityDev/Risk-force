@@ -1,6 +1,10 @@
-import { factionColor, factionName } from "../data/factions";
+import { factionColor } from "../data/factions";
 import type { GameAction } from "../engine/actions";
-import { digestHeadline } from "../engine/news";
+import {
+  digestHeadline,
+  NEWS_ICON,
+  prioritizeNews,
+} from "../engine/news";
 import type { GameState, NewsItem } from "../engine/state";
 
 interface NewsFeedProps {
@@ -20,16 +24,17 @@ function groupByTurn(items: NewsItem[]): { turn: number; items: NewsItem[] }[] {
   }
   return [...map.entries()]
     .sort((a, b) => b[0] - a[0])
-    .map(([turn, list]) => ({ turn, items: list }));
+    .map(([turn, list]) => ({ turn, items: prioritizeNews(list) }));
 }
 
 export function NewsFeed({ state, dispatch, digest, onClose }: NewsFeedProps) {
-  const items = digest
+  const raw = digest
     ? (state.newsDigest ?? [])
-    : [...(state.newsFeed ?? [])].reverse();
+    : [...(state.newsFeed ?? [])];
+  const items = prioritizeNews(raw);
   const groups = digest
     ? [{ turn: state.turn, items }]
-    : groupByTurn([...(state.newsFeed ?? [])]);
+    : groupByTurn(raw);
 
   return (
     <div
@@ -47,9 +52,7 @@ export function NewsFeed({ state, dispatch, digest, onClose }: NewsFeedProps) {
         <header className="rf-news__masthead">
           <span className="rf-label">Orbital Wire</span>
           <h2>
-            {digest
-              ? digestHeadline(items)
-              : "Theater Gazette"}
+            {digest ? digestHeadline(raw) : "Theater Gazette"}
           </h2>
           <p className="rf-news__dateline">
             {digest
@@ -60,15 +63,17 @@ export function NewsFeed({ state, dispatch, digest, onClose }: NewsFeedProps) {
 
         <div className="rf-news__body">
           {items.length === 0 && (
-            <p className="rf-hint">No dispatches yet — end a turn to receive the wire.</p>
+            <p className="rf-hint">
+              No dispatches yet — end a turn to receive the wire.
+            </p>
           )}
           {digest
-            ? items.map((it) => <NewsCard key={it.id} item={it} />)
+            ? items.map((it) => <NewsRow key={it.id} item={it} />)
             : groups.map((g) => (
                 <section key={g.turn} className="rf-news__turn">
                   <h3>Turn {g.turn}</h3>
                   {g.items.map((it) => (
-                    <NewsCard key={it.id} item={it} />
+                    <NewsRow key={it.id} item={it} />
                   ))}
                 </section>
               ))}
@@ -96,16 +101,21 @@ export function NewsFeed({ state, dispatch, digest, onClose }: NewsFeedProps) {
   );
 }
 
-function NewsCard({ item }: { item: NewsItem }) {
+function NewsRow({ item }: { item: NewsItem }) {
   const color = item.factionId ? factionColor(item.factionId) : undefined;
   return (
-    <div className={`rf-news__card rf-news__card--${item.category}`}>
-      <span className="rf-news__tag">{item.category}</span>
-      <h4 style={color ? { color } : undefined}>{item.headline}</h4>
-      <p>{item.body}</p>
-      {item.factionId && (
-        <small className="rf-text-dim">{factionName(item.factionId)}</small>
-      )}
+    <div
+      className={`rf-news__row rf-news__row--${item.category}`}
+      title={item.body}
+    >
+      <span className="rf-news__icon" aria-hidden>
+        {NEWS_ICON[item.category]}
+      </span>
+      <div className="rf-news__row-text">
+        <strong style={color ? { color } : undefined}>{item.headline}</strong>
+        <small>{item.body}</small>
+      </div>
+      <span className="rf-news__chip">{item.category}</span>
     </div>
   );
 }
