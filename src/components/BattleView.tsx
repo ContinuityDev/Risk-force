@@ -150,8 +150,8 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
           {tooltip}
         </div>
       )}
-      <header className="rf-view-header">
-        <div>
+      <header className="rf-view-header rf-battle__header">
+        <div className="rf-battle__title">
           <span className="rf-label">Engagement</span>
           <h2>{title}</h2>
           <p className="rf-text-dim">
@@ -170,6 +170,7 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
           ) : (
             <button
               type="button"
+              className="rf-battle__skip"
               onClick={() => {
                 for (let i = 0; i < 240; i++) {
                   dispatch({ type: "BATTLE_TICK", payload: { dt: 0.25 } });
@@ -182,6 +183,37 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
           )}
         </div>
       </header>
+      {/* Slim mobile overlay bar (visible only on short landscape via CSS) */}
+      <div className="rf-battle__slimbar" aria-hidden={false}>
+        <span className="rf-battle__slimbar-title">
+          <strong>{title}</strong>
+          <small className="rf-text-dim">
+            {factionName(battle.attacker)} vs {factionName(battle.defender)}
+          </small>
+        </span>
+        {done ? (
+          <button
+            type="button"
+            className="primary rf-battle__skip"
+            onClick={() => dispatch({ type: "RESOLVE_BATTLE" })}
+          >
+            Resolve
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="rf-battle__skip"
+            onClick={() => {
+              for (let i = 0; i < 240; i++) {
+                dispatch({ type: "BATTLE_TICK", payload: { dt: 0.25 } });
+              }
+              dispatch({ type: "RESOLVE_BATTLE" });
+            }}
+          >
+            Skip
+          </button>
+        )}
+      </div>
 
       <div className="rf-battle__stage">
         <div className="rf-battle__viewport">

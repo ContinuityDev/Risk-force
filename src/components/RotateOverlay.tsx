@@ -18,23 +18,41 @@ export function RotateOverlay({ onRequestLandscape }: RotateOverlayProps) {
     >
       <div className="rf-rotate__card">
         <div className="rf-rotate__icon" aria-hidden>
-          <svg viewBox="0 0 96 64" width="96" height="64">
+          {/* Portrait phone outline + curved rotate arrow */}
+          <svg viewBox="0 0 96 96" width="88" height="88">
             <rect
-              x="28"
-              y="4"
-              width="40"
-              height="56"
-              rx="6"
+              x="30"
+              y="12"
+              width="36"
+              height="64"
+              rx="5"
               fill="none"
               stroke="currentColor"
               strokeWidth="3"
             />
+            <line
+              x1="42"
+              y1="18"
+              x2="54"
+              y2="18"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
             <path
-              d="M18 32h-8M86 32h-8M12 24l-6 8 6 8M84 24l6 8-6 8"
+              d="M68 28c10 6 14 18 10 28-3 8-11 14-20 15"
               fill="none"
               stroke="currentColor"
               strokeWidth="3"
               strokeLinecap="round"
+            />
+            <path
+              d="M62 66l-4 5 7 1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </svg>
         </div>

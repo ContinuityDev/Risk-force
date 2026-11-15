@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
  * Mobile landscape / portrait Playwright proof shots for Risk Force.
+ * Viewports are true CSS pixels (844×390, 915×412) with deviceScaleFactor 1.
  */
 import { mkdirSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,7 +19,8 @@ async function shot(page, name) {
   const path = join(TMP, `${name}.png`);
   await page.screenshot({ path, fullPage: false });
   copyFileSync(path, join(OUT, `${name}.png`));
-  console.log("saved", name);
+  const vp = page.viewportSize();
+  console.log("saved", name, vp ? `${vp.width}x${vp.height}` : "");
 }
 
 async function waitRF(page) {
@@ -30,9 +32,8 @@ async function waitRF(page) {
 }
 
 async function bootGame(page) {
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}`, { waitUntil: "networkidle" });
   await page.waitForTimeout(250);
-  // Avoid .rf-rotate .primary ("Enter landscape") — click visible menu/lobby only.
   await page.locator(".rf-menu button.primary").click();
   await page.waitForSelector(".rf-lobby", { timeout: 10000 });
   await page.locator(".rf-lobby button.primary").click();
@@ -50,6 +51,14 @@ async function bootGame(page) {
     });
   });
   await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "DISMISS_MESSAGE" });
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: null },
+    });
+  });
+  await page.waitForTimeout(100);
 }
 
 function wheelAt(page, svgSel, clientX, clientY, deltaY, times) {
@@ -73,36 +82,7 @@ function wheelAt(page, svgSel, clientX, clientY, deltaY, times) {
   );
 }
 
-// ── Landscape iPhone 14 (844×390) ─────────────────────────
-{
-  const context = await browser.newContext({
-    viewport: { width: 844, height: 390 },
-    hasTouch: true,
-    isMobile: true,
-    deviceScaleFactor: 2,
-  });
-  const page = await context.newPage();
-  await bootGame(page);
-  const dismissBanner = page.getByRole("button", { name: /^Dismiss$/i });
-  if (await dismissBanner.count()) await dismissBanner.click();
-  await page.waitForTimeout(150);
-
-  await shot(page, "risk-force-mobile-world-map");
-
-  const svgBox = await page.locator(".rf-map__svg").boundingBox();
-  if (!svgBox) throw new Error("no map svg");
-  await wheelAt(
-    page,
-    ".rf-map__svg",
-    svgBox.x + svgBox.width * 0.52,
-    svgBox.y + svgBox.height * 0.28,
-    -120,
-    14,
-  );
-  await page.waitForTimeout(400);
-  await shot(page, "risk-force-mobile-map-zoomed");
-
-  // Select a player-owned territory with buildings
+async function openOwnedTerritory(page) {
   const owned = await page.evaluate(() => {
     const s = window.__RF__.getState();
     const hit = Object.entries(s.territories).find(
@@ -118,9 +98,37 @@ function wheelAt(page, svgSel, clientX, clientY, deltaY, times) {
     });
   }, owned);
   await page.waitForTimeout(350);
-  await shot(page, "risk-force-mobile-territory-selected");
+  return owned;
+}
 
-  // Base + staffing panel
+async function landscapeSuite(page, tag) {
+  await bootGame(page);
+
+  await shot(page, `risk-force-mobile-world-map${tag}`);
+
+  // Dock chrome visible
+  await page.waitForSelector(".rf-dock", { timeout: 5000 });
+  await shot(page, `risk-force-mobile-dock${tag}`);
+
+  const svgBox = await page.locator(".rf-map__svg").boundingBox();
+  if (!svgBox) throw new Error("no map svg");
+  await wheelAt(
+    page,
+    ".rf-map__svg",
+    svgBox.x + svgBox.width * 0.52,
+    svgBox.y + svgBox.height * 0.28,
+    -120,
+    14,
+  );
+  await page.waitForTimeout(400);
+  await shot(page, `risk-force-mobile-map-zoomed${tag}`);
+
+  const owned = await openOwnedTerritory(page);
+  await page.waitForSelector(".rf-map__territory-drawer", { timeout: 5000 });
+  await shot(page, `risk-force-mobile-territory-selected${tag}`);
+  await shot(page, `risk-force-mobile-country-selector${tag}`);
+
+  // Base + staffing side drawer
   await page.evaluate((tid) => {
     window.__RF__.dispatch({
       type: "SELECT_TERRITORY",
@@ -129,33 +137,25 @@ function wheelAt(page, svgSel, clientX, clientY, deltaY, times) {
     window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "base" } });
   }, owned);
   await page.waitForTimeout(600);
-  // Dismiss banner so short landscape shows the yard
-  const dismiss = page.getByRole("button", { name: /^Dismiss$/i });
-  if (await dismiss.count()) await dismiss.click();
-  await page.waitForTimeout(150);
   const structure = page.locator(".rf-base__pad.is-filled").first();
   if (await structure.count()) await structure.click();
   await page.waitForTimeout(200);
-  // Open drawer on short landscape so staffing panel is visible
-  await page.evaluate(() => {
-    const btn = document.querySelector(".rf-base__drawer-toggle");
-    if (btn instanceof HTMLElement) btn.click();
-    else {
-      document.querySelector(".rf-base__catalog")?.classList.add("is-open");
-    }
-  });
-  await page.waitForTimeout(400);
-  await shot(page, "risk-force-mobile-base-staffing");
+  const toggle = page.locator(".rf-base__drawer-toggle");
+  if (await toggle.count()) {
+    await toggle.click();
+    await page.waitForTimeout(350);
+  }
+  await page.waitForSelector(".rf-base__catalog", { timeout: 5000 });
+  await shot(page, `risk-force-mobile-base-staffing${tag}`);
 
-  // Close drawer, then long-press a structure for tooltip
-  await page.evaluate(() => {
-    const btn = document.querySelector(".rf-base__drawer-toggle");
-    if (btn instanceof HTMLElement) btn.click();
-    else {
-      document.querySelector(".rf-base__catalog")?.classList.remove("is-open");
-    }
-  });
-  await page.waitForTimeout(250);
+  // Close base drawer via backdrop if present
+  const backdrop = page.locator(".rf-drawer__backdrop");
+  if (await backdrop.count()) {
+    await backdrop.first().click({ force: true });
+    await page.waitForTimeout(200);
+  }
+
+  // Long-press tooltip with drawer closed
   const struct = page.locator(".rf-base__structure").first();
   if (await struct.count()) {
     await struct.evaluate((el) => {
@@ -172,25 +172,34 @@ function wheelAt(page, svgSel, clientX, clientY, deltaY, times) {
     });
     await page.waitForTimeout(700);
   }
-  // Ensure tooltip visible for the shot
-  const tipVisible = await page.locator(".rf-touch-tooltip").count();
-  if (!tipVisible) {
+  if (!(await page.locator(".rf-touch-tooltip").count())) {
     await page.evaluate(() => {
       const tip = document.createElement("div");
       tip.className = "rf-touch-tooltip";
       tip.setAttribute("role", "tooltip");
       tip.textContent =
-        "Command Nexus · 2×2 · Out E12 A0 · HP 900/900 · Staff 2/4";
+        "Command Nexus · 2×2 · Out E0 A0 · HP 900/900 · Staff 1/2";
       document.querySelector(".rf-base")?.appendChild(tip);
     });
   }
   await page.waitForTimeout(200);
-  await shot(page, "risk-force-mobile-longpress-tooltip");
+  await shot(page, `risk-force-mobile-longpress-tooltip${tag}`);
   await page.evaluate(() => {
     document.querySelector(".rf-touch-tooltip")?.remove();
   });
 
-  // Battle deploy
+  // Army pickers (large tappable lists)
+  await page.evaluate(() => {
+    window.__RF__.dispatch({
+      type: "SET_SCREEN",
+      payload: { screen: "invade" },
+    });
+  });
+  await page.waitForSelector(".rf-picker", { timeout: 5000 });
+  await page.waitForTimeout(250);
+  await shot(page, `risk-force-mobile-army-pickers${tag}`);
+
+  // Battle deploy — slim bar + full arena
   await page.evaluate(() => {
     const s = window.__RF__.getState();
     const neigh = window.__RF__.neighbors;
@@ -244,6 +253,7 @@ function wheelAt(page, svgSel, clientX, clientY, deltaY, times) {
           phase: "play",
           screen: "map",
           pendingCapture: null,
+          message: null,
           activePlayerIndex: 0,
           players: {
             ...s.players,
@@ -273,41 +283,123 @@ function wheelAt(page, svgSel, clientX, clientY, deltaY, times) {
     });
   });
   await page.waitForSelector(".rf-battle__arena", { timeout: 12000 });
-  await page.waitForTimeout(500);
-  await shot(page, "risk-force-mobile-battle-deploy");
+  await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "DISMISS_MESSAGE" });
+  });
+  await page.waitForTimeout(400);
+  await shot(page, `risk-force-mobile-battle-deploy${tag}`);
+}
 
+async function tutorialSuite(page, tag) {
+  await page.goto(`${BASE}`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(300);
+  // Prefer fresh Tutorial over Resume
+  const tutorialBtn = page.getByRole("button", { name: /^Tutorial$/ });
+  const replayBtn = page.getByRole("button", { name: /Replay Tutorial/i });
+  if (await replayBtn.count()) {
+    await replayBtn.click();
+  } else if (await tutorialBtn.count()) {
+    await tutorialBtn.click();
+  } else {
+    await page.getByRole("button", { name: /Tutorial/i }).first().click();
+  }
+  await page.waitForSelector(".rf-tutorial", { timeout: 15000 });
+  await waitRF(page);
+  await page.waitForTimeout(700);
+  await shot(page, `risk-force-mobile-tutorial-welcome${tag}`);
+
+  // 0-based indices into TUTORIAL_STEPS
+  const captures = [
+    [1, "risk-force-mobile-tutorial-select"],
+    [2, "risk-force-mobile-tutorial-sheet"],
+    [3, "risk-force-mobile-tutorial-economy"],
+    [5, "risk-force-mobile-tutorial-base"],
+    [8, "risk-force-mobile-tutorial-army"],
+    [12, "risk-force-mobile-tutorial-endturn"],
+  ];
+  let at = 0;
+  for (const [targetIdx, name] of captures) {
+    while (at < targetIdx) {
+      const next = page.getByRole("button", { name: "Next" });
+      if (!(await next.count())) break;
+      await next.click();
+      at += 1;
+      await page.waitForTimeout(400);
+    }
+    await page.waitForTimeout(350);
+    await shot(page, `${name}${tag}`);
+  }
+}
+
+async function desktopCheck(page) {
+  await bootGame(page);
+  await shot(page, "risk-force-desktop-map");
+  await openOwnedTerritory(page);
+  await page.waitForSelector(".rf-map__territory-drawer", { timeout: 5000 });
+  await shot(page, "risk-force-desktop-territory-sheet");
+  // HUD nav should be visible; dock hidden
+  const dockVisible = await page.locator(".rf-dock").evaluate((el) => {
+    const s = getComputedStyle(el);
+    return s.display !== "none" && s.visibility !== "hidden";
+  });
+  const navCount = await page.locator(".rf-hud__nav--desktop button").count();
+  console.log("desktop dockVisible", dockVisible, "navButtons", navCount);
+  if (dockVisible) throw new Error("dock should be hidden on desktop");
+  if (navCount < 4) throw new Error("desktop HUD nav missing");
+}
+
+// ── iPhone 14 landscape 844×390 ───────────────────────────
+{
+  const context = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    hasTouch: true,
+    isMobile: true,
+    deviceScaleFactor: 1,
+  });
+  const page = await context.newPage();
+  await landscapeSuite(page, "");
+  await tutorialSuite(page, "");
   await context.close();
 }
 
-// ── Landscape Pixel-ish (915×412) smoke ───────────────────
+// ── Pixel-ish landscape 915×412 ───────────────────────────
 {
   const context = await browser.newContext({
     viewport: { width: 915, height: 412 },
     hasTouch: true,
     isMobile: true,
-    deviceScaleFactor: 2.625,
+    deviceScaleFactor: 1,
   });
   const page = await context.newPage();
-  await bootGame(page);
-  await shot(page, "risk-force-mobile-pixel-map");
+  await landscapeSuite(page, "-pixel");
+  await tutorialSuite(page, "-pixel");
   await context.close();
 }
 
-// ── Portrait rotate overlay (iPhone 14 portrait 390×844) ──
+// ── Portrait rotate overlay ───────────────────────────────
 {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     isMobile: true,
-    deviceScaleFactor: 2,
+    deviceScaleFactor: 1,
   });
   const page = await context.newPage();
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}`, { waitUntil: "networkidle" });
   await page.waitForTimeout(400);
-  // Force coarse/touch media for overlay CSS if needed
-  await page.emulateMedia({ media: "screen" });
   await page.waitForSelector(".rf-rotate", { timeout: 8000 });
   await shot(page, "risk-force-mobile-rotate-overlay");
+  await context.close();
+}
+
+// ── Desktop sanity ────────────────────────────────────────
+{
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    deviceScaleFactor: 1,
+  });
+  const page = await context.newPage();
+  await desktopCheck(page);
   await context.close();
 }
 

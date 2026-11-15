@@ -10,6 +10,7 @@ import { canPlaceBuilding } from "../engine/placement";
 import { isUnlocked } from "../engine/research";
 import type { GameState, PlayerState } from "../engine/state";
 import { unitTrainTurns, workerCapForBuilding } from "../engine/training";
+import { Drawer } from "./Drawer";
 import { Sprite } from "./Sprite";
 
 interface BaseViewProps {
@@ -61,6 +62,16 @@ export function BaseView({
   } | null>(null);
   const [tooltip, setTooltip] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [shortLandscape, setShortLandscape] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)",
+    );
+    const sync = () => setShortLandscape(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   if (!tid) {
     return (
@@ -394,17 +405,25 @@ export function BaseView({
           })}
         </div>
 
-        <button
-          type="button"
-          className="ghost rf-base__drawer-toggle"
-          aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen((v) => !v)}
+        {shortLandscape && (
+          <button
+            type="button"
+            className="ghost rf-base__drawer-toggle"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen(true)}
+          >
+            Build · Staff · Train
+          </button>
+        )}
+        <Drawer
+          open={shortLandscape ? drawerOpen : true}
+          onClose={() => setDrawerOpen(false)}
+          side="right"
+          inline={!shortLandscape}
+          className="rf-base__catalog"
+          tutorialId="base-panels"
         >
-          {drawerOpen ? "Hide panels" : "Build · Staff · Train"}
-        </button>
-        <aside
-          className={`rf-base__catalog${drawerOpen ? " is-open" : ""}`}
-        >
+        <div className="rf-base__catalog-inner">
           {owned && selectedInst && (
             <section className="rf-base__staff-panel" title={HELP.workers}>
               <span className="rf-label">Staffing</span>
@@ -414,36 +433,67 @@ export function BaseView({
               <p className="rf-hint">
                 Free workers: {freeWorkers}. Output scales with assigned staff.
               </p>
-              <label className="rf-base__staff-control">
-                Workers
-                <input
-                  type="number"
-                  min={0}
-                  max={workerCapForBuilding(selectedInst.buildingId)}
-                  value={selectedInst.workers ?? 0}
-                  disabled={!canAct || selectedInst.buildRemaining > 0}
-                  onChange={(e) =>
-                    dispatch({
-                      type: "ASSIGN_WORKERS",
-                      payload: {
-                        territoryId: tid,
-                        instanceId: selectedInst.instanceId,
-                        workers: Number(e.target.value),
-                      },
-                    })
-                  }
-                />
-                /{workerCapForBuilding(selectedInst.buildingId)}
-              </label>
+              {(() => {
+                const cap = workerCapForBuilding(selectedInst.buildingId);
+                const cur = selectedInst.workers ?? 0;
+                const locked =
+                  !canAct || selectedInst.buildRemaining > 0;
+                const setWorkers = (next: number) =>
+                  dispatch({
+                    type: "ASSIGN_WORKERS",
+                    payload: {
+                      territoryId: tid,
+                      instanceId: selectedInst.instanceId,
+                      workers: Math.max(0, Math.min(cap, next)),
+                    },
+                  });
+                return (
+                  <div className="rf-base__staff-control">
+                    <span className="rf-label">Workers</span>
+                    <div className="rf-base__stepper" role="group">
+                      <button
+                        type="button"
+                        className="rf-base__stepper-btn"
+                        disabled={locked || cur <= 0}
+                        aria-label="Decrease workers"
+                        onClick={() => setWorkers(cur - 1)}
+                      >
+                        −
+                      </button>
+                      <strong className="rf-base__stepper-value">
+                        {cur}
+                        <span className="rf-text-dim">/{cap}</span>
+                      </strong>
+                      <button
+                        type="button"
+                        className="rf-base__stepper-btn"
+                        disabled={locked || cur >= cap || freeWorkers <= 0}
+                        aria-label="Increase workers"
+                        onClick={() => setWorkers(cur + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </section>
           )}
           {owned && (
-            <section className="rf-base__pop" title={HELP.training}>
+            <section
+              className="rf-base__pop"
+              title={HELP.training}
+              data-tutorial="base-train"
+            >
               <span className="rf-label">Population & Training</span>
-              <p className="rf-hint">
-                Untrained pop: <strong>{ts.population}</strong>. Train locally —
-                advanced units need research.
-              </p>
+              <div className="rf-base__pop-line">
+                <p className="rf-base__pop-count">
+                  Untrained pop:&nbsp;<strong>{ts.population}</strong>
+                </p>
+                <p className="rf-hint">
+                  Train locally — advanced units need research.
+                </p>
+              </div>
               <div className="rf-base__train-row">
                 <button
                   type="button"
@@ -599,7 +649,8 @@ export function BaseView({
             preview, then Confirm). Click a building twice to demolish (HQ
             excluded). Long-press a building for stats.
           </p>
-        </aside>
+        </div>
+        </Drawer>
       </div>
     </div>
   );

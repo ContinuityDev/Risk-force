@@ -1,31 +1,39 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
 import type { GameAction } from "../engine/actions";
 import { computeEnergyLedger } from "../engine/economy";
 import type { GameState, PlayerState, Screen } from "../engine/state";
 import { useLongPress } from "../hooks/useLongPress";
+import { Drawer } from "./Drawer";
 
 interface HudProps {
   state: GameState;
   activePlayer: PlayerState;
   isHumanTurn: boolean;
   dispatch: (action: GameAction) => void;
+  onTutorial?: () => void;
 }
 
 const NAV: { screen: Screen; label: string }[] = [
   { screen: "map", label: "Map" },
   { screen: "base", label: "Base" },
   { screen: "research", label: "Research" },
-  { screen: "invade", label: "Invade" },
+  { screen: "invade", label: "Army" },
   { screen: "save", label: "Save" },
 ];
 
-export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
+export function Hud({
+  state,
+  activePlayer,
+  isHumanTurn,
+  dispatch,
+  onTutorial,
+}: HudProps) {
   const r = activePlayer.resources;
   const color = factionColor(activePlayer.id);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [navOpen, setNavOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [ledgerHeld, setLedgerHeld] = useState(false);
   const ledger = computeEnergyLedger(state, activePlayer.id);
   const netSign = ledger.net >= 0 ? "+" : "−";
@@ -41,6 +49,14 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
     () => setLedgerHeld(true),
     () => setLedgerHeld(false),
   );
+
+  useEffect(() => {
+    if (!state.message) return;
+    const t = window.setTimeout(() => {
+      dispatch({ type: "DISMISS_MESSAGE" });
+    }, 3200);
+    return () => window.clearTimeout(t);
+  }, [state.message, dispatch]);
 
   return (
     <header className="rf-hud">
@@ -61,6 +77,7 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
             ledgerHeld ? " is-held" : ""
           }`}
           title={energyTitle}
+          data-tutorial="hud-energy"
           {...longPress}
         >
           <span className="rf-label">Energy</span>
@@ -96,6 +113,7 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
         <label
           className="rf-resource rf-hud__campaign"
           title={HELP.campaigning}
+          data-tutorial="hud-campaign"
         >
           <span className="rf-label">Campaign</span>
           <input
@@ -116,48 +134,88 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
         </label>
       </div>
 
-      <nav className={`rf-hud__nav${navOpen ? " is-open" : ""}`}>
+      {/* Desktop nav — hidden on short landscape (MobileDock replaces it) */}
+      <nav className="rf-hud__nav rf-hud__nav--desktop">
+        {NAV.map(({ screen, label }) => (
+          <button
+            key={screen}
+            type="button"
+            className={state.screen === screen ? "primary" : "ghost"}
+            disabled={!isHumanTurn && screen !== "map" && screen !== "save"}
+            onClick={() =>
+              dispatch({ type: "SET_SCREEN", payload: { screen } })
+            }
+          >
+            {label}
+          </button>
+        ))}
         <button
           type="button"
-          className="ghost rf-hud__nav-toggle"
-          aria-expanded={navOpen}
-          onClick={() => setNavOpen((v) => !v)}
+          className="ghost"
+          onClick={() => setHelpOpen((v) => !v)}
+          title="Game loop help"
         >
-          Menu
+          Help
         </button>
-        <div className="rf-hud__nav-items">
-          {NAV.map(({ screen, label }) => (
-            <button
-              key={screen}
-              type="button"
-              className={state.screen === screen ? "primary" : "ghost"}
-              disabled={!isHumanTurn && screen !== "map" && screen !== "save"}
-              onClick={() => {
-                setNavOpen(false);
-                dispatch({ type: "SET_SCREEN", payload: { screen } });
-              }}
-            >
-              {label}
-            </button>
-          ))}
+        {onTutorial && (
+          <button type="button" className="ghost" onClick={onTutorial}>
+            Tutorial
+          </button>
+        )}
+        <button
+          type="button"
+          className="primary"
+          disabled={!isHumanTurn || state.phase !== "play"}
+          onClick={() => dispatch({ type: "END_TURN" })}
+        >
+          End Turn
+        </button>
+      </nav>
+
+      {/* Mobile "More" opens a drawer (Save / Help / Tutorial) */}
+      <button
+        type="button"
+        className="ghost rf-hud__more"
+        aria-expanded={moreOpen}
+        onClick={() => setMoreOpen(true)}
+      >
+        More
+      </button>
+
+      <Drawer open={moreOpen} onClose={() => setMoreOpen(false)} side="right">
+        <span className="rf-label">Menu</span>
+        <div className="rf-hud__more-list">
           <button
             type="button"
-            className="ghost"
-            onClick={() => setHelpOpen((v) => !v)}
-            title="Game loop help"
+            onClick={() => {
+              setMoreOpen(false);
+              dispatch({ type: "SET_SCREEN", payload: { screen: "save" } });
+            }}
+          >
+            Save / Load
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMoreOpen(false);
+              setHelpOpen(true);
+            }}
           >
             Help
           </button>
-          <button
-            type="button"
-            className="primary"
-            disabled={!isHumanTurn || state.phase !== "play"}
-            onClick={() => dispatch({ type: "END_TURN" })}
-          >
-            End Turn
-          </button>
+          {onTutorial && (
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                onTutorial();
+              }}
+            >
+              Replay tutorial
+            </button>
+          )}
         </div>
-      </nav>
+      </Drawer>
 
       {helpOpen && (
         <div className="rf-hud__help" role="dialog" aria-label="Game loop help">
@@ -183,7 +241,7 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
       )}
 
       {state.turnLog.length > 0 && (
-        <div className="rf-hud__turnlog" role="status">
+        <div className="rf-hud__turnlog" role="status" data-tutorial="turn-log">
           <span className="rf-label">Turn log</span>
           <ul>
             {state.turnLog.slice(-8).map((line, i) => (
@@ -201,7 +259,7 @@ export function Hud({ state, activePlayer, isHumanTurn, dispatch }: HudProps) {
       )}
 
       {state.message && (
-        <div className="rf-hud__message" role="status">
+        <div className="rf-hud__message rf-hud__toast" role="status">
           <span>{state.message}</span>
           <button
             type="button"
