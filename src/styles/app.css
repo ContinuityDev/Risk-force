@@ -1,0 +1,861 @@
+/* Risk Force — application chrome & screens */
+
+.rf-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.rf-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.rf-main {
+  flex: 1;
+  padding: 0.85rem 1.1rem 1.4rem;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.rf-back {
+  margin: 1rem 1.1rem 0;
+  align-self: flex-start;
+}
+
+.rf-text-dim {
+  color: var(--rf-text-dim);
+}
+
+.rf-hint {
+  font-size: 0.78rem;
+  color: var(--rf-text-faint);
+  margin-top: 0.75rem;
+  line-height: 1.4;
+}
+
+.rf-empty {
+  display: grid;
+  place-items: center;
+  gap: 1rem;
+  min-height: 40vh;
+  color: var(--rf-text-dim);
+}
+
+.rf-view-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: var(--rf-hairline);
+}
+
+.rf-view-header h2 {
+  margin-top: 0.2rem;
+}
+
+.rf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-field input,
+.rf-field select,
+.rf-lobby__names input,
+.rf-invade select {
+  background: var(--rf-panel);
+  border: var(--rf-hairline);
+  border-radius: var(--rf-radius);
+  padding: 0.5rem 0.65rem;
+  outline: none;
+}
+
+.rf-field input:focus,
+.rf-field select:focus,
+.rf-lobby__names input:focus {
+  border-color: var(--rf-accent-dim);
+}
+
+/* ── Motion ─────────────────────────────────────────────── */
+
+@keyframes rf-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rf-pulse-idle {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}
+
+@keyframes rf-flash {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  40% {
+    filter: brightness(1.55);
+  }
+}
+
+@keyframes rf-fade-out {
+  to {
+    opacity: 0.25;
+    filter: grayscale(0.6);
+  }
+}
+
+@keyframes rf-resource-tick {
+  0% {
+    color: var(--rf-accent);
+  }
+  100% {
+    color: var(--rf-brass);
+  }
+}
+
+.rf-fade-in {
+  animation: rf-fade-in 0.45s ease both;
+}
+
+.rf-tick strong {
+  animation: rf-resource-tick 0.6s ease;
+}
+
+.rf-sprite {
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+.rf-sprite--idle {
+  animation: rf-pulse-idle 2.8s ease-in-out infinite;
+}
+
+.rf-sprite--working {
+  animation: rf-pulse-idle 1.4s ease-in-out infinite;
+}
+
+.rf-sprite--firing,
+.rf-sprite--attack {
+  animation: rf-flash 0.28s ease;
+}
+
+.rf-sprite--destroyed {
+  animation: rf-fade-out 0.6s ease forwards;
+}
+
+.rf-sprite--hit {
+  animation: rf-flash 0.2s ease;
+}
+
+.rf-sprite--none,
+.rf-sprite--move {
+  animation: none;
+}
+
+/* ── Menu ───────────────────────────────────────────────── */
+
+.rf-menu {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 2rem 1.25rem;
+}
+
+.rf-menu__atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 35%, rgba(61, 106, 122, 0.22), transparent 60%),
+    linear-gradient(180deg, transparent 40%, rgba(10, 14, 20, 0.85) 100%),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 80px,
+      rgba(36, 48, 65, 0.12) 80px,
+      rgba(36, 48, 65, 0.12) 81px
+    );
+  pointer-events: none;
+}
+
+.rf-menu__content {
+  position: relative;
+  text-align: center;
+  max-width: 36rem;
+}
+
+.rf-menu__eyebrow {
+  margin-bottom: 0.85rem;
+}
+
+.rf-menu__brand {
+  font-family: var(--rf-font-display);
+  font-size: clamp(2.6rem, 8vw, 4.4rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.05;
+  color: var(--rf-text);
+  text-shadow: 0 0 40px rgba(126, 182, 201, 0.12);
+}
+
+.rf-menu__subtitle {
+  margin: 0.85rem 0 2.2rem;
+  color: var(--rf-brass);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.rf-menu__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-width: 16rem;
+  margin: 0 auto;
+}
+
+.rf-menu__actions button {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  letter-spacing: 0.06em;
+}
+
+/* ── Lobby ──────────────────────────────────────────────── */
+
+.rf-lobby {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 3rem;
+}
+
+.rf-lobby__header {
+  margin-bottom: 1.75rem;
+}
+
+.rf-lobby__header h1 {
+  margin: 0.75rem 0 0.35rem;
+}
+
+.rf-lobby__tag {
+  color: var(--rf-text-dim);
+  margin: 0;
+}
+
+.rf-lobby__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.rf-lobby__names {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 1.25rem;
+}
+
+.rf-lobby__lan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: flex-end;
+  margin-bottom: 1.25rem;
+  padding: 0.9rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+}
+
+.rf-lobby__lan .rf-field {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.rf-lobby__status {
+  width: 100%;
+  margin: 0;
+  color: var(--rf-accent);
+  font-size: 0.85rem;
+}
+
+.rf-lobby__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── HUD ────────────────────────────────────────────────── */
+
+.rf-hud {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto minmax(12rem, 1.4fr);
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  padding: 0.65rem 1.1rem;
+  border-bottom: var(--rf-hairline);
+  background: linear-gradient(180deg, rgba(21, 28, 39, 0.95), rgba(15, 20, 28, 0.88));
+  backdrop-filter: blur(6px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.rf-hud__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.rf-hud__identity strong {
+  font-family: var(--rf-font-display);
+  letter-spacing: 0.04em;
+  font-size: 0.95rem;
+}
+
+.rf-hud__ai {
+  font-size: 0.72rem;
+  color: var(--rf-brass);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rf-hud__resources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.15rem;
+  justify-content: center;
+}
+
+.rf-hud__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.rf-hud__nav button {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rf-hud__message {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.65rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  color: var(--rf-text-dim);
+  font-size: 0.85rem;
+}
+
+/* ── World map ──────────────────────────────────────────── */
+
+.rf-map {
+  position: relative;
+}
+
+.rf-map__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: var(--rf-hairline);
+  background: #0a1420;
+}
+
+.rf-map__territory {
+  cursor: pointer;
+  transition: fill-opacity 0.15s ease, stroke 0.15s ease, filter 0.15s ease;
+}
+
+.rf-map__territory:hover {
+  fill-opacity: 0.95;
+  filter: brightness(1.18);
+  stroke: var(--rf-accent);
+}
+
+.rf-map__territory.is-selected {
+  filter: brightness(1.1);
+}
+
+.rf-map__label {
+  fill: rgba(215, 221, 230, 0.88);
+  font-size: 11px;
+  font-family: var(--rf-font-body);
+  letter-spacing: 0.02em;
+  paint-order: stroke;
+  stroke: rgba(10, 14, 20, 0.65);
+  stroke-width: 2.5px;
+}
+
+.rf-map__detail {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 0.9rem;
+  background: rgba(15, 20, 28, 0.92);
+  border: var(--rf-hairline);
+  min-width: 10rem;
+}
+
+/* ── Base ───────────────────────────────────────────────── */
+
+.rf-base__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(14rem, 0.9fr);
+  gap: 1rem;
+}
+
+.rf-base__grid {
+  display: grid;
+  gap: 3px;
+  aspect-ratio: 6 / 5;
+  padding: 0.55rem;
+  border: var(--rf-hairline);
+  background:
+    linear-gradient(145deg, #121a24, #0e151e),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 24px,
+      rgba(36, 48, 65, 0.25) 24px,
+      rgba(36, 48, 65, 0.25) 25px
+    );
+}
+
+.rf-base__cell {
+  position: relative;
+  min-height: 0;
+  padding: 0;
+  background: rgba(26, 35, 48, 0.55);
+  border: 1px solid var(--rf-border-soft);
+  border-radius: 0;
+}
+
+.rf-base__cell.has-building {
+  background: rgba(33, 43, 58, 0.85);
+}
+
+.rf-base__cell.is-target {
+  border-color: var(--rf-danger);
+}
+
+.rf-base__placed {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  position: relative;
+}
+
+.rf-base__progress,
+.rf-base__hp {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  font-size: 0.58rem;
+  line-height: 1;
+  text-align: center;
+  color: var(--rf-accent);
+}
+
+.rf-base__progress {
+  top: 2px;
+}
+
+.rf-base__hp {
+  bottom: 2px;
+  color: var(--rf-text-faint);
+}
+
+.rf-base__catalog {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.75rem;
+  max-height: min(70vh, 560px);
+  overflow: auto;
+}
+
+.rf-base__catalog ul {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-base__catalog li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+}
+
+.rf-base__catalog strong {
+  display: block;
+  font-size: 0.82rem;
+}
+
+.rf-base__catalog small {
+  color: var(--rf-text-faint);
+  font-size: 0.7rem;
+}
+
+/* ── Research ───────────────────────────────────────────── */
+
+.rf-research__branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.rf-research__branch {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.7rem;
+}
+
+.rf-research__branch h3 {
+  font-family: var(--rf-font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rf-brass);
+  margin-bottom: 0.55rem;
+  font-weight: 500;
+}
+
+.rf-research__branch ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-research__branch li button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+}
+
+.rf-research__branch li button.is-done {
+  border-color: var(--rf-ok);
+  color: var(--rf-ok);
+  background: transparent;
+}
+
+.rf-research__name {
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+
+.rf-research__meta {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.72rem;
+  color: var(--rf-text-dim);
+}
+
+.rf-research__unlocks {
+  font-size: 0.68rem;
+  color: var(--rf-text-faint);
+}
+
+/* ── Invade ─────────────────────────────────────────────── */
+
+.rf-invade__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.rf-invade__force {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.75rem;
+}
+
+.rf-invade__force ul {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.rf-invade__force li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--rf-border-soft);
+}
+
+.rf-invade__force li:last-child {
+  border-bottom: none;
+}
+
+.rf-invade__force small {
+  display: block;
+  color: var(--rf-text-faint);
+  font-size: 0.72rem;
+}
+
+.rf-invade__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.rf-invade__stepper button {
+  width: 1.75rem;
+  padding: 0.2rem;
+}
+
+.rf-invade__footer {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Battle ─────────────────────────────────────────────── */
+
+.rf-battle__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(12rem, 0.7fr);
+  gap: 0.85rem;
+  min-height: 360px;
+}
+
+.rf-battle__field {
+  border: var(--rf-hairline);
+  background: #0c121a;
+  display: block;
+  max-height: 420px;
+}
+
+.rf-battle__beam {
+  stroke-width: 1.5;
+  stroke: var(--rf-accent);
+}
+
+.rf-battle__beam--laser {
+  stroke: #7eb6c9;
+}
+
+.rf-battle__beam--rail {
+  stroke: #c4a574;
+  stroke-width: 2;
+}
+
+.rf-battle__beam--orbital {
+  stroke: #b6dce8;
+  stroke-width: 2.5;
+}
+
+.rf-battle__orb {
+  fill: #7eb6c9;
+}
+
+.rf-battle__orb--plasma {
+  fill: #6aaa8a;
+}
+
+.rf-battle__orb--missile,
+.rf-battle__orb--torpedo {
+  fill: #c07070;
+}
+
+.rf-battle__orb--emp {
+  fill: #6a8eb8;
+}
+
+.rf-battle__orb--flak,
+.rf-battle__orb--bolt {
+  fill: #c4a574;
+}
+
+.rf-battle__flash {
+  filter: brightness(1.5);
+}
+
+.rf-battle__fade {
+  opacity: 0.3;
+}
+
+.rf-battle__log {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.65rem;
+  overflow: auto;
+  max-height: 420px;
+}
+
+.rf-battle__log ul {
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--rf-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.rf-battle__result {
+  margin-top: 0.75rem;
+  color: var(--rf-brass);
+  font-family: var(--rf-font-display);
+  letter-spacing: 0.06em;
+  font-size: 0.85rem;
+}
+
+.rf-battle__actions {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.rf-battle__legend {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+/* ── Save ───────────────────────────────────────────────── */
+
+.rf-save {
+  max-width: 40rem;
+}
+
+.rf-save__io {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.rf-save__slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.rf-save__slots li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+}
+
+.rf-save__slots p {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+}
+
+.rf-save__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rf-save__error {
+  color: var(--rf-danger);
+  margin-top: 0.75rem;
+}
+
+/* ── Victory ────────────────────────────────────────────── */
+
+.rf-victory {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background:
+    radial-gradient(ellipse 50% 40% at 50% 30%, rgba(126, 182, 201, 0.12), transparent 65%),
+    var(--rf-void);
+}
+
+.rf-victory__panel {
+  text-align: center;
+  max-width: 28rem;
+}
+
+.rf-victory__panel h1 {
+  font-size: clamp(2.2rem, 6vw, 3.4rem);
+  letter-spacing: 0.16em;
+  margin: 0.6rem 0 1rem;
+}
+
+.rf-victory__winner {
+  margin: 0 0 1.5rem;
+  color: var(--rf-text-dim);
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .rf-hud {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .rf-hud__nav,
+  .rf-hud__resources {
+    justify-content: flex-start;
+  }
+
+  .rf-base__layout,
+  .rf-battle__stage,
+  .rf-invade__row,
+  .rf-lobby__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rf-map__detail {
+    position: static;
+    margin-top: 0.65rem;
+  }
+}

@@ -1,0 +1,162 @@
+/* Risk Force — premium near-future military sci-fi */
+
+:root {
+  /* Surfaces */
+  --rf-void: #0a0e14;
+  --rf-bg: #0f141c;
+  --rf-panel: #151c27;
+  --rf-panel-2: #1a2330;
+  --rf-elevated: #212b3a;
+  --rf-border: #2c3a4d;
+  --rf-border-soft: #243041;
+
+  /* Text */
+  --rf-text: #d7dde6;
+  --rf-text-dim: #8b97a8;
+  --rf-text-faint: #5c6b7e;
+
+  /* Accents — restrained */
+  --rf-accent: #7eb6c9;
+  --rf-accent-dim: #3d6a7a;
+  --rf-brass: #c4a574;
+  --rf-brass-dim: #7a6544;
+  --rf-danger: #c07070;
+  --rf-ok: #6aaa8a;
+  --rf-warn: #c4a574;
+
+  /* Faction (desaturated, classy) */
+  --rf-player: #5a9e82;
+  --rf-faction-a: #b87070;
+  --rf-faction-b: #6a8eb8;
+  --rf-faction-c: #b89a5a;
+
+  /* Typography */
+  --rf-font-display: "Orbitron", "Segoe UI", sans-serif;
+  --rf-font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+
+  /* Spacing / chrome */
+  --rf-radius: 2px;
+  --rf-hairline: 1px solid var(--rf-border);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: var(--rf-bg);
+  color: var(--rf-text);
+  font-family: var(--rf-font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, #1a2838 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, #141c28 0%, transparent 45%),
+    var(--rf-void);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: var(--rf-hairline);
+  background: var(--rf-elevated);
+  color: var(--rf-text);
+  border-radius: var(--rf-radius);
+  padding: 0.45rem 0.85rem;
+  letter-spacing: 0.02em;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--rf-accent-dim);
+  background: #263246;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: linear-gradient(180deg, #2a4554 0%, #1e3340 100%);
+  border-color: var(--rf-accent-dim);
+  color: var(--rf-accent);
+}
+
+button.primary:hover:not(:disabled) {
+  border-color: var(--rf-accent);
+  color: #b6dce8;
+}
+
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--rf-text-dim);
+}
+
+button.ghost:hover:not(:disabled) {
+  color: var(--rf-text);
+  border-color: var(--rf-border);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--rf-font-display);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.65rem;
+  color: var(--rf-text);
+}
+
+h2 {
+  font-size: 1.05rem;
+  color: var(--rf-accent);
+  font-weight: 500;
+}
+
+.rf-panel {
+  background: linear-gradient(165deg, var(--rf-panel-2) 0%, var(--rf-panel) 100%);
+  border: var(--rf-hairline);
+  border-radius: var(--rf-radius);
+}
+
+.rf-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--rf-text-faint);
+}
+
+.rf-resource {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-resource strong {
+  color: var(--rf-brass);
+  font-weight: 600;
+}
