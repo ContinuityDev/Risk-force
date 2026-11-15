@@ -201,13 +201,12 @@ export function layoutUnitMinis(
 
     const lbl = labelById[t.id];
     const baseX = lbl?.x ?? ax;
-    // Sit just below-left of the label (same vertical band as buildings, shifted
-    // left) so deep-zoom cameras that frame the label keep units on-screen.
-    // Keep a clear gap left of the label so deep multi-icon grids don't
-    // collide with the label box and fall through to a lone compact chip.
-    const sideX = lbl
-      ? lbl.x - size * (tier === "deep" ? 2.4 : 1.35)
-      : ax - size;
+    // Mid icons are large in world units (~6wu); deep grids are wide.
+    // Keep the whole multi-icon lane clear left of the label so we don't
+    // fall through to a lone compact chip on dense cores.
+    const laneOffset =
+      tier === "deep" ? size * 2.6 : tier === "mid" ? size * 3.1 : size * 1.2;
+    const sideX = lbl ? lbl.x - laneOffset : ax - size;
     const sideY = lbl
       ? lbl.y + lbl.h / 2 + gap + size / 2
       : ay + size * 0.9;
@@ -271,8 +270,10 @@ export function layoutUnitMinis(
     let placed = false;
     for (let ai = 0; ai < anchors.length; ai++) {
       const { cx, cy } = anchors[ai]!;
-      // First two anchors are the dedicated unit lane — ignore building boxes
-      const blockers = ai < 2 ? labelBoxes : occupied;
+      // Dedicated left/above-left unit lane: ignore building + label boxes.
+      // Labels are often wider than the glyph (padding) and would otherwise
+      // veto every mid/deep multi-icon grid next to dense cores.
+      const blockers = ai < 2 ? [] : occupied;
       const slots = gridSlots(slotCount, cols, size, gap, cx, cy);
       const trial: PlacedUnitMini[] = [];
       const trialBoxes: Box[] = [];
