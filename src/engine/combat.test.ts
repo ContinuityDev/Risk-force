@@ -6,11 +6,11 @@ import { getTerritory } from "../data/map/territories";
 import { createInitialState } from "./init";
 import {
   applyBattleResult,
-  confirmCaptureOccupation,
   createBattle,
   tickBattle,
 } from "./combat";
 import { tickArmiesForPlayer } from "./movement";
+import { resolveCaptureDisposition } from "./occupation";
 import { reduce } from "./reducer";
 
 describe("combat matrix", () => {
@@ -106,16 +106,17 @@ describe("battle simulation", () => {
     state = { ...state, battle, phase: "battle" };
     state = applyBattleResult(state);
     expect(state.territories[enemy]!.owner).toBe("player");
-    expect(state.territories[enemy]!.buildings.length).toBe(0);
     expect(state.battle).toBeNull();
-    // Human attacker gets capture occupation screen
+    // Human attacker gets capture occupation screen (raze/keep)
     expect(state.phase).toBe("capture");
     expect(state.pendingCapture).toBeTruthy();
     const total =
       state.pendingCapture!.survivors.reduce((s, x) => s + x.count, 0) || 0;
-    state = confirmCaptureOccupation(state, total);
+    state = resolveCaptureDisposition(state, "raze", total);
     expect(state.phase).toBe("play");
     expect(state.pendingCapture).toBeNull();
+    expect(state.territories[enemy]!.buildings.length).toBe(0);
+    expect(state.territories[enemy]!.control).toBe("occupied");
   });
 
   it("all spawned units and buildings lie on the ground plane", () => {

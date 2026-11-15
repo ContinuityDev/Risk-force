@@ -3,6 +3,7 @@ import { GAME_LOOP, HELP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
 import { getUnit } from "../data/units";
 import type { GameAction } from "../engine/actions";
+import type { CaptureDisposition } from "../engine/occupation";
 import type { GameState } from "../engine/state";
 
 interface CaptureViewProps {
@@ -22,6 +23,7 @@ export function CaptureView({ state, dispatch }: CaptureViewProps) {
       Math.round(total * GAME_LOOP.capture.defaultOccupyFraction),
     ),
   );
+  const [disposition, setDisposition] = useState<CaptureDisposition>("keep");
 
   if (!pending) {
     return (
@@ -47,6 +49,8 @@ export function CaptureView({ state, dispatch }: CaptureViewProps) {
     /* */
   }
 
+  const buildingCount = pending.buildings?.length ?? 0;
+
   return (
     <div className="rf-capture rf-fade-in">
       <header className="rf-view-header">
@@ -54,13 +58,40 @@ export function CaptureView({ state, dispatch }: CaptureViewProps) {
           <span className="rf-label">Occupation</span>
           <h2>Secure {name}</h2>
           <p className="rf-text-dim" title={HELP.invasion}>
-            Structures razed. Local population {pending.population}. Choose how
-            many survivors garrison the new plot — the rest return home.
+            Captured land is occupied (reduced output) until stabilized. Choose
+            Raze or Keep, then how many survivors garrison — the rest return
+            home.
           </p>
         </div>
       </header>
 
       <div className="rf-capture__panel">
+        <div className="rf-capture__disposition" role="group" aria-label="Disposition">
+          <button
+            type="button"
+            className={disposition === "raze" ? "primary" : undefined}
+            onClick={() => setDisposition("raze")}
+          >
+            Raze
+            <small>
+              +{GAME_LOOP.occupation.razeEnergyBonus} energy · wipe buildings ·
+              pop penalty
+            </small>
+          </button>
+          <button
+            type="button"
+            className={disposition === "keep" ? "primary" : undefined}
+            onClick={() => setDisposition("keep")}
+          >
+            Keep
+            <small>
+              {buildingCount} structures at{" "}
+              {Math.round(GAME_LOOP.occupation.keepBuildingHpMult * 100)}% HP
+              (repair needed)
+            </small>
+          </button>
+        </div>
+
         <ul className="rf-capture__force">
           {pending.survivors.map((s) => {
             let label = s.unitId;
@@ -94,11 +125,11 @@ export function CaptureView({ state, dispatch }: CaptureViewProps) {
           onClick={() =>
             dispatch({
               type: "CONFIRM_CAPTURE",
-              payload: { occupyCount: occupy },
+              payload: { occupyCount: occupy, disposition },
             })
           }
         >
-          Confirm Occupation
+          Confirm {disposition === "raze" ? "Raze" : "Keep"}
         </button>
       </div>
     </div>

@@ -878,7 +878,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         {(unitMinis.length > 0 || transitMinis.length > 0) && (
           <g className="rf-map__units">
             {[...unitMinis, ...transitMinis].map((m) => {
-              const col = factionColor(m.owner ?? "neutral");
+              const col = factionColor((m.owner ?? "neutral") as import("../data/types").FactionId);
               const half = m.size / 2;
               const strokeW = Math.max(0.35, 0.85 * zoomScale);
               if (m.more != null) {

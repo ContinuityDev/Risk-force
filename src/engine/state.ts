@@ -51,12 +51,21 @@ export interface TerritoryState {
   movedThisTurn?: boolean;
 }
 
+/** Active multi-turn research job (1–N turns). */
+export interface ResearchJob {
+  nodeId: string;
+  turnsRemaining: number;
+  totalTurns: number;
+}
+
 export interface PlayerState {
   id: FactionId;
   kind: "human" | "ai";
   displayName: string;
   resources: Record<ResourceId, number>;
   researched: string[];
+  /** In-progress research — completes via tickResearch. */
+  researchJob: ResearchJob | null;
   /**
    * Global staging pool (legacy / overflow). Prefer territorial garrisons.
    * Still used as a soft buffer when capturing / demobilizing.
@@ -91,6 +100,9 @@ export interface PendingCapture {
   /** Population left on the plot after capture retain. */
   population: number;
   workers: number;
+  /** Buildings surviving the battle (for Keep disposition). */
+  buildings: PlacedBuilding[];
+  supplyStock: number;
 }
 
 /** Snapshot of AI invasion intent for UI / tests. */
@@ -195,6 +207,13 @@ export interface BattleState {
   elapsed: number;
   status: "running" | "attacker_win" | "defender_win" | "retreated";
   log: string[];
+  /** Snapshot combat modifiers at battle start. */
+  mods: {
+    terrainDealt: number;
+    defenderIncoming: number;
+    attackerFrontage: number;
+    defenderFrontage: number;
+  };
 }
 
 export type Screen =

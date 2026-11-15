@@ -61,7 +61,38 @@ export type GameAction =
         force: StrikeForceSlot[];
       };
     }
-  | { type: "CONFIRM_CAPTURE"; payload: { occupyCount: number } }
+  | {
+      type: "CONFIRM_CAPTURE";
+      payload: {
+        occupyCount: number;
+        disposition?: "raze" | "keep";
+      };
+    }
+  | {
+      type: "STABILIZE_TERRITORY";
+      payload: { territoryId: string };
+    }
+  | {
+      type: "MARKET_TRADE";
+      payload: {
+        from: import("../data/types").ResourceId;
+        to: import("../data/types").ResourceId;
+        amount: number;
+      };
+    }
+  | {
+      type: "DISBAND_UNITS";
+      payload: { territoryId: string; unitId: string; count: number };
+    }
+  | {
+      type: "ORDER_ROUTE";
+      payload: {
+        fromId: string;
+        toId: string;
+        force: StrikeForceSlot[];
+        path: string[];
+      };
+    }
   | { type: "SET_AI_ATTACK_PLANS"; payload: { plans: AiAttackPlan[] } }
   | { type: "APPEND_TURN_LOG"; payload: { lines: string[] } }
   | {

@@ -9,6 +9,7 @@ import { SEA_ROUTES } from "../data/map/earthPaths";
 import { getTerritory } from "../data/map/territories";
 import { getUnit } from "../data/units";
 import { createBattle } from "./combat";
+import { travelBiomeMult } from "./combatMods";
 import {
   mergeIntoGarrison,
   normalizeForce,
@@ -96,6 +97,7 @@ export function travelTurns(
   if (isSeaLink(fromId, toId)) {
     turns = Math.ceil(turns * GAME_LOOP.movement.seaMultiplier);
   }
+  turns = Math.ceil(turns * travelBiomeMult(toId));
   return Math.max(1, Math.min(GAME_LOOP.movement.maxTurns, turns));
 }
 

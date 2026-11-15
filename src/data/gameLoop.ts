@@ -140,18 +140,18 @@ export const GAME_LOOP = {
    * workers grant no staffing/build bonuses while insolvent.
    */
   upkeep: {
-    perWorker: 1,
+    perWorker: 0.75,
     byRole: {
-      infantry: 1,
-      armor: 3,
-      air: 4,
-      artillery: 3,
-      naval: 4,
-      orbital: 6,
-      cyber: 2,
+      infantry: 0.85,
+      armor: 2.5,
+      air: 3.5,
+      artillery: 2.5,
+      naval: 3.5,
+      orbital: 5,
+      cyber: 1.75,
     },
     insolvencyThreshold: 0,
-    desertFraction: 0.15,
+    desertFraction: 0.12,
   },
 
   /** Strategic map movement (centroid distance in SVG px). */

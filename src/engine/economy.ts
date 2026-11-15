@@ -8,6 +8,8 @@ import {
 import type { GameState, PlayerState } from "./state";
 import { emptyResources } from "./state";
 import { healGarrison } from "./garrisonHp";
+import { applySupplyAttrition } from "./logistics";
+import { tickOccupation } from "./occupation";
 import { staffingMultiplier, workerCapForBuilding } from "./training";
 import { applyEnergyUpkeep, computeEnergyUpkeep } from "./upkeep";
 import { hasResearched } from "./research";
@@ -27,13 +29,23 @@ export function computeIncome(
   }
   for (const ts of Object.values(state.territories)) {
     if (ts.owner !== playerId) continue;
+    const occMult = ts.control === "occupied"
+      ? GAME_LOOP.occupation.occupiedOutputMult
+      : 1;
     for (const b of ts.buildings) {
       if (b.buildRemaining > 0 || b.hp <= 0) continue;
       const def = getBuilding(b.buildingId);
       if (!def.output) continue;
       const cap = workerCapForBuilding(b.buildingId);
-      const mult = staffingMultiplier(b.workers ?? 0, cap);
+      const mult = staffingMultiplier(b.workers ?? 0, cap) * occMult;
       for (const [k, v] of Object.entries(def.output) as [ResourceId, number][]) {
+        // Depot / logistics supply feeds local stock only — not global income.
+        if (
+          k === "supply" &&
+          (b.buildingId === "supply_depot" || b.buildingId === "logistics_hub")
+        ) {
+          continue;
+        }
         income[k] += v * mult;
       }
     }
@@ -155,7 +167,7 @@ export function applyEconomyTick(state: GameState, playerId: string): GameState 
       return b;
     });
     const supplyStock = Math.min(200, ts.supplyStock + Math.floor(stockGain));
-    let nextTs = {
+    let nextTs: typeof ts = {
       ...ts,
       buildings,
       supplyStock,
@@ -187,17 +199,32 @@ export function applyEconomyTick(state: GameState, playerId: string): GameState 
   }
 
   cur = { ...cur, territories };
-  const paid = applyEnergyUpkeep(cur, playerId);
-  const log = [...(cur.turnLog ?? [])];
-  if (paid.insolvent) {
+  let afterOcc = tickOccupation(cur.territories, playerId);
+  const attrition = applySupplyAttrition(
+    { ...cur, territories: afterOcc },
+    playerId,
+  );
+  afterOcc = attrition.territories;
+
+  const paid = applyEnergyUpkeep({ ...cur, territories: afterOcc }, playerId);
+  const flooredPlayer = {
+    ...paid.player,
+    resources: {
+      ...paid.player.resources,
+      energy: Math.max(0, paid.player.resources.energy),
+    },
+  };
+
+  const log = [...(cur.turnLog ?? []), ...attrition.lines];
+  if (paid.insolvent || flooredPlayer.insolvent) {
     log.push(
-      `${paid.player.displayName} insolvent (−${paid.upkeep} energy upkeep)` +
+      `${flooredPlayer.displayName} insolvent (−${paid.upkeep} energy upkeep)` +
         (paid.deserted ? ` · ${paid.deserted} deserted` : ""),
     );
   }
   if (cont.held.length) {
     log.push(
-      `${paid.player.displayName} holds ${cont.held.join(", ")} (+E${cont.energy} A${cont.alloy}).`,
+      `${flooredPlayer.displayName} holds ${cont.held.join(", ")} (+E${cont.energy} A${cont.alloy}).`,
     );
   }
 
@@ -205,7 +232,7 @@ export function applyEconomyTick(state: GameState, playerId: string): GameState 
     ...cur,
     players: {
       ...cur.players,
-      [playerId]: paid.player,
+      [playerId]: flooredPlayer,
     },
     territories: paid.territories,
     turnLog: log,

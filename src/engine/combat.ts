@@ -21,6 +21,12 @@ import type {
   StrikeForceSlot,
 } from "./state";
 import {
+  averageFrontageEfficiency,
+  defenderIncomingMult,
+  forceHeadcount,
+  terrainDamageDealtMult,
+} from "./combatMods";
+import {
   damageScaleFromHp,
   ensureTerritoryHp,
   forceFromBattleUnits,
@@ -28,6 +34,10 @@ import {
   normalizeForce,
   syncHpArray,
 } from "./garrisonHp";
+import {
+  aiCaptureDisposition,
+  resolveCaptureDisposition,
+} from "./occupation";
 import { checkEliminationsAndVictory } from "./victory";
 
 function dist(ax: number, ay: number, bx: number, by: number): number {
@@ -219,6 +229,15 @@ export function createBattle(
   const defUnitCount = units.filter((u) => u.side === "defender").length;
   const defCount = defenses.filter((d) => getBuilding(d.buildingId).damage)
     .length;
+  const mods = {
+    terrainDealt: terrainDamageDealtMult(territoryId),
+    defenderIncoming: defenderIncomingMult(
+      { ...state, territories: { ...state.territories, [territoryId]: ts } },
+      territoryId,
+    ),
+    attackerFrontage: averageFrontageEfficiency(forceHeadcount(normalized)),
+    defenderFrontage: averageFrontageEfficiency(defUnitCount),
+  };
 
   return {
     territoryId,
@@ -233,6 +252,7 @@ export function createBattle(
     time: 0,
     elapsed: 0,
     status: "running",
+    mods,
     log: [
       `Assault on ${territoryId} initiated.`,
       `Strike force: ${atkCount} · Garrison: ${defUnitCount} · Turrets: ${defCount}.`,
@@ -460,6 +480,18 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
     next = { ...next, facing: stepFacing(next.facing, aim, dt) };
     if (next.cooldown <= 0 && d <= weaponRange * 1.02) {
       const hpScale = damageScaleFromHp(next.hp, next.maxHp);
+      const mods = battle.mods ?? {
+        terrainDealt: 1,
+        defenderIncoming: 1,
+        attackerFrontage: 1,
+        defenderFrontage: 1,
+      };
+      const sideFrontage =
+        u.side === "attacker" ? mods.attackerFrontage : mods.defenderFrontage;
+      let scale = hpScale * mods.terrainDealt * sideFrontage;
+      if (target.kind === "defense" || target.kind === "unit") {
+        if (u.side === "attacker") scale *= mods.defenderIncoming;
+      }
       if (target.kind === "defense") {
         const bdef = getBuilding(target.ref.buildingId);
         const dmg = effectiveDamage(
@@ -467,7 +499,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
           udef.damageType,
           bdef.armorType,
           udef.armorPierce,
-          hpScale,
+          scale,
         );
         projectiles.push(
           spawnProjectile(
@@ -490,7 +522,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
           udef.damageType,
           foeDef.armorType,
           udef.armorPierce,
-          hpScale,
+          scale,
         );
         projectiles.push(
           spawnProjectile(
@@ -786,12 +818,14 @@ export function applyBattleResult(state: GameState): GameState {
       Math.floor(ts.population * GAME_LOOP.population.captureRetain),
     );
     const workers = Math.floor(ts.workers * 0.35);
+    const stock = Math.floor(ts.supplyStock * 0.2);
+    // Hold ownership; disposition (raze/keep) decided on capture screen.
     territories = {
       ...territories,
       [tid]: {
         owner: battle.attacker,
-        buildings: [],
-        supplyStock: Math.floor(ts.supplyStock * 0.2),
+        buildings,
+        supplyStock: stock,
         population: pop,
         workers,
         garrison: {},
@@ -811,17 +845,21 @@ export function applyBattleResult(state: GameState): GameState {
       survivors: atkSurvivors,
       population: pop,
       workers,
+      buildings,
+      supplyStock: stock,
     };
     const attacker = state.players[battle.attacker];
     // AI auto-occupies; humans get a capture screen
     if (attacker?.kind === "ai" || total === 0) {
-      const occupied = confirmCaptureOccupation(
+      const disposition = aiCaptureDisposition(pending, buildings.length);
+      const occupied = resolveCaptureDisposition(
         {
           ...state,
           territories,
           battle: null,
           pendingCapture: pending,
         },
+        disposition,
         total,
       );
       return checkEliminationsAndVictory(occupied, previousOwner);

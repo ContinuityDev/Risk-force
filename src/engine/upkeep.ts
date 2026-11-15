@@ -87,8 +87,10 @@ export function applyEnergyUpkeep(
 ): UpkeepResult {
   const player = state.players[playerId]!;
   const upkeep = computeEnergyUpkeep(state, playerId);
-  let energy = player.resources.energy - upkeep;
-  const insolvent = energy < GAME_LOOP.upkeep.insolvencyThreshold;
+  // Floor at 0 — insolvency triggers, but no infinite debt spiral.
+  let energy = Math.max(0, player.resources.energy - upkeep);
+  const insolvent =
+    player.resources.energy - upkeep < GAME_LOOP.upkeep.insolvencyThreshold;
   let deserted = 0;
   const territories = { ...state.territories };
 

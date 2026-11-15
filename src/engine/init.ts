@@ -36,6 +36,7 @@ function makePlayer(
             "siege_protocols",
           ]
         : ["infantry_doctrine", "mech_corps"],
+    researchJob: null,
     reserves: {},
     campaignBudget:
       kind === "human"

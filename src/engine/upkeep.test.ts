@@ -55,7 +55,8 @@ describe("energy upkeep", () => {
     );
     state = applyEconomyTick(state, "player");
     expect(state.players.player!.insolvent).toBe(true);
-    expect(state.players.player!.resources.energy).toBeLessThan(0);
+    // Energy floors at 0 — no infinite debt spiral
+    expect(state.players.player!.resources.energy).toBe(0);
     const after = Object.values(state.territories[tid]!.garrison).reduce(
       (a, b) => a + b,
       0,

@@ -41,6 +41,41 @@ export function canQueueWorker(
   return { ok: true };
 }
 
+/** Territory has a completed building that lists this unit in `produces`. */
+export function hasProducerBuilding(
+  ts: TerritoryState,
+  unitId: string,
+): boolean {
+  return ts.buildings.some((b) => {
+    if (b.buildRemaining > 0 || b.hp <= 0) return false;
+    try {
+      const def = getBuilding(b.buildingId);
+      return !!def.produces?.includes(unitId);
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function unitTrainCost(
+  unitId: string,
+  count: number,
+): {
+  energy: number;
+  alloy: number;
+  supply: number;
+  research: number;
+} {
+  const cfg = GAME_LOOP.training.unit;
+  const def = getUnit(unitId);
+  return {
+    energy: Math.ceil(def.cost.energy * cfg.energyMult) * count,
+    alloy: Math.ceil((def.cost.alloy ?? 0) * cfg.alloyMult) * count,
+    supply: Math.ceil((def.cost.supply ?? 0) * count),
+    research: Math.ceil((def.cost.research ?? 0) * count),
+  };
+}
+
 export function canQueueUnit(
   player: PlayerState,
   ts: TerritoryState,
@@ -50,6 +85,12 @@ export function canQueueUnit(
   if (count < 1) return { ok: false, reason: "Invalid count." };
   if (unitId !== GAME_LOOP.training.basicUnitId && !isUnlocked(player, unitId)) {
     return { ok: false, reason: "Unit locked — research required." };
+  }
+  if (!hasProducerBuilding(ts, unitId)) {
+    return {
+      ok: false,
+      reason: "Need a completed training building that produces this unit.",
+    };
   }
   const cfg = GAME_LOOP.training.unit;
   if (ts.population < cfg.popCost * count) {
@@ -61,10 +102,8 @@ export function canQueueUnit(
   } catch {
     return { ok: false, reason: "Unknown unit." };
   }
-  const cost = {
-    energy: Math.ceil(def.cost.energy * cfg.energyMult) * count,
-    alloy: Math.ceil((def.cost.alloy ?? 0) * cfg.alloyMult) * count,
-  };
+  void def;
+  const cost = unitTrainCost(unitId, count);
   if (!canAfford(player, cost)) return { ok: false, reason: "Insufficient resources." };
   return { ok: true };
 }
@@ -119,11 +158,8 @@ export function enqueueUnit(
   const check = canQueueUnit(player, ts, unitId, count);
   if (!check.ok) return null;
   const cfg = GAME_LOOP.training.unit;
-  const def = getUnit(unitId);
-  const spent = spend(player, {
-    energy: Math.ceil(def.cost.energy * cfg.energyMult) * count,
-    alloy: Math.ceil((def.cost.alloy ?? 0) * cfg.alloyMult) * count,
-  });
+  const cost = unitTrainCost(unitId, count);
+  const spent = spend(player, cost);
   const job: TrainingJob = {
     id: `tru-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     kind: "unit",
