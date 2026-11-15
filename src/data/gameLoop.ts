@@ -174,7 +174,7 @@ export const HELP = {
   invasion:
     "Attack from an adjacent territory using its garrison. You fight both enemy buildings and units stationed there. Capturing wipes buildings — you get bare land and a reduced local population. After a win, choose how many survivors occupy the new plot.",
   ai:
-    "AI factions defend borders, pick weak targets, and may open flanking fronts based on personality. Turns are sequential: you act, then each AI in order.",
+    "AI factions build real economies (reactors, refineries, staffing, research, training) with no free spawns, then defend borders and strike weak flanks. Their turns resolve instantly — the Orbital Wire summarizes what happened.",
   upkeep:
     "Units and workers cost energy every turn. If energy goes negative you are insolvent: production stops, workers idle, and some garrison units desert until you recover.",
   movement:

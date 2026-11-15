@@ -187,6 +187,24 @@ export type Screen =
   | "save"
   | "victory";
 
+/** Classy future-newsfeed entry for the turn report. */
+export interface NewsItem {
+  id: string;
+  turn: number;
+  category:
+    | "battle"
+    | "territory"
+    | "research"
+    | "build"
+    | "movement"
+    | "economy"
+    | "general";
+  headline: string;
+  body: string;
+  factionId?: FactionId;
+  timestamp: number;
+}
+
 export interface GameState {
   version: 1;
   seed: number;
@@ -213,6 +231,12 @@ export interface GameState {
   turnLog: string[];
   /** Diplomacy hook — unused in combat until a future pass. */
   relations: RelationsTable;
+  /** Chronological theater news (newest last). */
+  newsFeed: NewsItem[];
+  /** Unread news count for the HUD badge. */
+  newsUnread: number;
+  /** Auto-shown digest after an AI phase (null when dismissed). */
+  newsDigest: NewsItem[] | null;
 }
 
 export function emptyResources(): Record<ResourceId, number> {

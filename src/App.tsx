@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import type { NewGamePayload } from "./engine/actions";
 import { planAiTurn } from "./engine/ai";
 import { describeAiAction } from "./engine/aiLog";
+import {
+  digestHeadline,
+  newsFromAiAction,
+  newsFromBattleResult,
+} from "./engine/news";
 import { createMenuState } from "./engine/reducer";
+import type { NewsItem } from "./engine/state";
 import { useGame } from "./hooks/useGame";
 import { useLandscapeLock } from "./hooks/useLandscapeLock";
 import { createLanTransport } from "./net/lanTransport";
@@ -28,6 +34,7 @@ import { InvadeView } from "./components/InvadeView";
 import { LobbyScreen } from "./components/LobbyScreen";
 import { MenuScreen } from "./components/MenuScreen";
 import { MobileDock } from "./components/MobileDock";
+import { NewsFeed } from "./components/NewsFeed";
 import { ResearchView } from "./components/ResearchView";
 import { RotateOverlay } from "./components/RotateOverlay";
 import { SaveScreen } from "./components/SaveScreen";
@@ -60,10 +67,19 @@ export default function App() {
   const [canReplayTutorial, setCanReplayTutorial] = useState(() =>
     hasCompletedTutorial() || hasTutorialProgress(),
   );
+  const [newsOpen, setNewsOpen] = useState(false);
+  const [digestOpen, setDigestOpen] = useState(false);
   const aiBusy = useRef(false);
   const { requestLandscape } = useLandscapeLock();
 
   const { state, dispatch, activePlayer, isHumanTurn } = useGame(transport);
+
+  // Auto-open digest when AI phase posts news
+  useEffect(() => {
+    if (state.newsDigest && state.newsDigest.length > 0) {
+      setDigestOpen(true);
+    }
+  }, [state.newsDigest]);
 
   function startTutorial(fromResume = false) {
     const progress = fromResume ? loadTutorialProgress() : null;
@@ -227,7 +243,7 @@ export default function App() {
     }
   }
 
-  // AI turn loop — dispatch planAiTurn actions with short delays.
+  // AI turns resolve instantly; battles fast-forward; news digest at the end.
   useEffect(() => {
     if (!campaignActive) return;
     if (state.phase !== "play") return;
@@ -239,48 +255,94 @@ export default function App() {
     if (aiBusy.current) return;
     aiBusy.current = true;
 
-    let cancelled = false;
-    const actions = planAiTurn(transport.getState());
-    let i = 0;
+    const batch: NewsItem[] = [];
+    let guard = 0;
 
-    const step = () => {
-      if (cancelled) return;
+    while (guard++ < 40) {
       const snap = transport.getState();
-      if (snap.phase === "battle" || snap.screen === "battle") {
-        aiBusy.current = false;
-        return;
-      }
+      if (snap.phase !== "play") break;
       const pid = snap.playerOrder[snap.activePlayerIndex];
       const player = pid ? snap.players[pid] : undefined;
-      if (!player || player.kind !== "ai") {
-        aiBusy.current = false;
-        return;
-      }
-      if (i >= actions.length) {
-        aiBusy.current = false;
-        return;
-      }
-      const action = actions[i++]!;
-      const label = describeAiAction(player.displayName, action);
-      if (label) {
-        transport.dispatch({
-          type: "APPEND_TURN_LOG",
-          payload: { lines: [label] },
-        });
-      }
-      transport.dispatch(action);
-      if (action.type === "START_INVASION" || action.type === "END_TURN") {
-        aiBusy.current = false;
-        return;
-      }
-      window.setTimeout(step, 280);
-    };
+      if (!player || player.kind !== "ai") break;
 
-    const timer = window.setTimeout(step, 420);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
+      const actions = planAiTurn(snap);
+      let ended = false;
+      for (const action of actions) {
+        const label = describeAiAction(player.displayName, action);
+        if (label) {
+          transport.dispatch({
+            type: "APPEND_TURN_LOG",
+            payload: { lines: [label] },
+          });
+        }
+        const news = newsFromAiAction(
+          snap.turn,
+          pid!,
+          player.displayName,
+          action,
+          snap,
+        );
+        if (news) batch.push(news);
+
+        if (action.type === "START_INVASION") {
+          const before = transport.getState();
+          const prevOwner =
+            before.territories[action.payload.toId]?.owner ?? "faction_a";
+          transport.dispatch(action);
+          // Instant resolve — no player-facing battle UI for AI fights
+          let s = transport.getState();
+          let ticks = 0;
+          while (s.battle?.status === "running" && ticks++ < 400) {
+            transport.dispatch({
+              type: "BATTLE_TICK",
+              payload: { dt: 0.4 },
+            });
+            s = transport.getState();
+          }
+          if (s.battle && s.battle.status !== "running") {
+            const captured = s.battle.status === "attacker_win";
+            batch.push(
+              newsFromBattleResult(
+                s.turn,
+                s.battle,
+                prevOwner,
+                captured,
+              ),
+            );
+            transport.dispatch({ type: "RESOLVE_BATTLE" });
+          }
+          // AI still active after auto-occupy — continue outer loop to END_TURN
+          break;
+        }
+
+        transport.dispatch(action);
+        if (action.type === "END_TURN") {
+          ended = true;
+          break;
+        }
+      }
+      if (!ended) {
+        // Invasion path: force end-turn if still AI after resolve
+        const after = transport.getState();
+        const ap = after.players[after.playerOrder[after.activePlayerIndex]!];
+        if (ap?.kind === "ai" && after.phase === "play") {
+          transport.dispatch({ type: "END_TURN" });
+        }
+      }
+    }
+
+    if (batch.length) {
+      transport.dispatch({
+        type: "APPEND_NEWS",
+        payload: { items: batch, showDigest: true },
+      });
+      transport.dispatch({
+        type: "APPEND_TURN_LOG",
+        payload: { lines: [digestHeadline(batch)] },
+      });
+    }
+
+    aiBusy.current = false;
   }, [
     campaignActive,
     state.turn,
@@ -442,6 +504,10 @@ export default function App() {
             setTutorialStep(0);
             setTutorialActive(true);
           }}
+          onOpenNews={() => {
+            setNewsOpen(true);
+            dispatch({ type: "MARK_NEWS_READ" });
+          }}
         />
         <main className="rf-main">
           {state.screen === "map" && (
@@ -492,6 +558,21 @@ export default function App() {
             dispatch={dispatch}
             onStep={setTutorialStep}
             onClose={closeTutorial}
+          />
+        )}
+        {digestOpen && state.newsDigest && (
+          <NewsFeed
+            state={state}
+            dispatch={dispatch}
+            digest
+            onClose={() => setDigestOpen(false)}
+          />
+        )}
+        {newsOpen && (
+          <NewsFeed
+            state={state}
+            dispatch={dispatch}
+            onClose={() => setNewsOpen(false)}
           />
         )}
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { BUILDING_LIST, getBuilding } from "../data/buildings";
+import { buildingBlurb } from "../data/buildings/blurb";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
@@ -331,18 +332,7 @@ export function BaseView({
                   : def.output
                     ? "working"
                     : "idle";
-            const tip = [
-              def.name,
-              `${def.size.w}×${def.size.h}`,
-              def.output
-                ? `Out E${def.output.energy ?? 0} A${def.output.alloy ?? 0}`
-                : null,
-              def.damage ? `Dmg ${def.damage}` : null,
-              `HP ${Math.ceil(inst.hp)}/${def.maxHp}`,
-              `Staff ${inst.workers ?? 0}/${workerCapForBuilding(inst.buildingId)}`,
-            ]
-              .filter(Boolean)
-              .join(" · ");
+            const tip = buildingBlurb(def);
             return (
               <div
                 key={inst.instanceId}
@@ -425,10 +415,17 @@ export function BaseView({
         >
         <div className="rf-base__catalog-inner">
           {owned && selectedInst && (
-            <section className="rf-base__staff-panel" title={HELP.workers}>
+            <section
+              className="rf-base__staff-panel"
+              title={HELP.workers}
+              data-tutorial="base-desc"
+            >
               <span className="rf-label">Staffing</span>
               <p>
                 <strong>{getBuilding(selectedInst.buildingId).name}</strong>
+              </p>
+              <p className="rf-base__blurb">
+                {buildingBlurb(getBuilding(selectedInst.buildingId))}
               </p>
               <p className="rf-hint">
                 Free workers: {freeWorkers}. Output scales with assigned staff.
@@ -599,7 +596,7 @@ export function BaseView({
             </section>
           )}
           <span className="rf-label">Structures</span>
-          <ul>
+          <ul data-tutorial="base-build-menu">
             {catalog.map((b) => {
               const unlocked = isUnlocked(activePlayer, b.id);
               const affordable = canAfford(activePlayer, b.cost);
@@ -612,14 +609,14 @@ export function BaseView({
                 !unlocked ||
                 !affordable ||
                 coastalBlocked;
+              const selected = selectedBuilding === b.id;
               return (
                 <li key={b.id}>
                   <button
                     type="button"
-                    className={
-                      selectedBuilding === b.id ? "primary" : undefined
-                    }
+                    className={selected ? "primary" : undefined}
                     disabled={disabled}
+                    title={buildingBlurb(b)}
                     onClick={() =>
                       setSelectedBuilding((cur) =>
                         cur === b.id ? null : b.id,
@@ -640,6 +637,11 @@ export function BaseView({
                       </small>
                     </span>
                   </button>
+                  {selected && (
+                    <p className="rf-base__blurb rf-base__blurb--menu">
+                      {buildingBlurb(b)}
+                    </p>
+                  )}
                 </li>
               );
             })}

@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { BATTLE_FIELD } from "../data/battleField";
 import { getBuilding } from "../data/buildings";
 import { factionName } from "../data/factions";
@@ -12,7 +12,14 @@ import {
   getSpriteUrl,
 } from "../sprites/registry";
 import { DirSprite } from "./DirSprite";
-import { Sprite } from "./Sprite";
+
+interface DmgFloater {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  side: "atk" | "def";
+}
 
 /** Muzzle flash offset as % of actor box, keyed by 8-dir frame. */
 const MUZZLE_8: Array<{ left: string; top: string }> = [
@@ -110,6 +117,8 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
   const battle = state.battle;
   const [tooltip, setTooltip] = useState<string | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  const [floaters, setFloaters] = useState<DmgFloater[]>([]);
+  const prevHp = useRef<Record<string, number>>({});
 
   const title = useMemo(() => {
     if (!battle) return "Battle";
@@ -119,6 +128,49 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
       return battle.territoryId;
     }
   }, [battle]);
+
+  // Spawn floating damage numbers when HP drops (both sides).
+  useEffect(() => {
+    if (!battle) return;
+    const next: DmgFloater[] = [];
+    for (const u of battle.units) {
+      const prev = prevHp.current[u.id];
+      if (prev !== undefined && u.hp < prev) {
+        next.push({
+          id: `f-${u.id}-${battle.time}-${prev}`,
+          x: u.x,
+          y: u.y,
+          text: `−${Math.max(1, Math.round(prev - u.hp))}`,
+          side: u.side === "attacker" ? "atk" : "def",
+        });
+      }
+      prevHp.current[u.id] = u.hp;
+    }
+    for (const d of battle.defenses) {
+      const prev = prevHp.current[d.id];
+      if (prev !== undefined && d.hp < prev) {
+        next.push({
+          id: `f-${d.id}-${battle.time}-${prev}`,
+          x: d.x,
+          y: d.y,
+          text: `−${Math.max(1, Math.round(prev - d.hp))}`,
+          side: "def",
+        });
+      }
+      prevHp.current[d.id] = d.hp;
+    }
+    if (next.length) {
+      setFloaters((cur) => [...cur, ...next].slice(-28));
+    }
+  }, [battle]);
+
+  useEffect(() => {
+    if (!floaters.length) return;
+    const t = window.setTimeout(() => {
+      setFloaters((cur) => cur.slice(Math.max(0, cur.length - 12)));
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [floaters]);
 
   if (!battle) {
     return (
@@ -286,7 +338,7 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   d.anim === "firing"
                     ? "is-firing"
                     : wreck
-                      ? "is-wreck"
+                      ? "is-wreck is-burning"
                       : d.disabledT > 0
                         ? "is-disabled"
                         : ""
@@ -316,11 +368,14 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   d.buildingId === "shield_wall") &&
                   d.alive && <span className="rf-battle__shield-bubble" />}
                 {wreck ? (
-                  <img
-                    src={getSpriteUrl("fx-wreck")}
-                    alt=""
-                    draggable={false}
-                  />
+                  <>
+                    <img
+                      src={getSpriteUrl("fx-wreck")}
+                      alt=""
+                      draggable={false}
+                    />
+                    <span className="rf-battle__burn" aria-hidden />
+                  </>
                 ) : (
                   <DirSprite id={spriteId} facing={d.facing} size={size} />
                 )}
@@ -328,9 +383,11 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   <span
                     className="rf-battle__muzzle"
                     style={muzzleStyle(d.facing, spriteId)}
-                  />
+                  >
+                    <img src={getSpriteUrl("fx-muzzle")} alt="" draggable={false} />
+                  </span>
                 )}
-                {d.alive && d.hp < d.maxHp && (
+                {d.alive && (
                   <span className="rf-battle__hpbar">
                     <i style={{ width: `${(d.hp / d.maxHp) * 100}%` }} />
                   </span>
@@ -378,13 +435,15 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                 className={`rf-battle__actor rf-battle__actor--unit ${
                   u.anim === "attack"
                     ? "is-firing"
-                    : u.anim === "move"
-                      ? "is-moving"
-                      : wreck
-                        ? "is-wreck"
-                        : u.disabledT > 0
-                          ? "is-disabled"
-                          : ""
+                    : u.anim === "hit"
+                      ? "is-hit"
+                      : u.anim === "move"
+                        ? "is-moving"
+                        : wreck
+                          ? "is-wreck"
+                          : u.disabledT > 0
+                            ? "is-disabled"
+                            : "is-idle"
                 }`}
                 style={{
                   left: pos.left,
@@ -408,11 +467,14 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                 }}
               >
                 {wreck ? (
-                  <img
-                    src={getSpriteUrl("fx-wreck")}
-                    alt=""
-                    draggable={false}
-                  />
+                  <>
+                    <img
+                      src={getSpriteUrl("fx-wreck")}
+                      alt=""
+                      draggable={false}
+                    />
+                    <span className="rf-battle__spark" aria-hidden />
+                  </>
                 ) : (
                   <DirSprite id={spriteId} facing={u.facing} size={size} />
                 )}
@@ -420,9 +482,14 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                   <span
                     className="rf-battle__muzzle"
                     style={muzzleStyle(u.facing, spriteId)}
-                  />
+                  >
+                    <img src={getSpriteUrl("fx-muzzle")} alt="" draggable={false} />
+                  </span>
                 )}
-                {u.alive && u.hp < u.maxHp && (
+                {u.anim === "hit" && u.alive && (
+                  <span className="rf-battle__spark rf-battle__spark--hit" aria-hidden />
+                )}
+                {u.alive && (
                   <span
                     className={`rf-battle__hpbar ${
                       u.side === "attacker" ? "is-atk" : "is-def"
@@ -438,6 +505,19 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
           {battle.projectiles.map((p) => (
             <ProjectileLayer key={p.id} p={p} />
           ))}
+
+          {floaters.map((f) => {
+            const pos = worldToPct(f.x, f.y);
+            return (
+              <span
+                key={f.id}
+                className={`rf-battle__dmg rf-battle__dmg--${f.side}`}
+                style={{ left: pos.left, top: pos.top }}
+              >
+                {f.text}
+              </span>
+            );
+          })}
 
           {battle.explosions.map((ex) => {
             const pos = worldToPct(ex.x, ex.y);
