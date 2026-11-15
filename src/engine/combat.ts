@@ -30,6 +30,14 @@ function uid(prefix: string, n: number): string {
   return `${prefix}_${n}`;
 }
 
+/**
+ * Scale catalog ranges onto the battle field so infantry and mechs can
+ * fire across no-man's-land instead of walking into contact.
+ */
+export function battleEngageRange(catalogRange: number): number {
+  return Math.min(10.5, Math.max(catalogRange * 3.4, 5.8));
+}
+
 function effectiveDamage(
   raw: number,
   damageType: DamageType,
@@ -268,7 +276,7 @@ function pickTargetForDefense(
   const bdef = getBuilding(d.buildingId);
   if (!bdef.damage || d.disabledT > 0) return null;
   const pref = bdef.targetPreference ?? "any";
-  const range = bdef.range ?? 3;
+  const range = battleEngageRange(bdef.range ?? 3);
   const candidates = battle.units.filter((u) => {
     if (!u.alive || u.disabledT > 0 || u.side !== "attacker") return false;
     const role = getUnit(u.unitId).role;
@@ -313,17 +321,19 @@ function spawnProjectile(
 ): BattleProjectile {
   const speed =
     style === "laser" || style === "rail"
-      ? 5.2
+      ? 6.4
       : style === "orbital"
-        ? 3.2
+        ? 4.0
         : style === "emp"
-          ? 2.4
-          : 2.9;
+          ? 3.2
+          : 4.2;
   return {
     id: uid("p", idCounter.n++),
     style,
     x,
     y,
+    sx: x,
+    sy: y,
     tx,
     ty,
     progress: 0,
@@ -350,7 +360,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
   let projectiles = [...battle.projectiles];
   let explosions = battle.explosions
     .map((e) => ({ ...e, t: e.t + dt }))
-    .filter((e) => e.t < 0.95);
+    .filter((e) => e.t < 0.55);
   let scorches = battle.scorches
     .map((s) => ({ ...s, t: s.t + dt }))
     .filter((s) => s.t < 14);
@@ -404,14 +414,21 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
 
     const aim = facingFromDelta(tx - next.x, ty - next.y);
     const d = dist(next.x, next.y, tx, ty);
-    const ideal = Math.max(0.9, udef.range * 0.78);
-    // Defenders hold position; attackers close distance
-    if (u.side === "attacker" && d > ideal) {
-      const step = udef.speed * dt;
+    // Battle-scaled range so infantry/mechs fire across the gap instead of melee-clumping.
+    const weaponRange = battleEngageRange(udef.range);
+    const ideal = Math.min(weaponRange * 0.88, weaponRange - 0.35);
+    // Hold the near side of no-man's-land — never pile into the defender pad.
+    const holdX = BATTLE_FIELD.noMansLand.x1 - 0.55;
+    // Defenders hold position; attackers close only until weapon range / hold line
+    if (u.side === "attacker" && d > ideal && next.x < holdX) {
+      const step = udef.speed * dt * 0.75;
       const dx = ((tx - next.x) / d) * step;
-      const dy = ((ty - next.y) / d) * step * 0.45;
+      const dy = ((ty - next.y) / d) * step * 0.35;
       const moveFacing = facingFromDelta(dx, dy);
-      const pos = clampToGround(next.x + dx, next.y + dy);
+      const pos = clampToGround(
+        Math.min(holdX, next.x + dx),
+        next.y + dy,
+      );
       return {
         ...next,
         x: pos.x,
@@ -421,7 +438,7 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
       };
     }
     next = { ...next, facing: stepFacing(next.facing, aim, dt) };
-    if (next.cooldown <= 0 && d <= udef.range * 1.05) {
+    if (next.cooldown <= 0 && d <= weaponRange * 1.02) {
       if (target.kind === "defense") {
         const bdef = getBuilding(target.ref.buildingId);
         const dmg = effectiveDamage(
@@ -567,8 +584,8 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
       nextProjectiles.push({
         ...p,
         progress: prog,
-        x: p.x + (p.tx - p.x) * prog,
-        y: p.y + (p.ty - p.y) * prog,
+        x: p.sx + (p.tx - p.sx) * prog,
+        y: p.sy + (p.ty - p.sy) * prog,
       });
     }
   }

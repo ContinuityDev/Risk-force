@@ -129,8 +129,12 @@ export interface BattleDefense {
 export interface BattleProjectile {
   id: string;
   style: string;
+  /** Live tip position (lerped). */
   x: number;
   y: number;
+  /** Spawn origin — kept so tracers always draw shoot→target. */
+  sx: number;
+  sy: number;
   tx: number;
   ty: number;
   progress: number;
