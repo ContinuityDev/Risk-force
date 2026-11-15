@@ -1,16 +1,28 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { BUILDING_LIST, getBuilding } from "../data/buildings";
+import {
+  BUILDING_LIST,
+  getBuilding,
+  isTrainingBuilding,
+} from "../data/buildings";
 import { buildingBlurb } from "../data/buildings/blurb";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
-import { UNIT_LIST, getUnit } from "../data/units";
+import { RESEARCH_LIST } from "../data/research";
+import { getUnit } from "../data/units";
 import type { GameAction } from "../engine/actions";
-import { canAfford } from "../engine/economy";
+import { costShortfalls } from "../engine/economy";
 import { canPlaceBuilding } from "../engine/placement";
 import { isUnlocked } from "../engine/research";
 import type { GameState, PlayerState } from "../engine/state";
-import { unitTrainTurns, workerCapForBuilding } from "../engine/training";
+import {
+  canQueueUnit,
+  canQueueWorker,
+  unitTrainTurns,
+  workerCapForBuilding,
+} from "../engine/training";
+import { pulseResources } from "../ui/resourcePulse";
+import { CostLabel } from "./CostLabel";
 import { Drawer } from "./Drawer";
 import { Sprite } from "./Sprite";
 
@@ -63,6 +75,8 @@ export function BaseView({
   } | null>(null);
   const [tooltip, setTooltip] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  /** When a placed building is selected: actions menu or train list. */
+  const [panelMode, setPanelMode] = useState<"actions" | "train">("actions");
   const [shortLandscape, setShortLandscape] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia(
@@ -106,11 +120,16 @@ export function BaseView({
   const freeWorkers = Math.max(0, (ts.workers ?? 0) - assignedWorkers);
   const selectedInst =
     ts.buildings.find((b) => b.instanceId === selectedInstanceId) ?? null;
-  const trainables = UNIT_LIST.filter(
-    (u) =>
-      u.id === GAME_LOOP.training.basicUnitId ||
-      isUnlocked(activePlayer, u.id),
-  ).slice(0, 8);
+  const selectedDef = selectedInst
+    ? getBuilding(selectedInst.buildingId)
+    : null;
+  const trainingJobsForSelected = selectedInst
+    ? ts.trainingQueue.filter((j) => {
+        if (j.kind === "worker") return !!selectedDef?.producesWorkers;
+        if (!j.unitId || !selectedDef?.produces) return false;
+        return selectedDef.produces.includes(j.unitId);
+      })
+    : [];
 
   const occupied = useMemo(() => {
     const cells = new Set<string>();
@@ -258,10 +277,14 @@ export function BaseView({
                       setSelectedInstanceId(inst.instanceId);
                       setDemolishId(inst.instanceId);
                       setPendingPlace(null);
+                      setSelectedBuilding(null);
+                      setPanelMode("actions");
+                      if (shortLandscape) setDrawerOpen(true);
                       return;
                     }
                     setSelectedInstanceId(null);
                     setDemolishId(null);
+                    setPanelMode("actions");
                     if (!selectedBuilding) return;
                     // Touch: tap-to-preview + Confirm. Mouse: place immediately (desktop unchanged).
                     const touch =
@@ -386,6 +409,22 @@ export function BaseView({
                     {inst.workers ?? 0}/{workerCapForBuilding(inst.buildingId)}
                   </span>
                 )}
+                {(() => {
+                  const queued = ts.trainingQueue.filter((j) => {
+                    if (j.kind === "worker") return !!def.producesWorkers;
+                    return !!(
+                      j.unitId &&
+                      def.produces?.includes(j.unitId)
+                    );
+                  });
+                  if (!queued.length) return null;
+                  const head = queued[0]!;
+                  return (
+                    <span className="rf-base__train-badge" title="Training queue">
+                      Q{queued.length} · T-{head.turnsRemaining}
+                    </span>
+                  );
+                })()}
                 <span className="rf-base__hp">
                   {Math.ceil(inst.hp)}/{def.maxHp}
                 </span>
@@ -476,104 +515,281 @@ export function BaseView({
               })()}
             </section>
           )}
-          {owned && (
+          {owned && selectedInst && selectedDef && panelMode === "actions" && (
+            <section className="rf-base__actions" data-tutorial="base-train">
+              <span className="rf-label">Building menu</span>
+              <p>
+                <strong>{selectedDef.name}</strong>
+                <span className="rf-text-dim">
+                  {" "}
+                  · Pop {ts.population} untrained
+                </span>
+              </p>
+              <div className="rf-base__action-list">
+                {isTrainingBuilding(selectedDef) &&
+                  selectedInst.buildRemaining <= 0 && (
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => setPanelMode("train")}
+                    >
+                      Train unit
+                    </button>
+                  )}
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => {
+                    /* staffing panel already above when selected */
+                  }}
+                >
+                  Staff / info (see above)
+                </button>
+                {selectedDef.id !== "command_nexus" && (
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={!canAct}
+                    onClick={() => {
+                      if (demolishId === selectedInst.instanceId) {
+                        dispatch({
+                          type: "DEMOLISH_BUILDING",
+                          payload: {
+                            territoryId: tid,
+                            instanceId: selectedInst.instanceId,
+                          },
+                        });
+                        setSelectedInstanceId(null);
+                        setDemolishId(null);
+                      } else {
+                        setDemolishId(selectedInst.instanceId);
+                      }
+                    }}
+                  >
+                    {demolishId === selectedInst.instanceId
+                      ? "Confirm demolish"
+                      : "Demolish"}
+                  </button>
+                )}
+              </div>
+              {trainingJobsForSelected.length > 0 && (
+                <div className="rf-base__queue">
+                  <span className="rf-label">Queue at this building</span>
+                  <ul>
+                    {trainingJobsForSelected.map((j) => {
+                      let label =
+                        j.kind === "worker" ? "Worker" : (j.unitId ?? "Unit");
+                      if (j.unitId) {
+                        try {
+                          label = getUnit(j.unitId).name;
+                        } catch {
+                          /* */
+                        }
+                      }
+                      return (
+                        <li key={j.id}>
+                          {label}×{j.count}{" "}
+                          <span className="rf-text-dim">
+                            T-{j.turnsRemaining}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
+          {owned && selectedInst && selectedDef && panelMode === "train" && (
             <section
               className="rf-base__pop"
               title={HELP.training}
               data-tutorial="base-train"
             >
-              <span className="rf-label">Population & Training</span>
-              <div className="rf-base__pop-line">
-                <p className="rf-base__pop-count">
-                  Untrained pop:&nbsp;<strong>{ts.population}</strong>
-                </p>
-                <p className="rf-hint">
-                  Train locally — advanced units need research.
-                </p>
-              </div>
-              <div className="rf-base__train-row">
+              <div className="rf-base__train-head">
                 <button
                   type="button"
                   className="ghost"
-                  disabled={!canAct || ts.population < 1}
-                  onClick={() =>
-                    dispatch({
-                      type: "TRAIN_WORKER",
-                      payload: { territoryId: tid, count: 1 },
-                    })
-                  }
+                  onClick={() => setPanelMode("actions")}
                 >
-                  +Worker · E{GAME_LOOP.training.worker.energy}
-                  {GAME_LOOP.training.worker.alloy
-                    ? ` · A${GAME_LOOP.training.worker.alloy}`
-                    : ""}{" "}
-                  · T-{GAME_LOOP.training.worker.turns}
+                  ← Back
                 </button>
+                <span className="rf-label">Train at {selectedDef.name}</span>
               </div>
+              <p className="rf-hint">
+                Untrained pop: <strong>{ts.population}</strong>. Locked units
+                show their research gate.
+              </p>
+              {selectedDef.producesWorkers && (
+                <div className="rf-base__train-row">
+                  {(() => {
+                    const cost = {
+                      energy: GAME_LOOP.training.worker.energy,
+                      alloy: GAME_LOOP.training.worker.alloy,
+                    };
+                    const short = costShortfalls(activePlayer, cost);
+                    const check = canQueueWorker(activePlayer, ts, 1);
+                    const hardBlock =
+                      !canAct || (check.ok === false && short.length === 0);
+                    return (
+                      <button
+                        type="button"
+                        className={`ghost${short.length ? " is-unaffordable" : ""}`}
+                        disabled={hardBlock}
+                        aria-disabled={!canAct || !check.ok}
+                        onClick={() => {
+                          if (short.length) {
+                            pulseResources(short.map((s) => s.resource));
+                            return;
+                          }
+                          if (!check.ok) return;
+                          dispatch({
+                            type: "TRAIN_WORKER",
+                            payload: { territoryId: tid, count: 1 },
+                          });
+                        }}
+                      >
+                        <strong>Worker</strong>
+                        <CostLabel
+                          cost={cost}
+                          shortfalls={short}
+                          showNeed={short.length > 0}
+                        />
+                        <small>T-{GAME_LOOP.training.worker.turns}</small>
+                        {hardBlock && !check.ok && (
+                          <span className="rf-cost__need">{check.reason}</span>
+                        )}
+                      </button>
+                    );
+                  })()}
+                </div>
+              )}
               <ul className="rf-base__train-list">
-                {trainables.map((u) => {
+                {(selectedDef.produces ?? []).map((unitId) => {
+                  let u;
+                  try {
+                    u = getUnit(unitId);
+                  } catch {
+                    return null;
+                  }
                   const energy = Math.ceil(
                     u.cost.energy * GAME_LOOP.training.unit.energyMult,
                   );
                   const alloy = Math.ceil(
                     (u.cost.alloy ?? 0) * GAME_LOOP.training.unit.alloyMult,
                   );
-                  const turns = unitTrainTurns(u.id);
+                  const cost = { energy, alloy };
+                  const short = costShortfalls(activePlayer, cost);
+                  const unlocked =
+                    unitId === GAME_LOOP.training.basicUnitId ||
+                    isUnlocked(activePlayer, unitId);
+                  const check = canQueueUnit(activePlayer, ts, unitId, 1);
+                  const turns = unitTrainTurns(unitId);
+                  const gated = RESEARCH_LIST.find((n) =>
+                    n.unlocks.includes(unitId),
+                  );
+                  const hardBlock =
+                    !canAct ||
+                    !unlocked ||
+                    (check.ok === false && short.length === 0);
                   return (
-                    <li key={u.id}>
+                    <li key={unitId}>
                       <button
                         type="button"
-                        disabled={!canAct || ts.population < 1}
+                        className={short.length && unlocked ? "is-unaffordable" : undefined}
+                        disabled={hardBlock}
+                        aria-disabled={!canAct || !unlocked || !check.ok}
                         title={`${u.name} · HP ${u.maxHp} · Dmg ${u.damage}`}
-                        onPointerDown={(e) => {
-                          if (e.pointerType === "mouse") return;
-                          const tip = `${u.name} · HP ${u.maxHp} · Dmg ${u.damage} · Role ${u.role}`;
-                          const t = window.setTimeout(
-                            () => setTooltip(tip),
-                            480,
-                          );
-                          const clear = () => {
-                            window.clearTimeout(t);
-                            window.removeEventListener("pointerup", clear);
-                            window.removeEventListener("pointercancel", clear);
-                          };
-                          window.addEventListener("pointerup", clear, {
-                            once: true,
-                          });
-                          window.addEventListener("pointercancel", clear, {
-                            once: true,
-                          });
-                        }}
-                        onClick={() =>
+                        onClick={() => {
+                          if (!unlocked) return;
+                          if (short.length) {
+                            pulseResources(short.map((s) => s.resource));
+                            return;
+                          }
+                          if (!check.ok) return;
                           dispatch({
                             type: "TRAIN_UNIT",
                             payload: {
                               territoryId: tid,
-                              unitId: u.id,
+                              unitId,
                               count: 1,
                             },
-                          })
-                        }
+                          });
+                        }}
                       >
-                        <strong>{u.name}</strong>
-                        <small>
-                          E{energy}
-                          {alloy ? ` · A${alloy}` : ""} · T-{turns}
-                        </small>
+                        <Sprite id={u.sprite.id} size={32} anim="idle" />
+                        <span>
+                          <strong>{u.name}</strong>
+                          <CostLabel
+                            cost={cost}
+                            shortfalls={unlocked ? short : []}
+                            showNeed={unlocked && short.length > 0}
+                          />
+                          <small>
+                            T-{turns}
+                            {u.supplyCost ? ` · upkeep S${u.supplyCost}` : ""}
+                            {!unlocked && gated
+                              ? ` · locked: ${gated.name}`
+                              : ""}
+                          </small>
+                          {unlocked &&
+                            short.length === 0 &&
+                            !check.ok && (
+                              <span className="rf-cost__need">
+                                {check.reason}
+                              </span>
+                            )}
+                        </span>
                       </button>
                     </li>
                   );
                 })}
               </ul>
-              {ts.trainingQueue.length > 0 && (
+              {trainingJobsForSelected.length > 0 && (
                 <div className="rf-base__queue">
                   <span className="rf-label">Queue</span>
                   <ul>
+                    {trainingJobsForSelected.map((j) => {
+                      let label =
+                        j.kind === "worker" ? "Worker" : (j.unitId ?? "Unit");
+                      if (j.unitId) {
+                        try {
+                          label = getUnit(j.unitId).name;
+                        } catch {
+                          /* */
+                        }
+                      }
+                      return (
+                        <li key={j.id}>
+                          {label}×{j.count}{" "}
+                          <span className="rf-text-dim">
+                            T-{j.turnsRemaining}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
+          {owned && !selectedInst && (
+            <section className="rf-base__pop" data-tutorial="base-train">
+              <span className="rf-label">Training</span>
+              <p className="rf-hint">
+                Tap a Barracks, Vehicle Factory, Airfield, Drydock, or Command
+                Nexus on the grid, then choose <strong>Train unit</strong>.
+                Untrained pop: <strong>{ts.population}</strong>.
+              </p>
+              {ts.trainingQueue.length > 0 && (
+                <div className="rf-base__queue">
+                  <span className="rf-label">Territory queue</span>
+                  <ul>
                     {ts.trainingQueue.map((j) => {
                       let label =
-                        j.kind === "worker"
-                          ? "Worker"
-                          : j.unitId ?? "Unit";
+                        j.kind === "worker" ? "Worker" : (j.unitId ?? "Unit");
                       if (j.unitId) {
                         try {
                           label = getUnit(j.unitId).name;
@@ -625,41 +841,50 @@ export function BaseView({
           <ul data-tutorial={selectedBuilding ? undefined : "base-build-menu"}>
             {catalog.map((b) => {
               const unlocked = isUnlocked(activePlayer, b.id);
-              const affordable = canAfford(activePlayer, b.cost);
+              const short = costShortfalls(activePlayer, b.cost);
               const coastalBlocked =
                 (b.category === "naval" || b.id.includes("coastal")) &&
                 !tdef.coastal;
-              const disabled =
-                !canAct ||
-                !owned ||
-                !unlocked ||
-                !affordable ||
-                coastalBlocked;
+              const hardBlock =
+                !canAct || !owned || !unlocked || coastalBlocked;
               const selected = selectedBuilding === b.id;
               return (
                 <li key={b.id}>
                   <button
                     type="button"
-                    className={selected ? "primary" : undefined}
-                    disabled={disabled}
+                    className={`${selected ? "primary" : ""}${
+                      short.length && unlocked ? " is-unaffordable" : ""
+                    }`.trim()}
+                    disabled={hardBlock}
                     title={buildingBlurb(b)}
-                    onClick={() =>
+                    onClick={() => {
+                      if (short.length) {
+                        pulseResources(short.map((s) => s.resource));
+                      }
+                      setSelectedInstanceId(null);
+                      setPanelMode("actions");
                       setSelectedBuilding((cur) =>
                         cur === b.id ? null : b.id,
-                      )
-                    }
+                      );
+                    }}
                   >
                     <Sprite id={b.sprite.id} size={36} anim="idle" />
                     <span>
                       <strong>{b.name}</strong>
+                      <CostLabel
+                        cost={b.cost}
+                        shortfalls={unlocked ? short : []}
+                        showNeed={unlocked && short.length > 0}
+                      />
                       <small>
-                        {b.size.w}×{b.size.h} · E{b.cost.energy}
-                        {b.cost.alloy ? ` · A${b.cost.alloy}` : ""}
+                        {b.size.w}×{b.size.h}
                         {!unlocked
                           ? " · locked"
                           : coastalBlocked
                             ? " · coastal"
-                            : ""}
+                            : isTrainingBuilding(b)
+                              ? " · trains"
+                              : ""}
                       </small>
                     </span>
                   </button>

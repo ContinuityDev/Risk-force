@@ -102,6 +102,15 @@ function starterBuildings(
     },
     {
       instanceId: `b${nextId.n++}`,
+      buildingId: "barracks",
+      x: 4,
+      y: 2,
+      hp: 260,
+      buildRemaining: 0,
+      workers: 0,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
       buildingId: "shield_wall",
       x: 4,
       y: 4,

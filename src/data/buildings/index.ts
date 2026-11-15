@@ -15,7 +15,7 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     id: "command_nexus",
     name: "Command Nexus",
     description:
-      "Sector command core. Generates research signal. Cannot be demolished.",
+      "Sector command core. Generates research signal. Cannot be demolished. Trains workers from local population.",
     category: "command",
     cost: { energy: 0 },
     buildTime: 0,
@@ -23,6 +23,7 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     size: { w: 2, h: 2 },
     armorType: "fortified",
     output: { research: 1 },
+    producesWorkers: true,
     sprite: { id: "building-nexus", frameW: 64, frameH: 64 },
     anims: {
       construction: BUILD,
@@ -479,6 +480,7 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     armorType: "shielded",
     supplyUpkeep: 1,
     output: { research: 2 },
+    produces: ["ew_drone", "virus_probe", "data_spike"],
     requiresResearch: "cyber_doctrine",
     sprite: { id: "building-cyber-ops", frameW: 48, frameH: 48 },
     anims: {
@@ -510,6 +512,93 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     },
   },
 
+  // ── Training ─────────────────────────────────────────────
+  barracks: {
+    id: "barracks",
+    name: "Barracks",
+    description:
+      "Infantry academy. Trains troopers, walkers, and specialist ground squads.",
+    category: "support",
+    cost: { energy: 90, alloy: 20 },
+    buildTime: 2,
+    maxHp: 260,
+    size: { w: 1, h: 1 },
+    armorType: "medium",
+    supplyUpkeep: 1,
+    produces: [
+      "trooper",
+      "power_trooper",
+      "assault_mech",
+      "heavy_walker",
+      "stealth_operative",
+      "cyber_commando",
+    ],
+    sprite: { id: "building-barracks", frameW: 48, frameH: 48 },
+    anims: {
+      construction: BUILD,
+      idle: IDLE2,
+      working: { frames: 4, fps: 7 },
+      destroyed: DESTROYED,
+    },
+  },
+  vehicle_factory: {
+    id: "vehicle_factory",
+    name: "Vehicle Factory",
+    description:
+      "Heavy assembly line for tanks, mechs, and artillery platforms.",
+    category: "support",
+    cost: { energy: 140, alloy: 45 },
+    buildTime: 3,
+    maxHp: 300,
+    size: { w: 2, h: 1 },
+    armorType: "heavy",
+    supplyUpkeep: 2,
+    produces: [
+      "hover_tank",
+      "rail_tank",
+      "shield_tank",
+      "spider_mech",
+      "siege_mech",
+      "siege_cannon",
+      "plasma_howitzer",
+      "cruise_launcher",
+    ],
+    sprite: { id: "building-vehicle-factory", frameW: 64, frameH: 48 },
+    anims: {
+      construction: BUILD,
+      idle: IDLE2,
+      working: { frames: 4, fps: 8 },
+      destroyed: DESTROYED,
+    },
+  },
+  airfield: {
+    id: "airfield",
+    name: "Airfield",
+    description: "Flight deck and hangars for drones, gunships, and dropships.",
+    category: "support",
+    cost: { energy: 130, alloy: 40 },
+    buildTime: 3,
+    maxHp: 240,
+    size: { w: 2, h: 1 },
+    armorType: "medium",
+    supplyUpkeep: 2,
+    produces: [
+      "drone",
+      "dropship",
+      "gunship",
+      "stealth_bomber",
+      "interceptor_drone",
+      "assault_dropship",
+    ],
+    sprite: { id: "building-airfield", frameW: 64, frameH: 48 },
+    anims: {
+      construction: BUILD,
+      idle: IDLE2,
+      working: { frames: 4, fps: 8 },
+      destroyed: DESTROYED,
+    },
+  },
+
   // ── Naval ────────────────────────────────────────────────
   drydock: {
     id: "drydock",
@@ -523,6 +612,13 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     armorType: "fortified",
     supplyUpkeep: 2,
     output: { supply: 6 },
+    produces: [
+      "patrol_hydrofoil",
+      "destroyer",
+      "submarine",
+      "carrier_drone_barge",
+      "torpedo_boat",
+    ],
     requiresResearch: "naval_yards",
     sprite: { id: "building-drydock", frameW: 64, frameH: 64 },
     anims: {
@@ -567,6 +663,11 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     armorType: "light",
     supplyUpkeep: 2,
     output: { research: 2 },
+    produces: [
+      "orbital_laser_platform",
+      "kinetic_rod_battery",
+      "satellite_relay",
+    ],
     requiresResearch: "orbital_uplink",
     sprite: { id: "building-uplink", frameW: 64, frameH: 48 },
     anims: {
@@ -701,4 +802,9 @@ export function getBuilding(id: string): BuildingDef {
   const def = BUILDINGS[id];
   if (!def) throw new Error(`Unknown building: ${id}`);
   return def;
+}
+
+/** True if the building can train units and/or workers. */
+export function isTrainingBuilding(def: BuildingDef): boolean {
+  return !!def.producesWorkers || !!(def.produces && def.produces.length);
 }

@@ -168,7 +168,7 @@ export const HELP = {
   population:
     "Each territory has a local population pool. Recruits arrive each turn from land share + campaigning, then you train them into workers or units.",
   training:
-    "Train population into workers or units locally. Basic troopers are always available; advanced units need research. Training costs energy, alloy, and time.",
+    "Tap a training building on the base grid (Barracks, Vehicle Factory, Airfield, Drydock, Nexus) and choose Train unit. Each building lists what it can produce — locked units show their research requirement. Training spends energy, alloy, population, and turns.",
   workers:
     "Workers staff buildings (boosting output up to a cap) and speed construction. Assign them in the base view.",
   invasion:
