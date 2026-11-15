@@ -212,8 +212,11 @@ export function layoutUnitMinis(
       : ay - size * 0.95;
 
     if (tier === "world") {
+      // Skip 1-troop speckles on tiny plots — they read as "ghost" chips
+      // next to empty neighbors (Morocco/Tunisia-style).
       if (zoomScale >= 0.98 && t.area < 0.0035) continue;
       const total = sorted.reduce((s, u) => s + u.count, 0);
+      if (total < 3 && t.area < 0.008) continue;
       const top = sorted[0]!;
       const anchors = [
         { x: sideX, y: sideY },
