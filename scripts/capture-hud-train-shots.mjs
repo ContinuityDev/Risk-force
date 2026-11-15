@@ -45,6 +45,29 @@ async function boot(page) {
   });
 }
 
+async function clickBarracks(page) {
+  await page.evaluate(() => {
+    const s = window.__RF__.getState();
+    const tid = s.selectedTerritoryId;
+    const b = s.territories[tid].buildings.find(
+      (x) => x.buildingId === "barracks",
+    );
+    if (!b) return;
+    const CELL = window.matchMedia(
+      "(orientation: landscape) and (max-height: 500px)",
+    ).matches
+      ? 52
+      : 84;
+    const pad = [...document.querySelectorAll(".rf-base__pad")].find((el) => {
+      const left = parseInt(el.style.left, 10);
+      const top = parseInt(el.style.top, 10);
+      return left === b.x * CELL && top === b.y * CELL;
+    });
+    pad?.click();
+  });
+  await page.waitForSelector(".rf-base__ctx", { timeout: 5000 });
+}
+
 async function suite(page, tag) {
   await boot(page);
 
@@ -52,10 +75,10 @@ async function suite(page, tag) {
   await shot(page, `risk-force-hud-resources${tag}`);
 
   // Open energy tooltip
-  await page.locator('.rf-resource--energy').click();
+  await page.locator(".rf-resource--energy").click();
   await page.waitForTimeout(200);
   await shot(page, `risk-force-hud-resource-tooltip${tag}`);
-  await page.locator('.rf-resource--energy').click();
+  await page.locator(".rf-resource--energy").click();
 
   // Open base on owned territory with barracks
   const owned = await page.evaluate(() => {
@@ -67,7 +90,6 @@ async function suite(page, tag) {
     )?.[0];
   });
   await page.evaluate((tid) => {
-    // Drain alloy so unaffordable costs show
     const s = window.__RF__.getState();
     window.__RF__.dispatch({
       type: "LOAD_STATE",
@@ -93,82 +115,42 @@ async function suite(page, tag) {
   }, owned);
   await page.waitForTimeout(400);
 
+  // Unaffordable catalog cost via Build drawer (mobile) / inline catalog
   const toggle = page.locator(".rf-base__drawer-toggle");
   if (await toggle.count()) await toggle.click();
   await page.waitForTimeout(200);
 
-  // Unaffordable catalog cost (Vehicle Factory needs alloy)
-  const factory = page.locator(".rf-base__catalog li button", {
-    hasText: "Vehicle Factory",
+  await page.evaluate(() => {
+    const btn = [
+      ...document.querySelectorAll(".rf-base__catalog li button"),
+    ].find((b) => b.textContent?.includes("Vehicle Factory"));
+    btn?.scrollIntoView({ block: "center" });
+    btn?.click();
   });
-  if (await factory.count()) {
-    await factory.first().click({ force: true });
-    await page.waitForTimeout(250);
-  } else {
-    // scroll catalog to factory
-    await page.evaluate(() => {
-      const btn = [...document.querySelectorAll(".rf-base__catalog li button")].find(
-        (b) => b.textContent?.includes("Vehicle Factory"),
-      );
-      btn?.scrollIntoView({ block: "center" });
-      btn?.click();
-    });
-    await page.waitForTimeout(250);
-  }
+  await page.waitForTimeout(250);
   await shot(page, `risk-force-unaffordable-cost${tag}`);
 
-  // Select barracks on grid — find pad with barracks via evaluate click
-  await page.evaluate(() => {
-    const s = window.__RF__.getState();
-    const tid = s.selectedTerritoryId;
-    const barracks = s.territories[tid].buildings.find(
-      (b) => b.buildingId === "barracks",
-    );
-    if (!barracks) return;
-    // Click corresponding pad button
-    const pads = [...document.querySelectorAll(".rf-base__pad")];
-    const cell = document.querySelector(
-      `.rf-base__pad[style*="left: ${barracks.x * (window.matchMedia("(orientation: landscape) and (max-height: 500px)").matches ? 52 : 84)}px"]`,
-    );
-    // Fallback: dispatch selection via state + open train
-    window.__RF__.dispatch({ type: "DISMISS_MESSAGE" });
-  });
-
-  // Click structure by scanning pads
-  await page.evaluate(() => {
-    const s = window.__RF__.getState();
-    const tid = s.selectedTerritoryId;
-    const b = s.territories[tid].buildings.find(
-      (x) => x.buildingId === "barracks",
-    );
-    if (!b) return;
-    const CELL = window.matchMedia(
-      "(orientation: landscape) and (max-height: 500px)",
-    ).matches
-      ? 52
-      : 84;
-    const pad = [...document.querySelectorAll(".rf-base__pad")].find((el) => {
-      const left = parseInt(el.style.left, 10);
-      const top = parseInt(el.style.top, 10);
-      return left === b.x * CELL && top === b.y * CELL;
-    });
-    pad?.click();
-  });
-  await page.waitForTimeout(300);
-  if (await toggle.count()) {
-    // ensure drawer open
-    if (!(await page.locator(".rf-base__actions, .rf-base__pop").count())) {
-      await toggle.click();
-    }
+  // Close build drawer so the Barracks context menu is unobstructed
+  const backdrop = page.locator(".rf-drawer__backdrop");
+  if (await backdrop.count()) {
+    await backdrop.click({ force: true });
+    await page.waitForTimeout(200);
+  } else {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(150);
   }
+
+  // Tap barracks → anchored context menu (Train / Staff / Info)
+  await clickBarracks(page);
   await page.waitForTimeout(200);
   await shot(page, `risk-force-building-train-menu${tag}`);
 
-  const trainBtn = page.locator("button", { hasText: "Train unit" });
-  if (await trainBtn.count()) {
-    await trainBtn.first().click();
-    await page.waitForTimeout(300);
-  }
+  const trainBtn = page.locator(".rf-base__ctx button", {
+    hasText: "Train unit",
+  });
+  await trainBtn.click();
+  await page.waitForSelector(".rf-base__train-list", { timeout: 5000 });
+  await page.waitForTimeout(250);
   await shot(page, `risk-force-train-unit-list${tag}`);
 }
 
