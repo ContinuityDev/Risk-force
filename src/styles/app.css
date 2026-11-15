@@ -1521,14 +1521,17 @@
 
 .rf-battle__muzzle {
   position: absolute;
-  width: 14px;
-  height: 14px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background: radial-gradient(circle, #fff 0%, #a8d4e0 40%, transparent 70%);
   box-shadow: 0 0 12px #7eb6c9;
   pointer-events: none;
   z-index: 5;
+  display: grid;
+  place-items: center;
+  overflow: visible;
 }
 
 .rf-battle__hpbar {
@@ -3298,5 +3301,302 @@
 
   .rf-map__legend--desktop {
     display: block;
+  }
+}
+
+
+
+/* ── News feed / HUD badge ──────────────────────────────── */
+
+.rf-hud__news {
+  position: relative;
+  justify-self: end;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.35rem 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.rf-hud__news-badge {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.1rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--rf-brass, #c4a574);
+  color: #0c1218;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.rf-news {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.rf-news__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 8, 12, 0.55);
+  pointer-events: auto;
+  border: 0;
+}
+
+.rf-news__paper {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  width: min(92vw, 34rem);
+  max-height: min(86vh, 32rem);
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(28, 36, 48, 0.98), rgba(12, 18, 26, 0.98));
+  border: var(--rf-hairline);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.rf-news__masthead {
+  padding: 0.85rem 1rem 0.65rem;
+  border-bottom: var(--rf-hairline);
+  background: linear-gradient(90deg, rgba(40, 55, 70, 0.35), transparent);
+}
+
+.rf-news__masthead h2 {
+  margin: 0.2rem 0 0.15rem;
+  font-family: var(--rf-font-display);
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  color: var(--rf-accent);
+}
+
+.rf-news__dateline {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--rf-text-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rf-news__body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 0.65rem 1rem 0.35rem;
+  overscroll-behavior: contain;
+}
+
+.rf-news__turn + .rf-news__turn {
+  margin-top: 0.85rem;
+  padding-top: 0.65rem;
+  border-top: var(--rf-hairline);
+}
+
+.rf-news__turn h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rf-text-dim);
+}
+
+.rf-news__card {
+  padding: 0.55rem 0.15rem 0.65rem;
+  border-bottom: 1px solid var(--rf-border-soft);
+}
+
+.rf-news__card h4 {
+  margin: 0.2rem 0 0.25rem;
+  font-size: 0.95rem;
+  font-family: var(--rf-font-display);
+  letter-spacing: 0.03em;
+}
+
+.rf-news__card p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--rf-text-dim);
+  line-height: 1.4;
+}
+
+.rf-news__tag {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rf-brass, #c4a574);
+}
+
+.rf-news__footer {
+  padding: 0.55rem 1rem 0.75rem;
+  border-top: var(--rf-hairline);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rf-news__footer button {
+  min-height: 44px;
+}
+
+.rf-base__blurb {
+  margin: 0.25rem 0 0.45rem;
+  font-size: 0.78rem;
+  color: var(--rf-text-dim);
+  line-height: 1.4;
+}
+
+.rf-base__blurb--menu {
+  margin: 0.2rem 0 0.55rem 0.25rem;
+  padding-left: 0.35rem;
+  border-left: 2px solid var(--rf-accent-dim);
+}
+
+/* Battle combat readability */
+.rf-battle__actor.is-hit {
+  animation: rf-hit-flash 0.28s ease;
+  filter: brightness(1.35) saturate(1.2);
+}
+
+.rf-battle__actor.is-hit img,
+.rf-battle__actor.is-hit .rf-dir-sprite {
+  filter: brightness(1.4) drop-shadow(0 0 4px #ff8866);
+}
+
+.rf-battle__actor.is-idle img,
+.rf-battle__actor.is-idle .rf-dir-sprite {
+  animation: rf-idle-bob 2.4s ease-in-out infinite;
+}
+
+.rf-battle__actor.is-burning .rf-battle__burn {
+  position: absolute;
+  inset: 10% 15% 5%;
+  background:
+    radial-gradient(circle at 40% 80%, rgba(255, 140, 40, 0.85), transparent 55%),
+    radial-gradient(circle at 60% 60%, rgba(255, 60, 20, 0.55), transparent 50%);
+  animation: rf-burn-flicker 0.35s steps(2) infinite;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.rf-battle__muzzle img {
+  width: 28px;
+  height: 28px;
+  display: block;
+  filter: drop-shadow(0 0 6px rgba(255, 220, 120, 0.9));
+}
+
+.rf-battle__spark {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 18px;
+  height: 18px;
+  margin: -9px;
+  background: radial-gradient(circle, #fff6c8 0%, #ff9a3c 40%, transparent 70%);
+  animation: rf-spark 0.35s ease-out forwards;
+  pointer-events: none;
+}
+
+.rf-battle__spark--hit {
+  animation-duration: 0.28s;
+}
+
+.rf-battle__dmg {
+  position: absolute;
+  transform: translate(-50%, -120%);
+  font-family: var(--rf-font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  animation: rf-dmg-rise 0.85s ease-out forwards;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.rf-battle__dmg--atk {
+  color: #7ec8ff;
+}
+
+.rf-battle__dmg--def {
+  color: #ffb08a;
+}
+
+.rf-battle__hpbar {
+  opacity: 0.95;
+}
+
+@keyframes rf-hit-flash {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  40% { transform: translate(-50%, -50%) scale(1.08); filter: brightness(1.6); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes rf-idle-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+@keyframes rf-burn-flicker {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+@keyframes rf-spark {
+  0% { transform: scale(0.4); opacity: 1; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes rf-dmg-rise {
+  0% { opacity: 1; transform: translate(-50%, -80%); }
+  100% { opacity: 0; transform: translate(-50%, -180%); }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .rf-hud {
+    grid-template-columns: auto 1fr auto auto;
+  }
+
+  .rf-hud__news {
+    order: 3;
+    min-height: 44px;
+    height: 44px;
+    padding: 0 0.55rem;
+    background: var(--rf-elevated);
+    border: var(--rf-hairline);
+  }
+
+  .rf-hud__more {
+    order: 4;
+  }
+
+  .rf-news__paper {
+    width: min(94vw, 36rem);
+    max-height: min(88vh, 20rem);
+  }
+
+  .rf-news__masthead h2 {
+    font-size: 0.95rem;
+  }
+
+  .rf-battle__dmg {
+    font-size: 0.85rem;
+  }
+
+  .rf-base__blurb {
+    font-size: 0.72rem;
+    max-height: 4.5rem;
+    overflow: auto;
   }
 }

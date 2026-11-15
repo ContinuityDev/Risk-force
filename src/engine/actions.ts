@@ -62,7 +62,17 @@ export type GameAction =
     }
   | { type: "CONFIRM_CAPTURE"; payload: { occupyCount: number } }
   | { type: "SET_AI_ATTACK_PLANS"; payload: { plans: AiAttackPlan[] } }
-  | { type: "APPEND_TURN_LOG"; payload: { lines: string[] } };
+  | { type: "APPEND_TURN_LOG"; payload: { lines: string[] } }
+  | {
+      type: "APPEND_NEWS";
+      payload: {
+        items: import("./state").NewsItem[];
+        /** When true, opens the post-AI digest overlay. */
+        showDigest?: boolean;
+      };
+    }
+  | { type: "MARK_NEWS_READ" }
+  | { type: "DISMISS_NEWS_DIGEST" };
 
 export interface NewGamePayload {
   humanCount: number;

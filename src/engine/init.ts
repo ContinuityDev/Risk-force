@@ -248,6 +248,9 @@ export function createInitialState(payload: NewGamePayload): GameState {
     pendingCapture: null,
     turnLog: [],
     relations: createDefaultRelations(playerOrder),
+    newsFeed: [],
+    newsUnread: 0,
+    newsDigest: null,
   };
 }
 

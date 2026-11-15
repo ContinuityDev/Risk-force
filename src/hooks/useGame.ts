@@ -34,6 +34,9 @@ const EMPTY_MENU: GameState = {
   pendingCapture: null,
   turnLog: [],
   relations: {},
+  newsFeed: [],
+  newsUnread: 0,
+  newsDigest: null,
 };
 
 /**

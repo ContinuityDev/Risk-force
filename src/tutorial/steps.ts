@@ -57,6 +57,14 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     needSelection: true,
   },
   {
+    id: "building-desc",
+    title: "Building dossiers",
+    body: "Every structure lists what it does — output, cost, upkeep, worker slots, and research gates. Read the blurb in the build menu, long-press a pad building, or check the staffing drawer.",
+    target: "base-build-menu",
+    screen: "base",
+    needSelection: true,
+  },
+  {
     id: "train",
     title: "Train units",
     body: "Untrained population becomes workers or combat units in the Population & Training list. Advanced units unlock through Research.",
@@ -82,7 +90,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: "battle",
     title: "Battle deploy zones",
-    body: "In battle, attackers spawn in the left deploy strip, fight across no-man's-land, and hit the defender base on the right. Skip is a corner control on phones.",
+    body: "In battle, attackers spawn in the left deploy strip, fight across no-man's-land, and hit the defender base on the right. Watch muzzle flashes, tracers, hit sparks, and collapsing wrecks on both sides.",
     screen: "map",
   },
   {
@@ -100,9 +108,16 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: "endturn",
-    title: "End Turn & AI log",
-    body: "Tap End Turn on the bottom bar when ready. AI factions act automatically — watch the turn log for builds, marches, and invasions.",
+    title: "End Turn",
+    body: "Tap End Turn when ready. Enemy factions resolve instantly — they build economies, research, train, and fight without free spawns.",
     target: "dock-end",
+    screen: "map",
+  },
+  {
+    id: "news",
+    title: "Orbital Wire",
+    body: "After the AI phase, a theater brief summarizes battles, captures, research, and builds. Reopen anytime via the News button (badge shows unread). History is filed by turn.",
+    target: "hud-news",
     screen: "map",
   },
   {

@@ -43,8 +43,16 @@ export function reduce(state: GameState, action: GameAction): GameState {
     case "NEW_GAME":
       return createInitialState(action.payload);
 
-    case "LOAD_STATE":
-      return { ...action.payload.state };
+    case "LOAD_STATE": {
+      const s = action.payload.state;
+      return {
+        ...s,
+        newsFeed: s.newsFeed ?? [],
+        newsUnread: s.newsUnread ?? 0,
+        newsDigest: s.newsDigest ?? null,
+        turnLog: s.turnLog ?? [],
+      };
+    }
 
     case "SELECT_TERRITORY":
       return { ...state, selectedTerritoryId: action.payload.territoryId };
@@ -63,6 +71,27 @@ export function reduce(state: GameState, action: GameAction): GameState {
         ...state,
         turnLog: [...(state.turnLog ?? []), ...action.payload.lines],
       };
+
+    case "APPEND_NEWS": {
+      const items = action.payload.items ?? [];
+      if (!items.length) {
+        return action.payload.showDigest
+          ? { ...state, newsDigest: [] }
+          : state;
+      }
+      return {
+        ...state,
+        newsFeed: [...(state.newsFeed ?? []), ...items].slice(-120),
+        newsUnread: (state.newsUnread ?? 0) + items.length,
+        newsDigest: action.payload.showDigest ? items : state.newsDigest,
+      };
+    }
+
+    case "MARK_NEWS_READ":
+      return { ...state, newsUnread: 0 };
+
+    case "DISMISS_NEWS_DIGEST":
+      return { ...state, newsDigest: null };
 
     case "SET_CAMPAIGN_BUDGET": {
       const pid = activePlayerId(state);

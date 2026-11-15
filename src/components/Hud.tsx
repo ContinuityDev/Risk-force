@@ -13,6 +13,7 @@ interface HudProps {
   isHumanTurn: boolean;
   dispatch: (action: GameAction) => void;
   onTutorial?: () => void;
+  onOpenNews?: () => void;
 }
 
 const NAV: { screen: Screen; label: string }[] = [
@@ -29,6 +30,7 @@ export function Hud({
   isHumanTurn,
   dispatch,
   onTutorial,
+  onOpenNews,
 }: HudProps) {
   const r = activePlayer.resources;
   const color = factionColor(activePlayer.id);
@@ -134,6 +136,26 @@ export function Hud({
         </label>
       </div>
 
+      {/* News — top-right, thumb-reachable on mobile */}
+      {onOpenNews && (
+        <button
+          type="button"
+          className="ghost rf-hud__news"
+          data-tutorial="hud-news"
+          aria-label={
+            state.newsUnread
+              ? `News, ${state.newsUnread} unread`
+              : "News"
+          }
+          onClick={onOpenNews}
+        >
+          News
+          {(state.newsUnread ?? 0) > 0 && (
+            <span className="rf-hud__news-badge">{state.newsUnread}</span>
+          )}
+        </button>
+      )}
+
       {/* Desktop nav — hidden on short landscape (MobileDock replaces it) */}
       <nav className="rf-hud__nav rf-hud__nav--desktop">
         {NAV.map(({ screen, label }) => (
@@ -203,6 +225,18 @@ export function Hud({
           >
             Help
           </button>
+          {onOpenNews && (
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                onOpenNews();
+              }}
+            >
+              News
+              {(state.newsUnread ?? 0) > 0 ? ` (${state.newsUnread})` : ""}
+            </button>
+          )}
           {onTutorial && (
             <button
               type="button"
