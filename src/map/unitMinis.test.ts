@@ -79,6 +79,38 @@ describe("unitMinis", () => {
     expect(minis[0]?.transit).toBe(true);
   });
 
+  it("emits nothing for empty or zero-count garrisons", () => {
+    const t =
+      TERRITORIES.find((x) => x.id === "morocco") ?? TERRITORIES[0]!;
+    const cam = {
+      x: t.label.x - 50,
+      y: t.label.y - 25,
+      w: 100,
+      h: 50,
+    };
+    const labels = [
+      { id: t.id, x: t.label.x, y: t.label.y, w: 16, h: 8 },
+    ];
+    expect(
+      layoutUnitMinis(
+        [t],
+        { [t.id]: stubTs({ garrison: {} }) },
+        0.4,
+        cam,
+        labels,
+      ),
+    ).toEqual([]);
+    expect(
+      layoutUnitMinis(
+        [t],
+        { [t.id]: stubTs({ garrison: { trooper: 0, hover_tank: 0 } }) },
+        0.4,
+        cam,
+        labels,
+      ),
+    ).toEqual([]);
+  });
+
   it("fingerprints garrison mutations", () => {
     const a = garrisonFingerprint({
       t1: stubTs({ garrison: { trooper: 2 } }),

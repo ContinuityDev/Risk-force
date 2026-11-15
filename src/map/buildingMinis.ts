@@ -255,7 +255,8 @@ export function layoutBuildingMinis(
 
   for (const t of ranked) {
     const ts = territoryState[t.id];
-    const buildings = ts?.buildings ?? [];
+    // Skip empty / razed bases — never emit compact pads or +N for 0 buildings.
+    const buildings = (ts?.buildings ?? []).filter((b) => b.hp > 0);
     if (!buildings.length) continue;
 
     const ax = t.label.x;

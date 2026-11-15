@@ -177,6 +177,70 @@ describe("buildingMinis", () => {
     );
   });
 
+  it("emits nothing for empty or razed buildings (seed-77 Maghreb outposts)", async () => {
+    const { createInitialState } = await import("../engine/init");
+    const state = createInitialState({
+      humanCount: 1,
+      aiCount: 2,
+      multiplayerMode: "solo",
+      seed: 77,
+    });
+    for (const id of ["morocco", "tunisia", "france"] as const) {
+      expect(state.territories[id]?.buildings ?? []).toEqual([]);
+    }
+    expect(state.territories.algeria?.buildings.length).toBeGreaterThan(0);
+
+    const focus = TERRITORIES.filter((t) =>
+      ["morocco", "tunisia", "algeria", "france"].includes(t.id),
+    );
+    const labels = focus.map((t) => ({
+      id: t.id,
+      x: t.label.x,
+      y: t.label.y,
+      w: 18,
+      h: 8,
+    }));
+    const cam = { x: 450, y: 100, w: 120, h: 80 };
+    for (const zoom of [1, 0.5, 0.2]) {
+      const minis = layoutBuildingMinis(
+        focus,
+        state.territories,
+        zoom,
+        cam,
+        labels,
+      );
+      expect(minis.every((m) => m.territoryId === "algeria")).toBe(true);
+      expect(minis.some((m) => m.territoryId === "morocco")).toBe(false);
+      expect(minis.some((m) => m.territoryId === "tunisia")).toBe(false);
+    }
+
+    const razed: Record<string, TerritoryState> = {
+      algeria: stubTerritory({
+        owner: "player",
+        buildings: [
+          {
+            instanceId: "dead",
+            buildingId: "command_nexus",
+            x: 0,
+            y: 0,
+            hp: 0,
+            buildRemaining: 0,
+            workers: 0,
+          },
+        ],
+      }),
+    };
+    expect(
+      layoutBuildingMinis(
+        focus.filter((t) => t.id === "algeria"),
+        razed,
+        0.5,
+        cam,
+        labels.filter((l) => l.id === "algeria"),
+      ),
+    ).toEqual([]);
+  });
+
   it("fingerprints building mutations including construction", () => {
     const a = buildingsFingerprint({
       t1: stubTerritory({
