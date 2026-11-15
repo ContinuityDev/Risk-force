@@ -1353,8 +1353,10 @@
 .rf-invade-from {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.4rem;
   min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .rf-invade-from__head {
@@ -1362,11 +1364,23 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.5rem;
+  flex: 0 0 auto;
 }
 
 .rf-invade-from__head h3 {
-  margin: 0.1rem 0 0.15rem;
+  margin: 0.05rem 0 0.1rem;
   font-size: 1.05rem;
+}
+
+.rf-invade-from__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .rf-invade-from__origins {
@@ -1375,9 +1389,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  max-height: min(48vh, 22rem);
-  overflow: auto;
+  gap: 0.45rem;
 }
 
 .rf-invade-from__origins > li {
@@ -1443,8 +1455,12 @@
 .rf-invade-from__footer {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  margin-top: 0.35rem;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  flex: 0 0 auto;
+  padding-top: 0.25rem;
+  border-top: var(--rf-hairline);
+  background: rgba(12, 16, 22, 0.92);
 }
 
 .rf-invade-from__footer .primary {
@@ -3040,15 +3056,58 @@
     top: var(--rf-hud-h);
     bottom: 3.1rem;
     width: min(46vw, 16rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .rf-drawer--right > .rf-drawer__handle {
+    flex: 0 0 auto;
   }
 
   .rf-map__territory-drawer {
     max-height: calc(100dvh - var(--rf-hud-h) - 3.1rem);
     padding-top: 0.45rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .rf-map__territory-drawer .rf-picker__list {
     max-height: min(22vh, 6.5rem);
+  }
+
+  .rf-map__territory-drawer:has(.rf-invade-from) {
+    max-height: calc(100dvh - var(--rf-hud-h) - 3.1rem);
+    padding-bottom: 0.35rem;
+  }
+
+  .rf-map__territory-drawer:has(.rf-invade-from) > .rf-label,
+  .rf-map__territory-drawer:has(.rf-invade-from) > .rf-map__sheet-title,
+  .rf-map__territory-drawer:has(.rf-invade-from) > .rf-text-dim {
+    flex: 0 0 auto;
+  }
+
+  .rf-map__territory-drawer .rf-invade-from {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .rf-invade-from__head h3 {
+    font-size: 0.92rem;
+  }
+
+  .rf-invade-from__head .rf-hint {
+    font-size: 0.68rem;
+    margin: 0;
+  }
+
+  .rf-invade-from__force li {
+    gap: 0.35rem;
+  }
+
+  .rf-invade-from__footer .primary {
+    min-height: var(--rf-tap);
   }
 
   .rf-map__sheet-title {

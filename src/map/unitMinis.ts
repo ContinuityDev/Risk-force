@@ -1,7 +1,8 @@
 /**
  * Zoom-aware unit / garrison minis on the world map.
- * Mirrors buildingMinis: compact troop count at world zoom, top unit types
- * at mid, full breakdown at deep. Placed above labels so they do not overlap
+ * World: one compact strength chip per territory.
+ * Mid: up to 3 types + '+N' (compact on tiny plots).
+ * Deep: multi-type grid ABOVE the label so it never overlaps
  * building clusters (which sit below labels).
  */
 
@@ -153,9 +154,86 @@ function toMini(
   };
 }
 
+function tryPlaceGrid(
+  shown: Array<{ unitId: string; count: number }>,
+  moreCount: number,
+  territoryId: string,
+  owner: string | undefined,
+  cols: number,
+  size: number,
+  gap: number,
+  cx: number,
+  cy: number,
+  occupied: Box[],
+  collisionPad: number,
+): { minis: PlacedUnitMini[]; boxes: Box[] } | null {
+  const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
+  const slots = gridSlots(slotCount, cols, size, gap, cx, cy);
+  const trial: PlacedUnitMini[] = [];
+  const trialBoxes: Box[] = [];
+
+  for (let i = 0; i < shown.length; i++) {
+    const slot = slots[i]!;
+    const u = shown[i]!;
+    const box: Box = { x: slot.x, y: slot.y, w: size, h: size };
+    if (
+      occupied.some((o) => overlaps(box, o, collisionPad)) ||
+      trialBoxes.some((o) => overlaps(box, o, gap * 0.2))
+    ) {
+      return null;
+    }
+    const m = toMini(
+      `${territoryId}:${u.unitId}`,
+      u.unitId,
+      u.count,
+      slot.x,
+      slot.y,
+      size,
+      { territoryId, owner },
+    );
+    if (!m) continue;
+    trial.push(m);
+    trialBoxes.push(box);
+  }
+
+  if (moreCount > 0) {
+    const slot = slots[shown.length];
+    if (!slot) return null;
+    const box: Box = {
+      x: slot.x,
+      y: slot.y,
+      w: size * 0.85,
+      h: size * 0.85,
+    };
+    if (
+      occupied.some((o) => overlaps(box, o, collisionPad)) ||
+      trialBoxes.some((o) => overlaps(box, o, gap * 0.2))
+    ) {
+      return null;
+    }
+    trial.push({
+      key: `${territoryId}:more`,
+      territoryId,
+      unitId: "_more",
+      spriteId: "",
+      spriteUrl: "",
+      x: slot.x,
+      y: slot.y,
+      size: size * 0.85,
+      count: moreCount,
+      more: moreCount,
+      owner,
+    });
+    trialBoxes.push(box);
+  }
+
+  if (!trial.length) return null;
+  return { minis: trial, boxes: trialBoxes };
+}
+
 /**
- * Layout garrison unit minis. `occupied` should already include labels and
- * building mini boxes so units nest above the label pole.
+ * Layout garrison unit minis. `occupiedExtra` should include building mini
+ * boxes so units nest above the label pole (buildings sit below).
  */
 export function layoutUnitMinis(
   territories: TerritoryDef[],
@@ -166,16 +244,17 @@ export function layoutUnitMinis(
   occupiedExtra: Box[] = [],
 ): PlacedUnitMini[] {
   const tier: MiniZoomTier = miniZoomTier(zoomScale);
-  const size = iconWorldSize(zoomScale, cam.w, tier) * 0.92;
-  const gap = Math.max(0.7, size * 0.15);
+  // World chips stay compact; mid/deep shrink slightly so Europe stays readable.
+  const sizeScale = tier === "world" ? 0.78 : tier === "mid" ? 0.82 : 0.88;
+  const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
+  const gap = Math.max(0.55, size * 0.18);
   const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
-  // Labels always reserved; building boxes only block non-side anchors so the
-  // left-of-label unit lane stays free beside building clusters.
+  // Use a tightened label box — map labels often pad wider than the glyph.
   const labelBoxes: Box[] = labels.map((l) => ({
     x: l.x,
     y: l.y,
-    w: l.w,
-    h: l.h,
+    w: Math.min(l.w, Math.max(size * 1.4, 8)),
+    h: Math.max(l.h, size * 0.55),
   }));
   const occupied: Box[] = [...labelBoxes, ...occupiedExtra];
   const out: PlacedUnitMini[] = [];
@@ -201,35 +280,34 @@ export function layoutUnitMinis(
 
     const lbl = labelById[t.id];
     const baseX = lbl?.x ?? ax;
-    // Mid icons are large in world units (~6wu); deep grids are wide.
-    // Keep the whole multi-icon lane clear left of the label so we don't
-    // fall through to a lone compact chip on dense cores.
-    const laneOffset =
-      tier === "deep" ? size * 2.6 : tier === "mid" ? size * 3.1 : size * 1.2;
-    const sideX = lbl ? lbl.x - laneOffset : ax - size;
-    const sideY = lbl
-      ? lbl.y + lbl.h / 2 + gap + size / 2
-      : ay + size * 0.9;
-    const aboveY = lbl
-      ? lbl.y - lbl.h / 2 - gap - size / 2
-      : ay - size * 0.95;
+    const labelTop = lbl ? lbl.y - lbl.h / 2 : ay - 2;
+    const labelBot = lbl ? lbl.y + lbl.h / 2 : ay + 2;
+    const total = sorted.reduce((s, u) => s + u.count, 0);
 
+    // ── World: exactly one compact strength chip ───────────────
     if (tier === "world") {
-      // Skip 1-troop speckles on tiny plots — they read as "ghost" chips
-      // next to empty neighbors (Morocco/Tunisia-style).
-      if (zoomScale >= 0.98 && t.area < 0.0035) continue;
-      const total = sorted.reduce((s, u) => s + u.count, 0);
-      if (total < 3 && t.area < 0.008) continue;
-      const top = sorted[0]!;
+      // Europe clutter: skip speckles and tiny plots entirely.
+      if (t.area < 0.0045) continue;
+      if (total <= 1 && t.area < 0.01) continue;
+      if (zoomScale >= 0.9 && t.area < 0.006) continue;
+
+      const chipSize = size;
+      const aboveY = labelTop - gap - chipSize / 2;
+      const belowY = labelBot + gap + chipSize / 2;
       const anchors = [
-        { x: sideX, y: sideY },
-        { x: sideX, y: sideY - size - gap },
         { x: baseX, y: aboveY },
-        { x: baseX + (lbl?.w ?? size) / 2 + gap + size / 2, y: sideY },
+        { x: baseX - chipSize * 0.9, y: aboveY },
+        { x: baseX + chipSize * 0.9, y: aboveY },
+        { x: baseX - chipSize * 1.1, y: lbl?.y ?? ay },
+        { x: baseX + chipSize * 1.1, y: lbl?.y ?? ay },
+        { x: baseX, y: belowY },
       ];
+      const top = sorted[0]!;
+      let placed = false;
       for (const a of anchors) {
-        const box: Box = { x: a.x, y: a.y, w: size * 1.15, h: size * 1.15 };
-        if (occupied.some((o) => overlaps(box, o, gap * 0.4))) continue;
+        const box: Box = { x: a.x, y: a.y, w: chipSize, h: chipSize };
+        // Strong pad so neighbor Europe chips don't stack.
+        if (occupied.some((o) => overlaps(box, o, gap * 0.85))) continue;
         occupied.push(box);
         const m = toMini(
           `${t.id}:troops`,
@@ -237,7 +315,40 @@ export function layoutUnitMinis(
           total,
           a.x,
           a.y,
-          size,
+          chipSize,
+          { territoryId: t.id, compact: true, owner: ts?.owner },
+        );
+        if (m) out.push(m);
+        placed = true;
+        break;
+      }
+      void placed;
+      continue;
+    }
+
+    // Mid on tiny plots → single compact chip (Europe declutter).
+    const forceCompact = tier === "mid" && t.area < 0.008;
+    if (forceCompact || (tier === "mid" && sorted.length === 1)) {
+      const chipSize = size * (t.area < 0.005 ? 0.85 : 1);
+      const aboveY = labelTop - gap - chipSize / 2;
+      const anchors = [
+        { x: baseX, y: aboveY },
+        { x: baseX - chipSize, y: aboveY },
+        { x: baseX + chipSize, y: aboveY },
+        { x: baseX - chipSize * 1.15, y: lbl?.y ?? ay },
+      ];
+      const top = sorted[0]!;
+      for (const a of anchors) {
+        const box: Box = { x: a.x, y: a.y, w: chipSize, h: chipSize };
+        if (occupied.some((o) => overlaps(box, o, gap * 0.6))) continue;
+        occupied.push(box);
+        const m = toMini(
+          `${t.id}:troops`,
+          top.unitId,
+          total,
+          a.x,
+          a.y,
+          chipSize,
           { territoryId: t.id, compact: true, owner: ts?.owner },
         );
         if (m) out.push(m);
@@ -246,117 +357,71 @@ export function layoutUnitMinis(
       continue;
     }
 
+    // Mid: ≤3 types + optional +N. Deep: up to 6 types above the label.
     const maxShow =
-      tier === "mid"
-        ? Math.min(3, sorted.length)
-        : Math.min(6, sorted.length);
+      tier === "mid" ? Math.min(3, sorted.length) : Math.min(6, sorted.length);
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
+    const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
     const cols =
       tier === "deep"
-        ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(shown.length + (moreCount ? 1 : 0)))))
-        : Math.min(3, shown.length + (moreCount ? 1 : 0));
-    const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
+        ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(slotCount))))
+        : Math.min(3, slotCount);
+    const rows = Math.ceil(slotCount / cols);
+    const gridH = rows * size + (rows - 1) * gap;
+    // Center the grid so its bottom edge clears the label top.
+    const aboveCy = labelTop - gap - gridH / 2;
+    const sideX = baseX - size * (cols * 0.55 + 0.8);
+
     const anchors = [
-      { cx: sideX - (tier === "deep" ? size * 0.4 : 0), cy: sideY },
-      { cx: sideX, cy: sideY - size },
-      { cx: baseX, cy: aboveY },
+      { cx: baseX, cy: aboveCy },
+      { cx: baseX - size * 0.8, cy: aboveCy },
+      { cx: baseX + size * 0.8, cy: aboveCy },
+      { cx: sideX, cy: aboveCy },
       {
-        cx: baseX + (lbl?.w ?? size) / 2 + gap + size,
-        cy: sideY,
+        cx: sideX,
+        cy: (lbl?.y ?? ay) - size * 0.35,
       },
     ];
 
     let placed = false;
-    for (let ai = 0; ai < anchors.length; ai++) {
-      const { cx, cy } = anchors[ai]!;
-      // Dedicated left/above-left unit lane: ignore building + label boxes.
-      // Labels are often wider than the glyph (padding) and would otherwise
-      // veto every mid/deep multi-icon grid next to dense cores.
-      const blockers = ai < 2 ? [] : occupied;
-      const slots = gridSlots(slotCount, cols, size, gap, cx, cy);
-      const trial: PlacedUnitMini[] = [];
-      const trialBoxes: Box[] = [];
-      let ok = true;
-      for (let i = 0; i < shown.length; i++) {
-        const slot = slots[i]!;
-        const u = shown[i]!;
-        const box: Box = { x: slot.x, y: slot.y, w: size, h: size };
-        if (
-          blockers.some((o) => overlaps(box, o, gap * 0.35)) ||
-          trialBoxes.some((o) => overlaps(box, o, gap * 0.2))
-        ) {
-          ok = false;
-          break;
-        }
-        const m = toMini(
-          `${t.id}:${u.unitId}`,
-          u.unitId,
-          u.count,
-          slot.x,
-          slot.y,
-          size,
-          { territoryId: t.id, owner: ts?.owner },
-        );
-        if (!m) continue;
-        trial.push(m);
-        trialBoxes.push(box);
-      }
-      if (!ok) continue;
-      if (moreCount > 0) {
-        const slot = slots[shown.length]!;
-        const box: Box = { x: slot.x, y: slot.y, w: size * 0.85, h: size * 0.85 };
-        // Keep +N on the same blocker set as the unit lane (don't let
-        // building boxes veto an otherwise valid side-lane layout).
-        if (
-          blockers.some((o) => overlaps(box, o, gap * 0.35)) ||
-          trialBoxes.some((o) => overlaps(box, o, gap * 0.2))
-        ) {
-          continue;
-        }
-        trial.push({
-          key: `${t.id}:more`,
-          territoryId: t.id,
-          unitId: "_more",
-          spriteId: "",
-          spriteUrl: "",
-          x: slot.x,
-          y: slot.y,
-          size: size * 0.85,
-          count: moreCount,
-          more: moreCount,
-          owner: ts?.owner,
-        });
-        trialBoxes.push(box);
-      }
-      for (const box of trialBoxes) occupied.push(box);
-      out.push(...trial);
+    for (const { cx, cy } of anchors) {
+      const result = tryPlaceGrid(
+        shown,
+        moreCount,
+        t.id,
+        ts?.owner,
+        cols,
+        size,
+        gap,
+        cx,
+        cy,
+        occupied,
+        gap * 0.55,
+      );
+      if (!result) continue;
+      for (const box of result.boxes) occupied.push(box);
+      out.push(...result.minis);
       placed = true;
       break;
     }
 
     if (!placed) {
-      // Fallback compact badge — prefer label blockers so building clusters
-      // never erase the garrison chip on dense cores (Greenland etc.).
-      const total = sorted.reduce((s, u) => s + u.count, 0);
-      const top = sorted[0]!;
-      const fx = sideX;
-      const fy = sideY;
-      const box: Box = {
-        x: fx,
-        y: fy,
-        w: size * 1.1,
-        h: size * 1.1,
-      };
-      if (!labelBoxes.some((o) => overlaps(box, o, gap * 0.3))) {
+      // Fallback: one compact chip above the label.
+      const chipSize = size * 0.9;
+      const fx = baseX;
+      const fy = labelTop - gap - chipSize / 2;
+      const box: Box = { x: fx, y: fy, w: chipSize, h: chipSize };
+      if (!occupied.some((o) => overlaps(box, o, gap * 0.4))) {
         occupied.push(box);
+        const top = sorted[0]!;
         const m = toMini(
           `${t.id}:troops`,
           top.unitId,
           total,
           fx,
           fy,
-          size * 0.9,
+          chipSize,
           { territoryId: t.id, compact: true, owner: ts?.owner },
         );
         if (m) out.push(m);

@@ -149,7 +149,7 @@ export function InvadeFromPanel({
           <span className="rf-label">Invade</span>
           <h3>{target.name}</h3>
           <p className="rf-hint">
-            Garrison {preview.troops} · Defense {preview.defense} · Owner{" "}
+            Gar {preview.troops} · Def {preview.defense} ·{" "}
             {state.territories[targetId]?.owner ?? "neutral"}
           </p>
         </div>
@@ -158,94 +158,100 @@ export function InvadeFromPanel({
         </button>
       </header>
 
-      <span className="rf-label">Invade from</span>
-      {origins.length === 0 && (
-        <p className="rf-hint">
-          No bordering territories with units. March troops closer first.
-        </p>
-      )}
-      <ul className="rf-invade-from__origins">
-        {origins.map((o) => {
-          const g = state.territories[o.id]?.garrison ?? {};
-          const forceSlots = Object.entries(forces[o.id] ?? {})
-            .filter(([, c]) => c > 0)
-            .map(([unitId, count]) => ({ unitId, count }));
-          const eta =
-            forceSlots.length > 0
-              ? travelTurns(o.id, targetId, forceSlots)
-              : travelTurns(
-                  o.id,
-                  targetId,
-                  Object.entries(g)
-                    .filter(([, c]) => c > 0)
-                    .map(([unitId, count]) => ({ unitId, count })),
-                );
-          const active = selected.has(o.id);
-          const units = UNIT_LIST.filter((u) => (g[u.id] ?? 0) > 0);
-          return (
-            <li
-              key={o.id}
-              className={active ? "is-active" : undefined}
-            >
-              <button
-                type="button"
-                className={active ? "primary" : "ghost"}
-                onClick={() => toggleOrigin(o.id)}
+      <div className="rf-invade-from__body">
+        <span className="rf-label">Invade from</span>
+        {origins.length === 0 && (
+          <p className="rf-hint">
+            No bordering territories with units. March troops closer first.
+          </p>
+        )}
+        <ul className="rf-invade-from__origins">
+          {origins.map((o) => {
+            const g = state.territories[o.id]?.garrison ?? {};
+            const forceSlots = Object.entries(forces[o.id] ?? {})
+              .filter(([, c]) => c > 0)
+              .map(([unitId, count]) => ({ unitId, count }));
+            const eta =
+              forceSlots.length > 0
+                ? travelTurns(o.id, targetId, forceSlots)
+                : travelTurns(
+                    o.id,
+                    targetId,
+                    Object.entries(g)
+                      .filter(([, c]) => c > 0)
+                      .map(([unitId, count]) => ({ unitId, count })),
+                  );
+            const active = selected.has(o.id);
+            const units = UNIT_LIST.filter((u) => (g[u.id] ?? 0) > 0);
+            return (
+              <li
+                key={o.id}
+                className={active ? "is-active" : undefined}
               >
-                <strong>{o.name}</strong>
-                <small>
-                  {garrisonCount(g)} units · {eta} turn
-                  {eta === 1 ? "" : "s"} travel
-                </small>
-              </button>
-              <div className="rf-invade-from__minis">
-                {units.map((u) => (
-                  <span key={u.id} className="rf-invade-from__chip" title={u.name}>
-                    <Sprite id={u.sprite.id} size={22} anim="none" />
-                    <em>{g[u.id]}</em>
-                  </span>
-                ))}
-              </div>
-              {active && (
-                <ul className="rf-invade-from__force">
-                  {units.map((u) => {
-                    const reserve = g[u.id] ?? 0;
-                    const cur = forces[o.id]?.[u.id] ?? 0;
-                    return (
-                      <li key={u.id}>
-                        <Sprite id={u.sprite.id} size={28} anim="none" />
-                        <div>
-                          <strong>{u.name}</strong>
-                          <small>
-                            Avail {reserve} · Spd {u.speed}
-                          </small>
-                        </div>
-                        <div className="rf-invade__stepper">
-                          <button
-                            type="button"
-                            disabled={!canAct || cur <= 0}
-                            onClick={() => setCount(o.id, u.id, cur - 1)}
-                          >
-                            −
-                          </button>
-                          <strong>{cur}</strong>
-                          <button
-                            type="button"
-                            disabled={!canAct || cur >= reserve}
-                            onClick={() => setCount(o.id, u.id, cur + 1)}
-                          >
-                            +
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                <button
+                  type="button"
+                  className={active ? "primary" : "ghost"}
+                  onClick={() => toggleOrigin(o.id)}
+                >
+                  <strong>{o.name}</strong>
+                  <small>
+                    {garrisonCount(g)} units · {eta} turn
+                    {eta === 1 ? "" : "s"} travel
+                  </small>
+                </button>
+                <div className="rf-invade-from__minis">
+                  {units.map((u) => (
+                    <span
+                      key={u.id}
+                      className="rf-invade-from__chip"
+                      title={u.name}
+                    >
+                      <Sprite id={u.sprite.id} size={20} anim="none" />
+                      <em>{g[u.id]}</em>
+                    </span>
+                  ))}
+                </div>
+                {active && (
+                  <ul className="rf-invade-from__force">
+                    {units.map((u) => {
+                      const reserve = g[u.id] ?? 0;
+                      const cur = forces[o.id]?.[u.id] ?? 0;
+                      return (
+                        <li key={u.id}>
+                          <Sprite id={u.sprite.id} size={24} anim="none" />
+                          <div>
+                            <strong>{u.name}</strong>
+                            <small>
+                              Avail {reserve} · Spd {u.speed}
+                            </small>
+                          </div>
+                          <div className="rf-invade__stepper">
+                            <button
+                              type="button"
+                              disabled={!canAct || cur <= 0}
+                              onClick={() => setCount(o.id, u.id, cur - 1)}
+                            >
+                              −
+                            </button>
+                            <strong>{cur}</strong>
+                            <button
+                              type="button"
+                              disabled={!canAct || cur >= reserve}
+                              onClick={() => setCount(o.id, u.id, cur + 1)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       <footer className="rf-invade-from__footer">
         <p className="rf-resource">

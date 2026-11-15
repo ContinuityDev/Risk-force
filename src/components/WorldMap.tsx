@@ -943,8 +943,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     pointerEvents="none"
                   />
                   <circle
-                    r={Math.max(0.55, r * (m.compact ? 0.22 : 0.14))}
-                    cy={-r * 0.72}
+                    r={Math.max(0.4, r * (m.compact ? 0.16 : 0.1))}
+                    cx={-r * 0.62}
+                    cy={-r * 0.62}
                     fill={col}
                     opacity={0.95}
                     pointerEvents="none"
@@ -952,30 +953,38 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   {m.spriteUrl ? (
                     <image
                       href={m.spriteUrl}
-                      x={-half * 0.78}
-                      y={-half * (m.compact ? 0.55 : 0.62)}
-                      width={m.size * 0.78}
-                      height={m.size * (m.compact ? 0.7 : 0.78)}
+                      x={-half * 0.82}
+                      y={-half * (m.compact ? 0.72 : 0.78)}
+                      width={m.size * 0.82}
+                      height={m.size * (m.compact ? 0.78 : 0.88)}
                       preserveAspectRatio="xMidYMid meet"
                       pointerEvents="none"
                     />
                   ) : null}
                   {m.count > 0 && (
-                    <g pointerEvents="none">
+                    <g className="rf-map__unit-badge" pointerEvents="none">
                       <circle
-                        cx={half * 0.72}
-                        cy={-half * 0.72}
-                        r={Math.max(2.4, m.size * 0.34)}
+                        cx={half * 0.58}
+                        cy={half * 0.58}
+                        r={
+                          m.compact
+                            ? Math.max(1.35, m.size * 0.2)
+                            : Math.max(1.05, m.size * 0.14)
+                        }
                         fill={col}
                         stroke="#f2f7fa"
-                        strokeWidth={Math.max(0.3, 0.65 * zoomScale)}
+                        strokeWidth={Math.max(0.22, 0.45 * zoomScale)}
                       />
                       <text
-                        x={half * 0.72}
-                        y={-half * 0.72}
+                        x={half * 0.58}
+                        y={half * 0.58}
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        fontSize={Math.max(3.5, m.size * 0.36)}
+                        fontSize={
+                          m.compact
+                            ? Math.max(2.4, m.size * 0.2)
+                            : Math.max(2.0, m.size * 0.155)
+                        }
                         fill="#0a1218"
                         fontWeight="700"
                       >
