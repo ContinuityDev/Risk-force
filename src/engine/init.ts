@@ -21,8 +21,29 @@ function makePlayer(
       research: kind === "human" ? 30 : 24,
       supply: kind === "human" ? 40 : 35,
     },
-    researched: [],
-    reserves: { trooper: kind === "human" ? 5 : 4 },
+    // Seed early doctrines so invasions field mixed silhouettes out of the gate.
+    researched:
+      kind === "human"
+        ? [
+            "infantry_doctrine",
+            "mech_corps",
+            "grav_armor",
+            "nano_industry",
+            "drone_swarm",
+            "plasma_doctrine",
+            "siege_protocols",
+          ]
+        : ["infantry_doctrine", "mech_corps"],
+    reserves:
+      kind === "human"
+        ? {
+            trooper: 4,
+            assault_mech: 3,
+            hover_tank: 3,
+            drone: 4,
+            siege_cannon: 2,
+          }
+        : { trooper: 4, assault_mech: 1 },
   };
 }
 
@@ -69,7 +90,7 @@ function starterBuildings(
       instanceId: `b${nextId.n++}`,
       buildingId: "laser_turret",
       x: 4,
-      y: 2,
+      y: 0,
       hp: 260,
       buildRemaining: 0,
     },
@@ -77,8 +98,40 @@ function starterBuildings(
       instanceId: `b${nextId.n++}`,
       buildingId: "laser_turret",
       x: 5,
-      y: 3,
+      y: 2,
       hp: 260,
+      buildRemaining: 0,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
+      buildingId: "shield_wall",
+      x: 4,
+      y: 4,
+      hp: 480,
+      buildRemaining: 0,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
+      buildingId: "reactor",
+      x: 5,
+      y: 3,
+      hp: 240,
+      buildRemaining: 0,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
+      buildingId: "supply_depot",
+      x: 2,
+      y: 4,
+      hp: 200,
+      buildRemaining: 0,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
+      buildingId: "missile_battery",
+      x: 0,
+      y: 4,
+      hp: 250,
       buildRemaining: 0,
     },
   ];

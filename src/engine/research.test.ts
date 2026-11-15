@@ -23,8 +23,10 @@ describe("research", () => {
       multiplayerMode: "solo",
       seed: 1,
     });
+    // Blank slate — starter campaigns seed early doctrines for gameplay.
     const player = {
       ...state.players.player!,
+      researched: [] as string[],
       resources: { ...state.players.player!.resources, research: 0 },
     };
     expect(canResearch(player, "mech_corps")).toBe(false);
@@ -45,6 +47,7 @@ describe("research", () => {
     });
     const rich = {
       ...state.players.player!,
+      researched: [] as string[],
       resources: { ...state.players.player!.resources, research: 200 },
     };
     expect(isUnlocked(rich, "assault_mech")).toBe(false);
@@ -68,6 +71,7 @@ describe("research", () => {
         ...state.players,
         player: {
           ...state.players.player!,
+          researched: [],
           resources: { ...state.players.player!.resources, research: 500 },
         },
       },

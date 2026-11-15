@@ -496,33 +496,79 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at 30% 20%, rgba(126, 182, 201, 0.06), transparent 50%),
-    radial-gradient(ellipse at 70% 80%, rgba(196, 165, 116, 0.04), transparent 45%),
+    /* service roads — cross + perimeter */
+    linear-gradient(
+      90deg,
+      transparent 40%,
+      rgba(70, 82, 92, 0.45) 41%,
+      rgba(70, 82, 92, 0.45) 44%,
+      transparent 45%
+    ),
+    linear-gradient(
+      0deg,
+      transparent 55%,
+      rgba(70, 82, 92, 0.4) 56%,
+      rgba(70, 82, 92, 0.4) 58%,
+      transparent 59%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(55, 68, 78, 0.35) 0 3%,
+      transparent 3% 97%,
+      rgba(55, 68, 78, 0.35) 97% 100%
+    ),
+    /* pad plates */
     repeating-linear-gradient(
       90deg,
-      #152018 0px,
-      #152018 83px,
-      #1a2820 83px,
-      #1a2820 84px
+      #161e24 0px,
+      #161e24 83px,
+      #1c2830 83px,
+      #1c2830 84px
     ),
     repeating-linear-gradient(
       0deg,
-      #152018 0px,
-      #152018 83px,
-      #1a2820 83px,
-      #1a2820 84px
+      #161e24 0px,
+      #161e24 83px,
+      #1c2830 83px,
+      #1c2830 84px
     ),
-    linear-gradient(160deg, #1a2822 0%, #121c16 40%, #0e1612 100%);
+    /* panel hatch */
+    repeating-linear-gradient(
+      135deg,
+      transparent 0 10px,
+      rgba(126, 182, 201, 0.03) 10px 11px
+    ),
+    linear-gradient(160deg, #1a242c 0%, #121820 45%, #0e141a 100%);
 }
 
 .rf-base__terrain::after {
   content: "";
   position: absolute;
   inset: 0;
+  /* pad corner lights + center markers — hard dots, no soft blobs */
   background:
-    radial-gradient(circle at 20% 30%, rgba(40, 60, 48, 0.5) 0 12%, transparent 13%),
-    radial-gradient(circle at 70% 60%, rgba(30, 48, 40, 0.45) 0 18%, transparent 19%),
-    radial-gradient(circle at 45% 80%, rgba(50, 70, 55, 0.35) 0 10%, transparent 11%);
+    linear-gradient(
+      45deg,
+      transparent 48%,
+      rgba(126, 182, 201, 0.07) 49%,
+      transparent 51%
+    ),
+    radial-gradient(circle at 6px 6px, #c4a574 0 1.5px, transparent 2px),
+    radial-gradient(circle at calc(100% - 6px) 6px, #c4a574 0 1.5px, transparent 2px),
+    radial-gradient(circle at 6px calc(100% - 6px), #7eb6c9 0 1.5px, transparent 2px),
+    radial-gradient(
+      circle at calc(100% - 6px) calc(100% - 6px),
+      #7eb6c9 0 1.5px,
+      transparent 2px
+    ),
+    radial-gradient(circle at 42px 42px, rgba(168, 212, 224, 0.55) 0 1px, transparent 1.5px);
+  background-size:
+    100% 100%,
+    84px 84px,
+    84px 84px,
+    84px 84px,
+    84px 84px,
+    84px 84px;
   pointer-events: none;
 }
 
@@ -830,11 +876,31 @@
 
 .rf-battle__ground {
   position: absolute;
-  inset: 40% 0 0 0;
+  inset: 38% 0 0 0;
   background:
-    radial-gradient(circle at 25% 40%, #243428 0 8%, transparent 9%),
-    radial-gradient(circle at 60% 70%, #1a2820 0 12%, transparent 13%),
-    radial-gradient(circle at 80% 30%, #2a3830 0 6%, transparent 7%),
+    /* crater scars */
+    radial-gradient(ellipse 40px 18px at 22% 55%, #0a100c 0 40%, transparent 70%),
+    radial-gradient(ellipse 28px 14px at 48% 70%, #0a100c 0 35%, transparent 65%),
+    radial-gradient(ellipse 36px 16px at 75% 48%, #0a100c 0 40%, transparent 70%),
+    /* rubble / debris marks */
+    linear-gradient(120deg, transparent 20%, rgba(80, 90, 70, 0.25) 21%, transparent 23%),
+    linear-gradient(70deg, transparent 60%, rgba(70, 80, 65, 0.2) 61%, transparent 63%),
+    /* approach road */
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(70, 78, 70, 0.35) 8%,
+      rgba(70, 78, 70, 0.35) 18%,
+      transparent 22%
+    ),
+    /* trench / cover line */
+    linear-gradient(
+      0deg,
+      transparent 42%,
+      rgba(50, 62, 52, 0.55) 43%,
+      rgba(50, 62, 52, 0.55) 46%,
+      transparent 47%
+    ),
     repeating-linear-gradient(
       95deg,
       #152018 0px,
@@ -982,53 +1048,65 @@
 
 .rf-battle__bolt {
   position: absolute;
-  width: 10px;
-  height: 10px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   z-index: 5;
   pointer-events: none;
   background: #9fd4e4;
-  box-shadow: 0 0 10px #7eb6c9;
+  box-shadow: 0 0 18px #7eb6c9, 0 0 6px #fff;
 }
 
 .rf-battle__bolt--plasma {
-  width: 14px;
-  height: 14px;
+  width: 24px;
+  height: 24px;
   background: #6ec4a0;
-  box-shadow: 0 0 14px #6ec4a0;
+  box-shadow: 0 0 24px #6ec4a0, 0 0 8px #b8f0d0;
 }
 
 .rf-battle__bolt--emp {
-  width: 16px;
-  height: 16px;
+  width: 28px;
+  height: 28px;
   background: #7eb6c9;
-  box-shadow: 0 0 18px #7eb6c9, 0 0 4px #fff;
+  box-shadow: 0 0 28px #7eb6c9, 0 0 10px #fff;
 }
 
 .rf-battle__bolt--missile {
-  width: 12px;
-  height: 5px;
+  width: 22px;
+  height: 9px;
   border-radius: 2px;
   background: #c4a574;
-  box-shadow: 0 0 8px #c4a574;
+  box-shadow: 0 0 16px #c4a574, 0 0 4px #fff;
 }
 
 .rf-battle__bolt--rail,
 .rf-battle__bolt--laser,
 .rf-battle__bolt--orbital {
-  width: 8px;
-  height: 8px;
+  width: 16px;
+  height: 16px;
   background: #e8f4f8;
+  box-shadow: 0 0 20px #a8d4e0, 0 0 6px #fff;
+}
+
+.rf-battle__beam-el--laser {
+  height: 4.5px !important;
+  box-shadow: 0 0 10px #7eb6c9, 0 0 4px #fff !important;
+}
+
+.rf-battle__beam-el--rail {
+  height: 5px !important;
+  box-shadow: 0 0 12px #c4a574, 0 0 4px #fff !important;
 }
 
 .rf-battle__explosion {
   position: absolute;
-  width: 72px;
-  height: 72px;
+  width: 120px;
+  height: 120px;
   z-index: 6;
   pointer-events: none;
   object-fit: contain;
+  filter: brightness(1.45) saturate(1.35) contrast(1.1);
 }
 
 .rf-battle__beam {

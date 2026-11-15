@@ -155,9 +155,10 @@ export function WorldMap({ state, dispatch }: WorldMapProps) {
               <path
                 d={t.path}
                 className={`rf-map__territory${selected ? " is-selected" : ""}`}
-                fill={hexToRgba(base, selected ? 0.82 : 0.62)}
-                stroke={selected ? "#d4eaf2" : "#0a141c"}
-                strokeWidth={selected ? 2.4 : 1.35}
+                fill={hexToRgba(base, selected ? 0.9 : 0.78)}
+                stroke={selected ? "#d4eaf2" : "#081018"}
+                strokeWidth={selected ? 2.2 : 1.1}
+                strokeLinejoin="round"
                 filter={selected ? "url(#rf-select-glow)" : undefined}
                 onClick={() =>
                   dispatch({

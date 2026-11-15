@@ -145,11 +145,11 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             if (!d.alive && d.anim !== "destroyed") return null;
             const pos = worldToPct(d.x, d.y);
             let spriteId = "building-shield";
-            let size = 72;
+            let size = 104;
             try {
               const def = getBuilding(d.buildingId);
               spriteId = def.sprite.id;
-              size = def.size.w >= 2 ? 96 : 76;
+              size = def.size.w >= 2 ? 128 : 108;
             } catch {
               /* */
             }
@@ -197,16 +197,21 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             if (!u.alive && u.anim !== "destroyed") return null;
             const pos = worldToPct(u.x, u.y);
             let spriteId = "unit-trooper";
-            let size = 56;
+            let size = 78;
             try {
               const def = getUnit(u.unitId);
               spriteId = def.sprite.id;
+              const isMech = /mech|walker|spider/i.test(u.unitId);
               size =
                 def.role === "armor" || def.role === "naval"
-                  ? 68
-                  : def.role === "air" || def.role === "orbital"
-                    ? 62
-                    : 54;
+                  ? 96
+                  : isMech
+                    ? 100
+                    : def.role === "air" || def.role === "orbital"
+                      ? 86
+                      : def.role === "artillery"
+                        ? 90
+                        : 76;
             } catch {
               /* */
             }
@@ -259,7 +264,7 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
 
           {battle.explosions.map((ex) => {
             const pos = worldToPct(ex.x, ex.y);
-            const scale = 1 + ex.t * 1.6;
+            const scale = 1.25 + ex.t * 2.2;
             const fx = ex.style === "emp" ? "fx-emp" : "fx-explosion";
             return (
               <img
@@ -270,8 +275,10 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
                 style={{
                   left: pos.left,
                   top: pos.top,
+                  width: 120,
+                  height: 120,
                   transform: `translate(-50%, -50%) scale(${scale})`,
-                  opacity: Math.max(0, 1 - ex.t * 1.5),
+                  opacity: Math.max(0, 1 - ex.t * 1.2),
                 }}
               />
             );

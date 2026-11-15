@@ -40,54 +40,139 @@ export function createBattle(
   const ts = state.territories[territoryId]!;
   const defenses: BattleDefense[] = [];
   let n = 0;
+
+  // Defender base on the RIGHT — structured lanes, not raw grid scatter.
+  const armed: typeof ts.buildings = [];
+  const walls: typeof ts.buildings = [];
+  const econ: typeof ts.buildings = [];
+  const command: typeof ts.buildings = [];
   for (const b of ts.buildings) {
     if (b.buildRemaining > 0 || b.hp <= 0) continue;
+    const def = getBuilding(b.buildingId);
+    if (def.category === "command") command.push(b);
+    else if (def.damage) armed.push(b);
+    else if (def.category === "defense") walls.push(b);
+    else econ.push(b);
+  }
+
+  const placeDef = (
+    b: (typeof ts.buildings)[number],
+    x: number,
+    y: number,
+  ) => {
     const def = getBuilding(b.buildingId);
     defenses.push({
       id: uid("d", n++),
       buildingId: b.buildingId,
       instanceId: b.instanceId,
-      x: 8 + b.x * 1.15,
-      y: 2 + b.y * 1.15,
+      x,
+      y,
       hp: b.hp,
       maxHp: def.maxHp,
-      cooldown: 0,
+      cooldown: 0.1 * (n % 4),
       anim: "idle",
       animT: 0,
       alive: true,
       disabledT: 0,
     });
-  }
+  };
 
+  // Front line turrets — two columns, clear spacing
+  armed.forEach((b, i) => {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    placeDef(b, 8.0 + col * 1.55, 1.35 + row * 1.45);
+  });
+  // Walls / pylons mid
+  walls.forEach((b, i) => {
+    placeDef(b, 10.0 + (i % 2) * 1.1, 1.7 + Math.floor(i / 2) * 1.5);
+  });
+  // Economy behind
+  econ.forEach((b, i) => {
+    placeDef(b, 11.5 + (i % 2) * 1.0, 1.5 + Math.floor(i / 2) * 1.4);
+  });
+  // HQ back-center
+  command.forEach((b, i) => {
+    placeDef(b, 12.6, 2.8 + i * 1.35);
+  });
+
+  // Attackers on the LEFT — spread formation by silhouette class.
   const units: BattleUnit[] = [];
-  let row = 0;
-  let col = 0;
+  const lanes = {
+    infantry: 0,
+    mech: 0,
+    armor: 0,
+    air: 0,
+    artillery: 0,
+    other: 0,
+  };
   for (const slot of force) {
     const udef = getUnit(slot.unitId);
+    const isMech =
+      /mech|walker|spider/i.test(slot.unitId) ||
+      /mech|walker/i.test(udef.name);
     for (let i = 0; i < slot.count; i++) {
-      const isAir = udef.role === "air" || udef.role === "orbital";
-      const isNaval = udef.role === "naval";
+      let laneKey: keyof typeof lanes = "other";
+      let baseY = 2.5;
+      let baseX = 1.0;
+      let colPitch = 1.35;
+      let rowPitch = 1.2;
+      if (udef.role === "air" || udef.role === "orbital") {
+        laneKey = "air";
+        baseY = 0.55;
+        baseX = 1.6;
+        colPitch = 1.5;
+        rowPitch = 1.15;
+      } else if (udef.role === "armor" || /hover|tank|rail/i.test(slot.unitId)) {
+        laneKey = "armor";
+        baseY = 3.5;
+        baseX = 0.55;
+        colPitch = 1.55;
+        rowPitch = 1.25;
+      } else if (isMech) {
+        laneKey = "mech";
+        baseY = 2.15;
+        baseX = 0.85;
+        colPitch = 1.5;
+        rowPitch = 1.3;
+      } else if (udef.role === "artillery") {
+        laneKey = "artillery";
+        baseY = 5.0;
+        baseX = 0.4;
+        colPitch = 1.4;
+        rowPitch = 1.15;
+      } else if (udef.role === "infantry") {
+        laneKey = "infantry";
+        baseY = 1.15;
+        baseX = 1.35;
+        colPitch = 1.2;
+        rowPitch = 1.05;
+      } else if (udef.role === "naval") {
+        baseY = 5.7;
+        baseX = 1.1;
+      }
+      const idx = lanes[laneKey]++;
+      const col = idx % 3;
+      const row = Math.floor(idx / 3);
       units.push({
         id: uid("u", n++),
         unitId: slot.unitId,
         side: "attacker",
-        x: 0.8 + col * 0.85,
-        y: (isAir ? 0.4 : isNaval ? 5.2 : 2.2) + row * 0.85,
+        x: baseX + col * colPitch,
+        y: baseY + row * rowPitch,
         hp: udef.maxHp,
         maxHp: udef.maxHp,
-        cooldown: 0.15 + (n % 5) * 0.08,
+        cooldown: 0.15 + (n % 7) * 0.1,
         anim: "move",
         animT: 0,
         alive: true,
         disabledT: 0,
       });
-      col++;
-      if (col > 3) {
-        col = 0;
-        row++;
-      }
     }
   }
+
+  const forceCount = units.length;
+  const defCount = defenses.filter((d) => getBuilding(d.buildingId).damage).length;
 
   return {
     territoryId,
@@ -100,7 +185,10 @@ export function createBattle(
     time: 0,
     elapsed: 0,
     status: "running",
-    log: [`Assault on ${territoryId} initiated.`],
+    log: [
+      `Assault on ${territoryId} initiated.`,
+      `Strike force: ${forceCount} units · Defenses online: ${defCount}.`,
+    ],
   };
 }
 
@@ -365,9 +453,11 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
               t: 0,
               style: "emp",
             });
-            log.push(`EMP disrupt on ${getBuilding(d.buildingId).name}.`);
-          } else if (p.damage >= 25) {
-            log.push(`Heavy hit on ${getBuilding(d.buildingId).name}.`);
+            log.push(`EMP disrupt → ${getBuilding(d.buildingId).name}.`);
+          } else {
+            log.push(
+              `${p.style} hit ${getBuilding(d.buildingId).name} (−${p.damage}).`,
+            );
           }
           return { ...d, hp, disabledT };
         });
@@ -384,8 +474,10 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
               t: 0,
               style: isEmp ? "emp" : "unit",
             });
+            log.push(`${getUnit(u.unitId).name} destroyed.`);
             return { ...u, hp: 0, alive: false, anim: "destroyed", animT: 0, disabledT: 0 };
           }
+          log.push(`${getUnit(u.unitId).name} takes ${p.damage} dmg.`);
           return { ...u, hp, anim: "hit", animT: 0, disabledT };
         });
       }
