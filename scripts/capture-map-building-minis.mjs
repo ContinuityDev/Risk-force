@@ -94,7 +94,7 @@ async function suite(page, tag) {
   await page.waitForTimeout(500);
   await shot(page, `risk-force-map-bldgs-mid${tag}`);
 
-  // Deep zoom — pick a core with buildings and frame it tightly
+  // Deep zoom — pick a core with buildings; selection autofocuses, then zoom in place
   const deepTarget = await page.evaluate(() => {
     const s = window.__RF__.getState();
     const hit = Object.entries(s.territories).find(
@@ -108,17 +108,17 @@ async function suite(page, tag) {
       payload: { territoryId: tid },
     });
   }, deepTarget);
-  await page.waitForTimeout(400);
-  // Selection already frames ~0.32 world; wheel in further for deep tier
+  await page.waitForTimeout(450);
+  // Zoom toward the frame center (selected territory), not Europe
   const box2 = await page.locator(".rf-map__svg").boundingBox();
   if (box2) {
     await wheelAt(
       page,
       ".rf-map__svg",
-      box2.x + box2.width * 0.4,
-      box2.y + box2.height * 0.45,
+      box2.x + box2.width * 0.38,
+      box2.y + box2.height * 0.5,
       -120,
-      14,
+      16,
     );
   }
   await page.waitForTimeout(500);
