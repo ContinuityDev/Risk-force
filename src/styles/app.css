@@ -497,7 +497,9 @@
   left: 0;
   top: calc(100% + 0.35rem);
   z-index: 30;
+  box-sizing: border-box;
   min-width: 10rem;
+  max-width: min(280px, calc(100vw - 1rem));
   padding: 0.45rem 0.55rem;
   border: var(--rf-hairline);
   background: rgba(8, 12, 16, 0.96);
@@ -507,6 +509,10 @@
   font-size: 0.7rem;
   color: var(--rf-text-dim);
   pointer-events: none;
+  white-space: normal !important;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow: hidden;
 }
 
 .rf-resource--energy:hover .rf-hud__ledger,
@@ -744,8 +750,8 @@
 }
 
 .rf-base__ctx {
-  position: absolute;
-  z-index: 30;
+  position: fixed;
+  z-index: 60;
   min-width: 8.5rem;
   padding: 0.2rem;
   display: flex;
@@ -754,11 +760,6 @@
   background: rgba(10, 14, 18, 0.97);
   border: 1px solid rgba(126, 182, 201, 0.45);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
-  transform: translateX(-50%);
-}
-
-.rf-base__ctx--above {
-  transform: translate(-50%, -100%);
 }
 
 .rf-base__ctx-item {
@@ -2978,6 +2979,7 @@
     align-items: center;
     min-height: var(--rf-hud-h);
     max-height: var(--rf-hud-h);
+    overflow: visible;
     padding: 0.15rem max(0.45rem, env(safe-area-inset-right, 0px))
       0.15rem max(0.45rem, env(safe-area-inset-left, 0px));
     padding-top: max(0.15rem, env(safe-area-inset-top, 0px));
@@ -3983,17 +3985,25 @@
   left: 0;
   top: calc(100% + 0.35rem);
   z-index: 40;
-  min-width: 12rem;
-  max-width: 16rem;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 11rem;
+  max-width: min(280px, calc(100vw - 1rem));
   padding: 0.5rem 0.6rem;
   border: var(--rf-hairline);
   background: rgba(8, 12, 16, 0.97);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   flex-direction: column;
+  align-items: stretch;
   gap: 0.2rem;
   font-size: 0.7rem;
   color: var(--rf-text-dim);
   pointer-events: none;
+  /* Parent .rf-resource uses nowrap for the chip row — reset here */
+  white-space: normal !important;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow: hidden;
 }
 
 .rf-hud__ledger.is-open,
@@ -4009,10 +4019,16 @@
 }
 
 .rf-hud__ledger-tip {
+  display: block;
   margin-top: 0.25rem;
   padding-top: 0.25rem;
   border-top: 1px solid var(--rf-border-soft);
-  line-height: 1.35;
+  line-height: 1.4;
+  max-width: 100%;
+  letter-spacing: normal;
+  white-space: normal !important;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .rf-cost {
@@ -4109,7 +4125,7 @@ button.is-unaffordable {
   }
 
   .rf-hud__ledger {
-    max-width: min(70vw, 14rem);
+    max-width: min(280px, calc(100vw - 1rem));
     font-size: 0.65rem;
   }
 }

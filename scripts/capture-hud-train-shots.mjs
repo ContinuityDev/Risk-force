@@ -66,92 +66,13 @@ async function clickBarracks(page) {
     pad?.click();
   });
   await page.waitForSelector(".rf-base__ctx", { timeout: 5000 });
-}
-
-async function suite(page, tag) {
-  await boot(page);
-
-  // HUD icons + labels
-  await shot(page, `risk-force-hud-resources${tag}`);
-
-  // Open energy tooltip
-  await page.locator(".rf-resource--energy").click();
-  await page.waitForTimeout(200);
-  await shot(page, `risk-force-hud-resource-tooltip${tag}`);
-  await page.locator(".rf-resource--energy").click();
-
-  // Open base on owned territory with barracks
-  const owned = await page.evaluate(() => {
-    const s = window.__RF__.getState();
-    return Object.entries(s.territories).find(
-      ([, t]) =>
-        t.owner === "player" &&
-        t.buildings.some((b) => b.buildingId === "barracks"),
-    )?.[0];
+  // Wait for layout anchor (visibility:visible after clamp)
+  await page.waitForFunction(() => {
+    const m = document.querySelector(".rf-base__ctx");
+    if (!m) return false;
+    const s = getComputedStyle(m);
+    return s.visibility !== "hidden" && parseFloat(s.left) > 0;
   });
-  await page.evaluate((tid) => {
-    const s = window.__RF__.getState();
-    window.__RF__.dispatch({
-      type: "LOAD_STATE",
-      payload: {
-        state: {
-          ...s,
-          selectedTerritoryId: tid,
-          players: {
-            ...s.players,
-            player: {
-              ...s.players.player,
-              resources: {
-                ...s.players.player.resources,
-                alloy: 2,
-                energy: 40,
-              },
-            },
-          },
-        },
-      },
-    });
-    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "base" } });
-  }, owned);
-  await page.waitForTimeout(400);
-
-  // Unaffordable catalog cost via Build drawer (mobile) / inline catalog
-  const toggle = page.locator(".rf-base__drawer-toggle");
-  if (await toggle.count()) await toggle.click();
-  await page.waitForTimeout(200);
-
-  await page.evaluate(() => {
-    const btn = [
-      ...document.querySelectorAll(".rf-base__catalog li button"),
-    ].find((b) => b.textContent?.includes("Vehicle Factory"));
-    btn?.scrollIntoView({ block: "center" });
-    btn?.click();
-  });
-  await page.waitForTimeout(250);
-  await shot(page, `risk-force-unaffordable-cost${tag}`);
-
-  // Close build drawer so the Barracks context menu is unobstructed
-  const backdrop = page.locator(".rf-drawer__backdrop");
-  if (await backdrop.count()) {
-    await backdrop.click({ force: true });
-    await page.waitForTimeout(200);
-  } else {
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(150);
-  }
-
-  // Tap barracks → anchored context menu (Train / Staff / Info)
-  await clickBarracks(page);
-  await page.waitForTimeout(200);
-  await shot(page, `risk-force-building-train-menu${tag}`);
-
-  const trainBtn = page.locator(".rf-base__ctx button", {
-    hasText: "Train unit",
-  });
-  await trainBtn.click();
-  await page.waitForSelector(".rf-base__train-list", { timeout: 5000 });
-  await page.waitForTimeout(250);
-  await shot(page, `risk-force-train-unit-list${tag}`);
 }
 
 {
@@ -161,16 +82,40 @@ async function suite(page, tag) {
     isMobile: true,
   });
   const page = await ctx.newPage();
-  await suite(page, "");
-  await ctx.close();
-}
+  await boot(page);
 
-{
-  const ctx = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
+  // Energy tooltip — verify wrap stays in box
+  await page.locator(".rf-resource--energy").click();
+  await page.waitForTimeout(250);
+  await shot(page, "risk-force-hud-resource-tooltip");
+  await page.locator(".rf-resource--energy").click();
+
+  // Base + Barracks context menu
+  const owned = await page.evaluate(() => {
+    const s = window.__RF__.getState();
+    return Object.entries(s.territories).find(
+      ([, t]) =>
+        t.owner === "player" &&
+        t.buildings.some((b) => b.buildingId === "barracks"),
+    )?.[0];
   });
-  const page = await ctx.newPage();
-  await suite(page, "-desktop");
+  await page.evaluate((tid) => {
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...window.__RF__.getState(),
+          selectedTerritoryId: tid,
+        },
+      },
+    });
+    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "base" } });
+  }, owned);
+  await page.waitForTimeout(400);
+  await clickBarracks(page);
+  await page.waitForTimeout(200);
+  await shot(page, "risk-force-building-train-menu");
+
   await ctx.close();
 }
 

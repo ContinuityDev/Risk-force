@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -83,13 +84,12 @@ export function BaseView({
   const [drawerOpen, setDrawerOpen] = useState(false);
   /**
    * Anchored context menu on a placed building (Train / Staff / Info).
-   * Drawer opens for Train / Staff / Info / Build catalog.
+   * Coordinates are viewport-fixed (px) so yard scroll cannot drift them.
    */
   const [buildingMenu, setBuildingMenu] = useState<{
     instanceId: string;
     left: number;
     top: number;
-    place: "above" | "below";
   } | null>(null);
   /** What the side panel / drawer is showing after a menu pick. */
   const [drawerMode, setDrawerMode] = useState<
@@ -97,6 +97,60 @@ export function BaseView({
   >(null);
   const [shortLandscape, setShortLandscape] = useState(false);
   const yardRef = useRef<HTMLDivElement | null>(null);
+  const ctxRef = useRef<HTMLDivElement | null>(null);
+
+  /** Place / clamp the context menu next to the selected building. */
+  function anchorMenuToBuilding(instanceId: string) {
+    const yard = yardRef.current;
+    const el =
+      yard?.querySelector(
+        `[data-instance-id="${CSS.escape(instanceId)}"]`,
+      ) ?? null;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const menuEl = ctxRef.current;
+    const menuW = menuEl?.offsetWidth || 148;
+    const menuH = menuEl?.offsetHeight || 130;
+    const gap = 2;
+    const edge = 8;
+    // Prefer flush to the right edge of the building; flip left if needed
+    let left = rect.right + gap;
+    let top = rect.top + Math.max(0, (rect.height - menuH) / 2);
+    if (left + menuW > window.innerWidth - edge) {
+      left = rect.left - menuW - gap;
+    }
+    if (left < edge) {
+      // Fall back: below the building, left-aligned to it
+      left = Math.min(
+        Math.max(edge, rect.left),
+        window.innerWidth - menuW - edge,
+      );
+      top = rect.bottom + gap;
+    }
+    if (left + menuW > window.innerWidth - edge) {
+      left = Math.max(edge, window.innerWidth - menuW - edge);
+    }
+    if (top + menuH > window.innerHeight - edge) {
+      top = Math.max(edge, window.innerHeight - menuH - edge);
+    }
+    if (top < edge) top = edge;
+    setBuildingMenu({ instanceId, left, top });
+  }
+
+  useLayoutEffect(() => {
+    if (!buildingMenu?.instanceId) return;
+    anchorMenuToBuilding(buildingMenu.instanceId);
+    const onResize = () => anchorMenuToBuilding(buildingMenu.instanceId);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onResize, true);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onResize, true);
+    };
+    // Re-run when the open target changes; coords update inside.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildingMenu?.instanceId, CELL, shortLandscape]);
+
   useEffect(() => {
     const mq = window.matchMedia(
       "(orientation: landscape) and (max-height: 500px)",
@@ -294,24 +348,17 @@ export function BaseView({
                       return;
                     }
                     if (inst) {
-                      const def = getBuilding(inst.buildingId);
-                      const cx = (inst.x + def.size.w / 2) * CELL;
-                      const below = (inst.y + def.size.h) * CELL + 4;
-                      const above = inst.y * CELL - 4;
-                      // Prefer below; flip above when near the bottom of the yard
-                      const nearBottom =
-                        below + 160 > tdef.grid.rows * CELL;
                       setSelectedInstanceId(inst.instanceId);
                       setDemolishId(inst.instanceId);
                       setPendingPlace(null);
                       setSelectedBuilding(null);
                       setDrawerMode(null);
                       setDrawerOpen(false);
+                      // Provisional coords; layout effect re-anchors from the DOM rect
                       setBuildingMenu({
                         instanceId: inst.instanceId,
-                        left: cx,
-                        top: nearBottom ? above : below,
-                        place: nearBottom ? "above" : "below",
+                        left: 0,
+                        top: 0,
                       });
                       return;
                     }
@@ -396,6 +443,7 @@ export function BaseView({
                 className={`rf-base__structure${
                   demolishId === inst.instanceId ? " is-target" : ""
                 }${constructing ? " is-building" : ""}`}
+                data-instance-id={inst.instanceId}
                 style={{
                   left: inst.x * CELL,
                   top: inst.y * CELL,
@@ -467,61 +515,67 @@ export function BaseView({
             );
           })}
 
-          {buildingMenu &&
-            selectedInst &&
-            selectedDef &&
-            buildingMenu.instanceId === selectedInst.instanceId && (
-              <div
-                className={`rf-base__ctx rf-base__ctx--${buildingMenu.place}`}
-                role="menu"
-                data-tutorial="base-train"
-                style={{
-                  left: buildingMenu.left,
-                  top: buildingMenu.top,
+        </div>
+
+        {buildingMenu &&
+          selectedInst &&
+          selectedDef &&
+          buildingMenu.instanceId === selectedInst.instanceId && (
+            <div
+              ref={ctxRef}
+              className="rf-base__ctx"
+              role="menu"
+              data-tutorial="base-train"
+              style={{
+                left: buildingMenu.left,
+                top: buildingMenu.top,
+                visibility:
+                  buildingMenu.left === 0 && buildingMenu.top === 0
+                    ? "hidden"
+                    : "visible",
+              }}
+            >
+              {isTrainingBuilding(selectedDef) &&
+                selectedInst.buildRemaining <= 0 && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="rf-base__ctx-item"
+                    onClick={() => {
+                      setBuildingMenu(null);
+                      setDrawerMode("train");
+                      setDrawerOpen(true);
+                    }}
+                  >
+                    Train unit
+                  </button>
+                )}
+              <button
+                type="button"
+                role="menuitem"
+                className="rf-base__ctx-item"
+                onClick={() => {
+                  setBuildingMenu(null);
+                  setDrawerMode("staff");
+                  setDrawerOpen(true);
                 }}
               >
-                {isTrainingBuilding(selectedDef) &&
-                  selectedInst.buildRemaining <= 0 && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="rf-base__ctx-item"
-                      onClick={() => {
-                        setBuildingMenu(null);
-                        setDrawerMode("train");
-                        setDrawerOpen(true);
-                      }}
-                    >
-                      Train unit
-                    </button>
-                  )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="rf-base__ctx-item"
-                  onClick={() => {
-                    setBuildingMenu(null);
-                    setDrawerMode("staff");
-                    setDrawerOpen(true);
-                  }}
-                >
-                  Staff
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="rf-base__ctx-item"
-                  onClick={() => {
-                    setBuildingMenu(null);
-                    setDrawerMode("info");
-                    setDrawerOpen(true);
-                  }}
-                >
-                  Info
-                </button>
-              </div>
-            )}
-        </div>
+                Staff
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="rf-base__ctx-item"
+                onClick={() => {
+                  setBuildingMenu(null);
+                  setDrawerMode("info");
+                  setDrawerOpen(true);
+                }}
+              >
+                Info
+              </button>
+            </div>
+          )}
 
         {shortLandscape && (
           <button
@@ -576,13 +630,10 @@ export function BaseView({
                   onClick={() => {
                     setDrawerMode(null);
                     setDrawerOpen(false);
-                    const def = selectedDef;
                     setBuildingMenu({
                       instanceId: selectedInst.instanceId,
-                      left:
-                        (selectedInst.x + def.size.w / 2) * CELL,
-                      top: (selectedInst.y + def.size.h) * CELL + 4,
-                      place: "below",
+                      left: 0,
+                      top: 0,
                     });
                   }}
                 >
@@ -654,11 +705,8 @@ export function BaseView({
                     setDrawerOpen(false);
                     setBuildingMenu({
                       instanceId: selectedInst.instanceId,
-                      left:
-                        (selectedInst.x + selectedDef.size.w / 2) * CELL,
-                      top:
-                        (selectedInst.y + selectedDef.size.h) * CELL + 4,
-                      place: "below",
+                      left: 0,
+                      top: 0,
                     });
                   }}
                 >
@@ -696,11 +744,8 @@ export function BaseView({
                     setDrawerOpen(false);
                     setBuildingMenu({
                       instanceId: selectedInst.instanceId,
-                      left:
-                        (selectedInst.x + selectedDef.size.w / 2) * CELL,
-                      top:
-                        (selectedInst.y + selectedDef.size.h) * CELL + 4,
-                      place: "below",
+                      left: 0,
+                      top: 0,
                     });
                   }}
                 >
