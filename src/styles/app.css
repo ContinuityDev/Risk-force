@@ -2317,7 +2317,8 @@
   border: 0;
   padding: 0;
   margin: 0;
-  background: rgba(0, 0, 0, 0.45);
+  /* Light scrim — must stay translucent so map/base remain visible underneath */
+  background: rgba(4, 10, 16, 0.28);
   cursor: pointer;
   pointer-events: auto;
   min-height: 0;
@@ -2941,11 +2942,15 @@
     position: relative;
     height: 100%;
     max-height: 100%;
+    overflow: hidden;
   }
 
   .rf-map__svg {
-    height: 100%;
-    width: 100%;
+    position: absolute;
+    inset: 0;
+    height: 100% !important;
+    width: 100% !important;
+    max-height: 100%;
     touch-action: none;
   }
 
@@ -3055,6 +3060,8 @@
   }
 
   .rf-base__yard {
+    position: relative;
+    z-index: 1;
     max-width: 100%;
     max-height: 100%;
     overflow: auto;
@@ -3103,6 +3110,16 @@
     gap: 0.35rem;
   }
 
+  /* Battle: reclaim dock height so the arena is taller */
+  .rf-shell:has(.rf-battle) .rf-dock {
+    display: none !important;
+  }
+
+  .rf-shell:has(.rf-battle) .rf-main {
+    height: calc(100dvh - var(--rf-hud-h));
+    max-height: calc(100dvh - var(--rf-hud-h));
+  }
+
   /* ── Battle: slim bar + full arena ────────────────────── */
   .rf-battle {
     position: relative;
@@ -3117,19 +3134,19 @@
     display: none !important;
   }
 
+  /* In-flow slimbar — does not cover the top row of units */
   .rf-battle__slimbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.4rem;
-    position: absolute;
-    top: 0.25rem;
-    left: 0.35rem;
-    right: 0.35rem;
+    position: relative;
+    flex: 0 0 auto;
     z-index: 12;
-    min-height: var(--rf-tap);
-    padding: 0.1rem 0.15rem 0.1rem 0.4rem;
-    background: rgba(8, 12, 18, 0.65);
+    min-height: 2rem;
+    margin: 0.15rem 0.35rem 0;
+    padding: 0.05rem 0.15rem 0.05rem 0.4rem;
+    background: rgba(8, 12, 18, 0.9);
     border: var(--rf-hairline);
     backdrop-filter: blur(4px);
     pointer-events: none;
@@ -3193,13 +3210,21 @@
 
   .rf-battle__arena {
     position: absolute !important;
-    inset: 0;
+    /*
+     * Leave headroom above the field so unit/building sprites (anchored at
+     * feet, extending upward) clear the engagement slimbar.
+     */
+    top: 2.25rem;
+    right: 0;
+    bottom: 0.35rem;
+    left: 0;
     width: auto !important;
     height: auto !important;
     max-width: none !important;
     max-height: none !important;
     min-height: 0;
     aspect-ratio: unset !important;
+    overflow: visible;
   }
 
   .rf-battle__log-toggle {

@@ -123,12 +123,23 @@ async function landscapeSuite(page, tag) {
   await page.waitForTimeout(400);
   await shot(page, `risk-force-mobile-map-zoomed${tag}`);
 
+  // Country selector — select without prior zoom; camera should pan to keep
+  // the territory visible left of the drawer, with the map still rendered.
+  await page.evaluate(() => {
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: null },
+    });
+  });
+  await page.waitForTimeout(150);
   const owned = await openOwnedTerritory(page);
   await page.waitForSelector(".rf-map__territory-drawer", { timeout: 5000 });
+  await page.mouse.move(2, 2); // avoid sticky :hover on scrim
+  await page.waitForTimeout(250);
   await shot(page, `risk-force-mobile-territory-selected${tag}`);
   await shot(page, `risk-force-mobile-country-selector${tag}`);
 
-  // Base + staffing side drawer
+  // Base + staffing side drawer — yard must stay visible behind scrim
   await page.evaluate((tid) => {
     window.__RF__.dispatch({
       type: "SELECT_TERRITORY",
@@ -137,8 +148,8 @@ async function landscapeSuite(page, tag) {
     window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "base" } });
   }, owned);
   await page.waitForTimeout(600);
-  const structure = page.locator(".rf-base__pad.is-filled").first();
-  if (await structure.count()) await structure.click();
+  const filledPad = page.locator(".rf-base__pad.is-filled").first();
+  if (await filledPad.count()) await filledPad.click({ force: true });
   await page.waitForTimeout(200);
   const toggle = page.locator(".rf-base__drawer-toggle");
   if (await toggle.count()) {
@@ -146,6 +157,9 @@ async function landscapeSuite(page, tag) {
     await page.waitForTimeout(350);
   }
   await page.waitForSelector(".rf-base__catalog", { timeout: 5000 });
+  await page.waitForSelector(".rf-base__structure", { timeout: 5000 });
+  await page.mouse.move(2, 2);
+  await page.waitForTimeout(200);
   await shot(page, `risk-force-mobile-base-staffing${tag}`);
 
   // Close base drawer via backdrop if present

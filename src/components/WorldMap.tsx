@@ -232,7 +232,24 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   }, [initialCam]);
 
   useEffect(() => {
-    if (state.selectedTerritoryId) setDetailOpen(true);
+    const id = state.selectedTerritoryId;
+    if (!id) return;
+    setDetailOpen(true);
+    const t = TERRITORIES.find((x) => x.id === id);
+    if (!t) return;
+    // Frame selection in the left ~58% so the right drawer does not cover it.
+    const focusW = Math.min(WORLD_W, Math.max(MIN_VIEW_W * 1.6, WORLD_W * 0.32));
+    const focusH = focusW * (WORLD_H / WORLD_W);
+    const cx = t.label.x + focusW * 0.14;
+    const cy = t.label.y;
+    const next = clampCamera({
+      x: cx - focusW / 2,
+      y: cy - focusH / 2,
+      w: focusW,
+      h: focusH,
+    });
+    cameraRef.current = next;
+    setCamera(next);
   }, [state.selectedTerritoryId]);
 
   const humanId = useMemo(

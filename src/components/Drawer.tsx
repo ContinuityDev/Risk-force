@@ -51,11 +51,19 @@ export function Drawer({
 
   return (
     <div className={`rf-drawer-root rf-drawer-root--${side}`}>
-      <button
-        type="button"
+      {/* div (not button) — theme button/hover backgrounds would opaque-cover the map/base */}
+      <div
         className="rf-drawer__backdrop"
+        role="button"
+        tabIndex={0}
         aria-label="Close panel"
         onClick={onClose}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClose();
+          }
+        }}
       />
       <aside
         className={`rf-drawer rf-drawer--${side} ${className}`.trim()}
