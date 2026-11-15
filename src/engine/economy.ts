@@ -54,16 +54,37 @@ export function computeSupplyUpkeep(state: GameState, playerId: string): number 
       upkeep += getBuilding(b.buildingId).supplyUpkeep ?? 0;
     }
     for (const count of Object.values(ts.garrison)) {
-      upkeep += Math.ceil(count * 0.25);
+      upkeep += Math.ceil(count * 0.15);
     }
   }
   const player = state.players[playerId];
   if (player) {
     for (const count of Object.values(player.reserves)) {
-      upkeep += Math.ceil(count * 0.25);
+      upkeep += Math.ceil(count * 0.15);
     }
   }
   return upkeep;
+}
+
+/** Energy ledger for HUD tooltips: income vs upkeep vs campaign. */
+export function computeEnergyLedger(
+  state: GameState,
+  playerId: string,
+): {
+  income: number;
+  upkeep: number;
+  campaign: number;
+  net: number;
+} {
+  const income = computeIncome(state, playerId).energy;
+  const upkeep = computeEnergyUpkeep(state, playerId);
+  const campaign = state.players[playerId]?.campaignBudget ?? 0;
+  return {
+    income,
+    upkeep,
+    campaign,
+    net: income - upkeep - campaign,
+  };
 }
 
 /** Apply income, upkeep, construction (worker-sped), and local supply stockpiles. */

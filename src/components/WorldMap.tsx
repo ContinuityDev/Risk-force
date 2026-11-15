@@ -397,11 +397,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
 
         <path
           d={LAND_PATH}
-          fill="#152838"
-          fillOpacity="0.95"
-          stroke="#4a7a8c"
-          strokeWidth="0.7"
-          filter="url(#rf-land-glow)"
+          fill="#0c1824"
+          fillOpacity="0.55"
+          stroke="#3a5a6a"
+          strokeWidth={0.55 * zoomScale}
           pointerEvents="none"
         />
 
@@ -510,12 +509,12 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 d={t.path}
                 className={`rf-map__territory${isSelected ? " is-selected" : ""}`}
                 data-territory-id={t.id}
-                fill={hexToRgba(base, isSelected ? 0.72 : 0.55)}
-                stroke={isSelected ? "#e8f4f8" : "#9fd4e4"}
-                strokeWidth={isSelected ? 1.6 : 0.55}
+                fill={hexToRgba(base, isSelected ? 0.9 : 0.82)}
+                stroke={isSelected ? "#e8f4f8" : "#7eb6c9"}
+                // Counter-scale: strokeWidth in user units × zoomScale ≈ constant screen px.
+                strokeWidth={(isSelected ? 1.4 : 1.05) * zoomScale}
                 strokeLinejoin="round"
                 strokeLinecap="round"
-                filter={isSelected ? "url(#rf-select-glow)" : undefined}
                 onClick={(ev) => {
                   ev.stopPropagation();
                   // Selection only — never opens base / battle (those are explicit actions).

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { NewGamePayload } from "./engine/actions";
 import { planAiTurn } from "./engine/ai";
+import { describeAiAction } from "./engine/aiLog";
 import { createMenuState } from "./engine/reducer";
 import { useGame } from "./hooks/useGame";
 import { createLanTransport } from "./net/lanTransport";
@@ -146,18 +147,7 @@ export default function App() {
         return;
       }
       const action = actions[i++]!;
-      const label =
-        action.type === "START_INVASION"
-          ? `${player.displayName} invades ${action.payload.toId}`
-          : action.type === "ORDER_MOVE" || action.type === "MOVE_GARRISON"
-            ? `${player.displayName} marches troops`
-            : action.type === "PLACE_BUILDING"
-              ? `${player.displayName} builds`
-              : action.type === "RESEARCH"
-                ? `${player.displayName} researches`
-                : action.type === "SET_AI_ATTACK_PLANS"
-                  ? `${player.displayName} opens ${action.payload.plans.length} front(s)`
-                  : null;
+      const label = describeAiAction(player.displayName, action);
       if (label) {
         transport.dispatch({
           type: "APPEND_TURN_LOG",

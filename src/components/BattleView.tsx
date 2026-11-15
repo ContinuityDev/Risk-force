@@ -223,17 +223,18 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
 
           {battle.defenses.map((d) => {
             if (!d.alive && d.anim !== "destroyed") return null;
+            const wreck = !d.alive;
+            if (wreck && d.animT > 2.8) return null;
             const pos = worldToPct(d.x, d.y);
             let spriteId = "building-shield";
-            let size = 128;
+            let size = 96;
             try {
               const def = getBuilding(d.buildingId);
               spriteId = def.sprite.id;
-              size = def.size.w >= 2 ? 152 : 130;
+              size = def.size.w >= 2 ? 112 : 96;
             } catch {
               /* */
             }
-            const wreck = !d.alive;
             return (
               <div
                 key={d.id}
@@ -284,26 +285,28 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
             if (!u.alive && u.anim !== "destroyed") return null;
             const pos = worldToPct(u.x, u.y);
             let spriteId = "unit-trooper";
-            // ~80–120px tanks at ~1280px stage width
-            let size = 96;
+            // Smaller sprites so the arena fits without clipping the bottom edge.
+            let size = 72;
             try {
               const def = getUnit(u.unitId);
               spriteId = def.sprite.id;
               const isMech = /mech|walker|spider/i.test(u.unitId);
               size =
                 def.role === "armor" || def.role === "naval"
-                  ? 112
+                  ? 84
                   : isMech
-                    ? 120
+                    ? 88
                     : def.role === "air" || def.role === "orbital"
-                      ? 100
+                      ? 76
                       : def.role === "artillery"
-                        ? 108
-                        : 94;
+                        ? 80
+                        : 70;
             } catch {
               /* */
             }
             const wreck = !u.alive;
+            // Hide long-lived grey ghosts — keep burnt wrecks briefly then drop.
+            if (wreck && u.animT > 2.4) return null;
             return (
               <div
                 key={u.id}

@@ -14,37 +14,40 @@ export const BATTLE_FIELD = {
 
   /** Attacker deployment strip (left edge). */
   attackerDeploy: {
-    x0: 0.4,
-    x1: 3.4,
-    y0: 0.45,
-    y1: 7.55,
+    x0: 0.45,
+    x1: 3.15,
+    y0: 0.7,
+    y1: 7.3,
   },
 
-  /** No-man's-land between the lines. */
+  /** No-man's-land between the lines — empty at battle start. */
   noMansLand: {
-    x0: 3.4,
-    x1: 7.6,
-    y0: 0.45,
-    y1: 7.55,
+    x0: 3.15,
+    x1: 7.0,
+    y0: 0.7,
+    y1: 7.3,
   },
 
   /**
-   * Defender base zone (right). Territory base-grid buildings are
-   * mapped into this rectangle preserving relative layout.
+   * Defender base zone (right). Buildings map into the rear of this
+   * rectangle; garrison stands in the front strip (see garrisonZone).
    */
   defenderZone: {
-    x0: 7.6,
-    x1: 13.55,
-    y0: 0.45,
-    y1: 7.55,
+    x0: 7.0,
+    x1: 13.5,
+    y0: 0.7,
+    y1: 7.3,
   },
 
-  /** Garrison stands just in front of the building zone. */
+  /**
+   * Garrison stands inside the defender zone tint, in front of buildings
+   * — never in no-man's-land (avoids “ghost unit” misreads).
+   */
   garrisonZone: {
-    x0: 6.2,
-    x1: 7.9,
-    y0: 0.55,
-    y1: 7.45,
+    x0: 7.15,
+    x1: 8.35,
+    y0: 0.85,
+    y1: 7.15,
   },
 } as const;
 
@@ -97,12 +100,15 @@ export function mapBaseCellToBattle(
   gridCols: number,
   gridRows: number,
 ): { x: number; y: number } {
+  // Buildings occupy the rear of the defender zone (past the garrison strip).
   const z = BATTLE_FIELD.defenderZone;
-  const zw = z.x1 - z.x0;
-  const zh = z.y1 - z.y0;
+  const buildX0 = Math.max(z.x0, BATTLE_FIELD.garrisonZone.x1 + 0.15);
+  const build = { x0: buildX0, x1: z.x1, y0: z.y0, y1: z.y1 };
+  const zw = build.x1 - build.x0;
+  const zh = build.y1 - build.y0;
   const cx = (cellX + sizeW / 2) / gridCols;
   const cy = (cellY + sizeH / 2) / gridRows;
-  return clampToZone(z.x0 + cx * zw, z.y0 + cy * zh, z);
+  return clampToZone(build.x0 + cx * zw, build.y0 + cy * zh, build);
 }
 
 /** True if a point lies on the playable ground plane. */
