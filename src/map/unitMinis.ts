@@ -18,6 +18,12 @@ import {
   type LabelBox,
   type MiniZoomTier,
 } from "./buildingMinis";
+import {
+  claimInteriorCluster,
+  claimInteriorSlot,
+  getTerritoryAnchors,
+  marchLandPoint,
+} from "./territoryAnchors";
 
 export interface PlacedUnitMini {
   key: string;
@@ -43,15 +49,6 @@ interface Box {
   y: number;
   w: number;
   h: number;
-}
-
-function overlaps(a: Box, b: Box, pad = 1.2): boolean {
-  return !(
-    a.x + a.w / 2 + pad < b.x - b.w / 2 ||
-    a.x - a.w / 2 - pad > b.x + b.w / 2 ||
-    a.y + a.h / 2 + pad < b.y - b.h / 2 ||
-    a.y - a.h / 2 - pad > b.y + b.h / 2
-  );
 }
 
 /** Prefer elite / heavy / high-count units in the mid shortlist. */
@@ -106,28 +103,6 @@ function sortGarrison(
     );
 }
 
-function gridSlots(
-  n: number,
-  cols: number,
-  size: number,
-  gap: number,
-  cx: number,
-  cy: number,
-): Array<{ x: number; y: number }> {
-  const rows = Math.ceil(n / cols);
-  const gridW = cols * size + (cols - 1) * gap;
-  const gridH = rows * size + (rows - 1) * gap;
-  const x0 = cx - gridW / 2 + size / 2;
-  const y0 = cy - gridH / 2 + size / 2;
-  const out: Array<{ x: number; y: number }> = [];
-  for (let i = 0; i < n; i++) {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    out.push({ x: x0 + c * (size + gap), y: y0 + r * (size + gap) });
-  }
-  return out;
-}
-
 function toMini(
   key: string,
   unitId: string,
@@ -156,86 +131,9 @@ function toMini(
   };
 }
 
-function tryPlaceGrid(
-  shown: Array<{ unitId: string; count: number }>,
-  moreCount: number,
-  territoryId: string,
-  owner: string | undefined,
-  cols: number,
-  size: number,
-  gap: number,
-  cx: number,
-  cy: number,
-  occupied: Box[],
-  collisionPad: number,
-): { minis: PlacedUnitMini[]; boxes: Box[] } | null {
-  const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
-  const slots = gridSlots(slotCount, cols, size, gap, cx, cy);
-  const trial: PlacedUnitMini[] = [];
-  const trialBoxes: Box[] = [];
-
-  for (let i = 0; i < shown.length; i++) {
-    const slot = slots[i]!;
-    const u = shown[i]!;
-    const box: Box = { x: slot.x, y: slot.y, w: size, h: size };
-    if (
-      occupied.some((o) => overlaps(box, o, collisionPad)) ||
-      trialBoxes.some((o) => overlaps(box, o, gap * 0.2))
-    ) {
-      return null;
-    }
-    const m = toMini(
-      `${territoryId}:${u.unitId}`,
-      u.unitId,
-      u.count,
-      slot.x,
-      slot.y,
-      size,
-      { territoryId, owner },
-    );
-    if (!m) continue;
-    trial.push(m);
-    trialBoxes.push(box);
-  }
-
-  if (moreCount > 0) {
-    const slot = slots[shown.length];
-    if (!slot) return null;
-    const box: Box = {
-      x: slot.x,
-      y: slot.y,
-      w: size * 0.85,
-      h: size * 0.85,
-    };
-    if (
-      occupied.some((o) => overlaps(box, o, collisionPad)) ||
-      trialBoxes.some((o) => overlaps(box, o, gap * 0.2))
-    ) {
-      return null;
-    }
-    trial.push({
-      key: `${territoryId}:more`,
-      territoryId,
-      unitId: "_more",
-      spriteId: "",
-      spriteUrl: "",
-      x: slot.x,
-      y: slot.y,
-      size: size * 0.85,
-      count: moreCount,
-      more: moreCount,
-      owner,
-    });
-    trialBoxes.push(box);
-  }
-
-  if (!trial.length) return null;
-  return { minis: trial, boxes: trialBoxes };
-}
-
 /**
- * Layout garrison unit minis. `occupiedExtra` should include building mini
- * boxes so units nest above the label pole (buildings sit below).
+ * Layout garrison unit minis on interior land anchors (never on water).
+ * `occupiedExtra` should include building mini boxes.
  */
 export function layoutUnitMinis(
   territories: TerritoryDef[],
@@ -250,20 +148,14 @@ export function layoutUnitMinis(
   wantCompact?: (t: TerritoryDef, ts: TerritoryState | undefined) => boolean,
 ): PlacedUnitMini[] {
   const tier: MiniZoomTier = miniZoomTier(zoomScale);
-  // Shrink chips so long names (Western China / Kazakhstan) stay readable.
   const sizeScale = tier === "world" ? 0.62 : tier === "mid" ? 0.62 : 0.74;
   const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
   const gap = Math.max(0.55, size * 0.2);
-  const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
-  // Inflate label boxes so chips never cover glyphs — prefer below/beside.
-  const labelPadW = tier === "world" ? 1.15 : 1.4;
-  const labelPadH = tier === "world" ? 1.15 : 1.65;
-  const labelMinW = tier === "world" ? size * 1.8 : size * 2.6;
   const labelBoxes: Box[] = labels.map((l) => ({
     x: l.x,
     y: l.y,
-    w: Math.max(l.w * labelPadW, labelMinW, 10),
-    h: Math.max(l.h * labelPadH, size * (tier === "world" ? 0.7 : 0.95), 4),
+    w: Math.max(l.w * 1.15, size * 1.6, 8),
+    h: Math.max(l.h * 1.25, size * 0.75, 3.5),
   }));
   const occupied: Box[] = [...labelBoxes, ...occupiedExtra];
   const out: PlacedUnitMini[] = [];
@@ -277,236 +169,126 @@ export function layoutUnitMinis(
     const sorted = sortGarrison(garrison);
     if (!sorted.length) continue;
 
-    const ax = t.label.x;
-    const ay = t.label.y;
+    const pole = getTerritoryAnchors(t).pole;
     if (
-      ax < cam.x - 40 ||
-      ax > cam.x + cam.w + 40 ||
-      ay < cam.y - 40 ||
-      ay > cam.y + cam.h + 40
+      pole.x < cam.x - 40 ||
+      pole.x > cam.x + cam.w + 40 ||
+      pole.y < cam.y - 40 ||
+      pole.y > cam.y + cam.h + 40
     ) {
       continue;
     }
 
-    const lbl = labelById[t.id];
-    const baseX = lbl?.x ?? ax;
-    const labelTop = lbl ? lbl.y - lbl.h / 2 : ay - 2;
-    const labelBot = lbl ? lbl.y + lbl.h / 2 : ay + 2;
     const total = sorted.reduce((s, u) => s + u.count, 0);
     const compactOnly = Boolean(wantCompact?.(t, ts));
 
-    // ── World / neighbor-compact: exactly one strength chip ────
+    const placeCompact = (chipSize: number) => {
+      const slot = claimInteriorSlot(t, chipSize, occupied, gap * 0.7);
+      if (!slot) return false;
+      occupied.push({ x: slot.x, y: slot.y, w: chipSize, h: chipSize });
+      const top = sorted[0]!;
+      const m = toMini(
+        `${t.id}:troops`,
+        top.unitId,
+        total,
+        slot.x,
+        slot.y,
+        chipSize,
+        { territoryId: t.id, compact: true, owner: ts?.owner },
+      );
+      if (m) out.push(m);
+      return true;
+    };
+
     if (tier === "world" || compactOnly) {
-      // Skip speckles relative to the active map (Earth Europe / CW NE).
-      // Neighbor focus chips always render — they're intentional chrome.
       if (!compactOnly) {
         const med = mapMedianArea();
         if (t.area < med * 0.45) continue;
         if (total <= 2 && t.area < med * 0.95) continue;
         if (zoomScale >= 0.88 && t.area < med * 0.65) continue;
       }
-
-      const chipSize = size;
-      const halfLabel = Math.max((lbl?.w ?? size * 2) / 2, chipSize * 0.9);
-      const aboveY = labelTop - gap * 1.6 - chipSize / 2;
-      const belowY = labelBot + gap * 1.35 + chipSize / 2;
-      const leftX = baseX - halfLabel - gap - chipSize / 2;
-      const rightX = baseX + halfLabel + gap + chipSize / 2;
-      // Below / far-below / above only — never at label-center Y (clips glyphs).
-      const anchors = [
-        { x: baseX, y: belowY },
-        { x: leftX, y: belowY },
-        { x: rightX, y: belowY },
-        { x: baseX, y: belowY + chipSize * 0.9 },
-        { x: baseX, y: aboveY },
-        { x: leftX, y: aboveY },
-        { x: rightX, y: aboveY },
-      ];
-      const top = sorted[0]!;
-      let placed = false;
-      for (const a of anchors) {
-        const box: Box = { x: a.x, y: a.y, w: chipSize, h: chipSize };
-        // Strong pad so neighbor Europe chips don't stack.
-        if (occupied.some((o) => overlaps(box, o, gap * 0.95))) continue;
-        occupied.push(box);
-        const m = toMini(
-          `${t.id}:troops`,
-          top.unitId,
-          total,
-          a.x,
-          a.y,
-          chipSize,
-          { territoryId: t.id, compact: true, owner: ts?.owner },
-        );
-        if (m) out.push(m);
-        placed = true;
-        break;
-      }
-      if (!placed) {
-        // Last resort: below label, only skip the label box itself.
-        const fy = belowY + chipSize * 0.35;
-        const box: Box = { x: baseX, y: fy, w: chipSize, h: chipSize };
-        const hitsLabel = labelBoxes.some((o) => overlaps(box, o, gap * 0.4));
-        if (!hitsLabel) {
-          occupied.push(box);
-          const m = toMini(
-            `${t.id}:troops`,
-            top.unitId,
-            total,
-            baseX,
-            fy,
-            chipSize,
-            { territoryId: t.id, compact: true, owner: ts?.owner },
-          );
-          if (m) out.push(m);
-        }
-      }
+      placeCompact(size);
       continue;
     }
 
-    // Mid: compact for small plots / single-type; larger territories keep a
-    // multi-type row below the label (labels paint above minis in WorldMap).
     const forceCompact =
       tier === "mid" && (isSmallPlot(t.area) || sorted.length === 1);
     if (forceCompact) {
       const chipSize = size * (isSmallPlot(t.area, 0.4) ? 0.75 : 0.85);
-      // Below / above only — side-at-label-Y was clipping "Western China" etc.
-      const halfLabel = Math.max((lbl?.w ?? size * 2.4) / 2, chipSize * 1.15);
-      const aboveY = labelTop - gap * 1.6 - chipSize / 2;
-      const belowY = labelBot + gap * 1.5 + chipSize / 2;
-      const leftX = baseX - halfLabel - gap * 1.2 - chipSize / 2;
-      const rightX = baseX + halfLabel + gap * 1.2 + chipSize / 2;
-      const anchors = [
-        { x: baseX, y: belowY },
-        { x: leftX, y: belowY },
-        { x: rightX, y: belowY },
-        { x: baseX, y: belowY + chipSize },
-        { x: baseX, y: aboveY },
-        { x: leftX, y: aboveY },
-        { x: rightX, y: aboveY },
-      ];
-      const top = sorted[0]!;
-      let placedMid = false;
-      for (const a of anchors) {
-        const box: Box = { x: a.x, y: a.y, w: chipSize, h: chipSize };
-        if (occupied.some((o) => overlaps(box, o, gap * 0.75))) continue;
-        occupied.push(box);
-        const m = toMini(
-          `${t.id}:troops`,
-          top.unitId,
-          total,
-          a.x,
-          a.y,
-          chipSize,
-          { territoryId: t.id, compact: true, owner: ts?.owner },
-        );
-        if (m) out.push(m);
-        placedMid = true;
-        break;
-      }
-      if (!placedMid) {
-        const fy = belowY + chipSize * 1.2;
-        const box: Box = { x: baseX, y: fy, w: chipSize, h: chipSize };
-        const hitsLabel = labelBoxes.some((o) => overlaps(box, o, gap * 0.35));
-        if (!hitsLabel) {
-          occupied.push(box);
-          const m = toMini(
-            `${t.id}:troops`,
-            top.unitId,
-            total,
-            baseX,
-            fy,
-            chipSize,
-            { territoryId: t.id, compact: true, owner: ts?.owner },
-          );
-          if (m) out.push(m);
-        }
-      }
+      placeCompact(chipSize);
       continue;
     }
 
-    // Mid: ≤3 types + optional +N. Deep: up to 6 types below the label.
     const maxShow =
       tier === "mid" ? Math.min(3, sorted.length) : Math.min(6, sorted.length);
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
     const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
-    const cols =
-      tier === "deep"
-        ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(slotCount))))
-        : Math.min(3, slotCount);
-    const rows = Math.ceil(slotCount / cols);
-    const gridH = rows * size + (rows - 1) * gap;
-    const gridW = cols * size + (cols - 1) * gap;
-    // Prefer LEFT/RIGHT of the label at label height — buildings sit BELOW
-    // the label, so this lane stays clear and on-camera at deep zoom.
-    const halfLabel = Math.max((lbl?.w ?? gridW) / 2, gridW / 2);
-    const sideX = baseX - halfLabel - gap - gridW / 2 - size * 0.35;
-    const rightX = baseX + halfLabel + gap + gridW / 2 + size * 0.35;
-    const clearGap = gap + size * 0.5;
-    const aboveCy = labelTop - clearGap - gridH / 2;
-    const belowCy = labelBot + clearGap + gridH / 2;
+    const centers = claimInteriorCluster(
+      t,
+      slotCount,
+      size,
+      occupied,
+      gap * 0.5,
+    );
 
-    // Below first, then far sides at below/above — never cy == label center.
-    const anchors = [
-      { cx: baseX, cy: belowCy },
-      { cx: sideX, cy: belowCy },
-      { cx: rightX, cy: belowCy },
-      { cx: baseX, cy: belowCy + size },
-      { cx: baseX, cy: aboveCy },
-      { cx: sideX, cy: aboveCy },
-      { cx: rightX, cy: aboveCy },
-    ];
-
-    let placed = false;
-    for (const { cx, cy } of anchors) {
-      const result = tryPlaceGrid(
-        shown,
-        moreCount,
-        t.id,
-        ts?.owner,
-        cols,
-        size,
-        gap,
-        cx,
-        cy,
-        occupied,
-        gap * 0.55,
-      );
-      if (!result) continue;
-      for (const box of result.boxes) occupied.push(box);
-      out.push(...result.minis);
-      placed = true;
-      break;
-    }
-
-    if (!placed) {
-      // Fallback: one compact chip BELOW the label (never cover glyphs).
-      const chipSize = size * 0.85;
-      const fx = baseX;
-      const fy = labelBot + gap * 1.2 + chipSize / 2;
-      const box: Box = { x: fx, y: fy, w: chipSize, h: chipSize };
-      if (!occupied.some((o) => overlaps(box, o, gap * 0.5))) {
-        occupied.push(box);
-        const top = sorted[0]!;
+    if (centers.length >= shown.length) {
+      for (let i = 0; i < shown.length; i++) {
+        const c = centers[i]!;
+        const u = shown[i]!;
+        occupied.push({ x: c.x, y: c.y, w: size, h: size });
         const m = toMini(
-          `${t.id}:troops`,
-          top.unitId,
-          total,
-          fx,
-          fy,
-          chipSize,
-          { territoryId: t.id, compact: true, owner: ts?.owner },
+          `${t.id}:${u.unitId}`,
+          u.unitId,
+          u.count,
+          c.x,
+          c.y,
+          size,
+          { territoryId: t.id, owner: ts?.owner },
         );
         if (m) out.push(m);
       }
+      if (moreCount > 0 && centers[shown.length]) {
+        const c = centers[shown.length]!;
+        const moreSize = size * 0.85;
+        occupied.push({ x: c.x, y: c.y, w: moreSize, h: moreSize });
+        out.push({
+          key: `${t.id}:more`,
+          territoryId: t.id,
+          unitId: "_more",
+          spriteId: "",
+          spriteUrl: "",
+          x: c.x,
+          y: c.y,
+          size: moreSize,
+          count: moreCount,
+          more: moreCount,
+          owner: ts?.owner,
+        });
+      }
+      continue;
     }
+
+    placeCompact(size * 0.85);
   }
 
   return out;
 }
 
-/** Place in-transit army minis along their march routes. */
+function isNavalOnlyForce(
+  force: { unitId: string; count: number }[],
+): boolean {
+  if (!force.length) return false;
+  return force.every((f) => {
+    try {
+      return getUnit(f.unitId).role === "naval";
+    } catch {
+      return false;
+    }
+  });
+}
+
+/** Place in-transit army minis on a land-safe march path (naval may cross water). */
 export function layoutTransitUnitMinis(
   armies: ArmyTransit[],
   territories: TerritoryDef[],
@@ -526,13 +308,13 @@ export function layoutTransitUnitMinis(
     const progress =
       1 - army.turnsRemaining / Math.max(1, army.totalTurns);
     const t = Math.min(0.85, 0.12 + progress * 0.7);
-    const x = from.label.x + (to.label.x - from.label.x) * t;
-    const y = from.label.y + (to.label.y - from.label.y) * t - 6;
+    const naval = isNavalOnlyForce(army.force);
+    const pt = marchLandPoint(from, to, t, naval);
     if (
-      x < cam.x - 30 ||
-      x > cam.x + cam.w + 30 ||
-      y < cam.y - 30 ||
-      y > cam.y + cam.h + 30
+      pt.x < cam.x - 30 ||
+      pt.x > cam.x + cam.w + 30 ||
+      pt.y < cam.y - 30 ||
+      pt.y > cam.y + cam.h + 30
     ) {
       continue;
     }
@@ -546,14 +328,30 @@ export function layoutTransitUnitMinis(
         : tier === "mid"
           ? sorted.slice(0, 2)
           : sorted.slice(0, 3);
+    // Keep multi-type transit chips clustered on land around the march point.
+    const host = t < 0.5 ? from : to;
+    const centers = claimInteriorCluster(
+      host,
+      show.length,
+      size,
+      [{ x: pt.x, y: pt.y, w: size * 0.4, h: size * 0.4 }],
+      size * 0.35,
+    );
     show.forEach((u, i) => {
+      const c = centers[i] ?? {
+        x: pt.x + i * (size * 0.55),
+        y: pt.y,
+      };
+      // Prefer march point for the lead chip so motion reads clearly.
+      const x = i === 0 ? pt.x : c.x;
+      const y = i === 0 ? pt.y : c.y;
       const m = toMini(
         `${army.id}:${u.unitId}`,
         u.unitId,
         tier === "world"
           ? army.force.reduce((s, f) => s + f.count, 0)
           : u.count,
-        x + i * (size * 0.85),
+        x,
         y,
         size,
         {

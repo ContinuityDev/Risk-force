@@ -1,12 +1,13 @@
 /**
  * Conflict-of-Nations-style grounded map markers:
- * soft contact shadows, slight isometric lean, muted faction cues,
- * pill count tags — no circular badges/discs.
+ * soft contact shadows (separate underlay layer), slight isometric lean,
+ * muted faction cues, pill count tags — no circular badges/discs.
  */
 import {
   groundedBuildingFootprint,
   groundedUnitFootprint,
   muteFactionColor,
+  type GroundedFootprint,
 } from "../map/groundedChrome";
 
 interface UnitMiniProps {
@@ -19,6 +20,10 @@ interface UnitMiniProps {
   compact?: boolean;
   transit?: boolean;
   more?: number;
+  /** When true, only the contact shadow is drawn (for the underlay pass). */
+  shadowOnly?: boolean;
+  /** When true, omit the contact shadow (sprite/chrome pass). */
+  omitShadow?: boolean;
 }
 
 interface BuildingMiniProps {
@@ -33,6 +38,8 @@ interface BuildingMiniProps {
   constructing?: boolean;
   progress?: number;
   more?: number;
+  shadowOnly?: boolean;
+  omitShadow?: boolean;
 }
 
 function CountTag({
@@ -72,6 +79,30 @@ function CountTag({
   );
 }
 
+/** Soft elliptical contact shadow — drawn in the underlay layer only. */
+export function GroundedContactShadow({
+  fp,
+  kind = "unit",
+}: {
+  fp: GroundedFootprint;
+  kind?: "unit" | "building";
+}) {
+  return (
+    <ellipse
+      className="rf-map__contact-shadow"
+      cx={fp.shadow.cx}
+      cy={fp.shadow.cy}
+      rx={fp.shadow.rx}
+      ry={fp.shadow.ry}
+      fill={
+        kind === "building" ? "rgba(4,8,12,0.5)" : "rgba(4,8,12,0.48)"
+      }
+      filter="url(#rf-contact-shadow)"
+      pointerEvents="none"
+    />
+  );
+}
+
 export function GroundedUnitMini({
   territoryId,
   size,
@@ -82,21 +113,19 @@ export function GroundedUnitMini({
   compact,
   transit,
   more,
+  shadowOnly,
+  omitShadow,
 }: UnitMiniProps) {
   const col = muteFactionColor(factionHex, transit ? 0.22 : 0.38);
   if (more != null) {
     if (more <= 0) return null;
     const fp = groundedUnitFootprint(size * 0.85, zoomScale, { compact: true });
+    if (shadowOnly) {
+      return <GroundedContactShadow fp={fp} kind="unit" />;
+    }
     return (
       <g className="rf-map__unit-more is-grounded">
-        <ellipse
-          cx={0}
-          cy={fp.shadow.cy}
-          rx={fp.shadow.rx}
-          ry={fp.shadow.ry}
-          fill="rgba(4,8,12,0.45)"
-          pointerEvents="none"
-        />
+        {!omitShadow && <GroundedContactShadow fp={fp} kind="unit" />}
         <rect
           className="rf-map__unit-hit"
           data-territory-id={territoryId}
@@ -125,6 +154,9 @@ export function GroundedUnitMini({
     compact,
     transit,
   });
+  if (shadowOnly) {
+    return <GroundedContactShadow fp={fp} kind="unit" />;
+  }
   const countText = count > 9 ? "9+" : String(count);
 
   return (
@@ -134,27 +166,7 @@ export function GroundedUnitMini({
       }`}
       opacity={transit ? 0.9 : 1}
     >
-      <ellipse
-        className="rf-map__contact-shadow"
-        cx={0}
-        cy={fp.shadow.cy}
-        rx={fp.shadow.rx}
-        ry={fp.shadow.ry}
-        fill="rgba(4,8,12,0.38)"
-        pointerEvents="none"
-      />
-      <line
-        className="rf-map__ground-line"
-        x1={fp.groundLine.x1}
-        y1={fp.groundLine.y}
-        x2={fp.groundLine.x2}
-        y2={fp.groundLine.y}
-        stroke={col}
-        strokeWidth={fp.groundLine.strokeW}
-        strokeLinecap="round"
-        opacity={0.7}
-        pointerEvents="none"
-      />
+      {!omitShadow && <GroundedContactShadow fp={fp} kind="unit" />}
       <rect
         className="rf-map__unit-hit"
         data-territory-id={territoryId}
@@ -182,10 +194,10 @@ export function GroundedUnitMini({
           />
         ) : (
           <path
-            d={`M ${-fp.sprite.w * 0.18} ${fp.shadow.cy - 0.2}
+            d={`M ${-fp.sprite.w * 0.18} ${fp.sprite.y + fp.sprite.h - fp.footInset}
                 L ${-fp.sprite.w * 0.12} ${fp.sprite.y + fp.sprite.h * 0.35}
                 L ${fp.sprite.w * 0.12} ${fp.sprite.y + fp.sprite.h * 0.35}
-                L ${fp.sprite.w * 0.18} ${fp.shadow.cy - 0.2} Z
+                L ${fp.sprite.w * 0.18} ${fp.sprite.y + fp.sprite.h - fp.footInset} Z
                 M ${-fp.sprite.w * 0.08} ${fp.sprite.y + fp.sprite.h * 0.35}
                 L 0 ${fp.sprite.y + fp.sprite.h * 0.12}
                 L ${fp.sprite.w * 0.08} ${fp.sprite.y + fp.sprite.h * 0.35}`}
@@ -213,6 +225,8 @@ export function GroundedBuildingMini({
   constructing,
   progress = 0,
   more,
+  shadowOnly,
+  omitShadow,
 }: BuildingMiniProps) {
   const col = muteFactionColor(factionHex, 0.42);
   if (more != null) {
@@ -220,16 +234,12 @@ export function GroundedBuildingMini({
     const fp = groundedBuildingFootprint(size * 0.85, zoomScale, {
       compact: true,
     });
+    if (shadowOnly) {
+      return <GroundedContactShadow fp={fp} kind="building" />;
+    }
     return (
       <g className="rf-map__bldg-more is-grounded">
-        <ellipse
-          cx={0}
-          cy={fp.shadow.cy}
-          rx={fp.shadow.rx}
-          ry={fp.shadow.ry}
-          fill="rgba(4,8,12,0.42)"
-          pointerEvents="none"
-        />
+        {!omitShadow && <GroundedContactShadow fp={fp} kind="building" />}
         <rect
           className="rf-map__bldg-hit"
           data-territory-id={territoryId}
@@ -262,6 +272,9 @@ export function GroundedBuildingMini({
     constructing,
     progress,
   });
+  if (shadowOnly) {
+    return <GroundedContactShadow fp={fp} kind="building" />;
+  }
   const countText =
     count != null && count > 0 ? (count > 9 ? "9+" : String(count)) : "";
 
@@ -272,27 +285,7 @@ export function GroundedBuildingMini({
       }`}
       opacity={constructing ? 0.7 : 1}
     >
-      <ellipse
-        className="rf-map__contact-shadow"
-        cx={0}
-        cy={fp.shadow.cy}
-        rx={fp.shadow.rx}
-        ry={fp.shadow.ry}
-        fill="rgba(4,8,12,0.35)"
-        pointerEvents="none"
-      />
-      <line
-        className="rf-map__ground-line"
-        x1={fp.groundLine.x1}
-        y1={fp.groundLine.y}
-        x2={fp.groundLine.x2}
-        y2={fp.groundLine.y}
-        stroke={col}
-        strokeWidth={fp.groundLine.strokeW}
-        strokeLinecap="round"
-        opacity={0.65}
-        pointerEvents="none"
-      />
+      {!omitShadow && <GroundedContactShadow fp={fp} kind="building" />}
       <rect
         className="rf-map__bldg-hit"
         data-territory-id={territoryId}
@@ -315,7 +308,7 @@ export function GroundedBuildingMini({
                 x={fp.sprite.x}
                 y={fp.sprite.y}
                 width={fp.sprite.w}
-                height={fp.sprite.h * 0.82}
+                height={fp.sprite.h - fp.footInset}
               />
             </clipPath>
             <image
@@ -325,9 +318,10 @@ export function GroundedBuildingMini({
               width={fp.sprite.w}
               height={fp.sprite.h}
               preserveAspectRatio="xMidYMax meet"
-              opacity={0.94}
+              opacity={0.62}
               filter="url(#rf-sprite-knockout)"
               clipPath={`url(#${clipId})`}
+              className="rf-map__bldg-art"
             />
           </g>
         ) : (
@@ -335,7 +329,7 @@ export function GroundedBuildingMini({
             x={fp.sprite.x + fp.sprite.w * 0.15}
             y={fp.sprite.y + fp.sprite.h * 0.25}
             width={fp.sprite.w * 0.7}
-            height={fp.sprite.h * 0.7}
+            height={fp.sprite.h * 0.7 - fp.footInset}
             rx={fp.sprite.w * 0.06}
             fill={col}
             opacity={0.55}

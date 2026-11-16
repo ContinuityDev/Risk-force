@@ -51,11 +51,16 @@ import {
   type MapChromeFocus,
 } from "../map/mapChrome";
 import {
+  getTerritoryAnchors,
+  marchLandPoint,
+} from "../map/territoryAnchors";
+import {
   garrisonFingerprint,
   layoutTransitUnitMinis,
   layoutUnitMinis,
   transitFingerprint,
 } from "../map/unitMinis";
+import { getUnit } from "../data/units";
 import { Drawer } from "./Drawer";
 import {
   GroundedBuildingMini,
@@ -844,6 +849,20 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               floodOpacity="0.75"
             />
           </filter>
+          {/* Soft contact shadow under mini feet (drawn in underlay layer).
+              Blur is tiny in user units so it doesn't dwarf the ellipse. */}
+          <filter
+            id="rf-contact-shadow"
+            x="-80%"
+            y="-80%"
+            width="260%"
+            height="260%"
+            filterUnits="objectBoundingBox"
+            primitiveUnits="objectBoundingBox"
+            colorInterpolationFilters="sRGB"
+          >
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.18" />
+          </filter>
           {/* Knock near-black sprite backplates to transparent (sprites are on #000). */}
           <filter
             id="rf-sprite-knockout"
@@ -1002,19 +1021,33 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               if (!from || !to) return null;
               const progress =
                 1 - army.turnsRemaining / Math.max(1, army.totalTurns);
-              const x1 = from.label.x;
-              const y1 = from.label.y;
-              const x2 = to.label.x;
-              const y2 = to.label.y;
-              const mx = x1 + (x2 - x1) * Math.min(0.85, 0.15 + progress * 0.7);
-              const my =
-                y1 + (y2 - y1) * Math.min(0.85, 0.15 + progress * 0.7) - 6;
+              const naval = army.force.every((f) => {
+                try {
+                  return getUnit(f.unitId).role === "naval";
+                } catch {
+                  return false;
+                }
+              });
+              const a0 = getTerritoryAnchors(from).pole;
+              const a1 = getTerritoryAnchors(to).pole;
+              const mid = marchLandPoint(
+                from,
+                to,
+                Math.min(0.85, 0.15 + progress * 0.7),
+                naval,
+              );
+              const x1 = a0.x;
+              const y1 = a0.y;
+              const x2 = a1.x;
+              const y2 = a1.y;
+              const mx = mid.x;
+              const my = mid.y;
               const col = factionColor(army.owner);
               const headCount = army.force.reduce((s, f) => s + f.count, 0);
               return (
                 <g key={army.id}>
                   <path
-                    d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${(y1 + y2) / 2 - 10} ${x2} ${y2}`}
+                    d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${(y1 + y2) / 2 - (naval ? 10 : 4)} ${x2} ${y2}`}
                     fill="none"
                     stroke={col}
                     strokeWidth={Math.max(1.1, 2 * zoomScale)}
@@ -1487,6 +1520,62 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </g>
         )}
 
+        {/* Contact shadows underlay — every shadow below every sprite so
+            neighbouring minis never paint a shadow over another piece. */}
+        {(unitMinis.length > 0 ||
+          transitMinis.length > 0 ||
+          buildingMinis.length > 0) && (
+          <g className="rf-map__mini-shadows" pointerEvents="none">
+            {[...unitMinis, ...transitMinis].map((m) => {
+              const col = factionColor(
+                (m.owner ?? "neutral") as import("../data/types").FactionId,
+              );
+              return (
+                <g key={`sh-${m.key}`} transform={`translate(${m.x}, ${m.y})`}>
+                  <GroundedUnitMini
+                    territoryId={m.territoryId ?? m.armyId ?? ""}
+                    size={m.size}
+                    zoomScale={zoomScale}
+                    factionHex={col}
+                    count={m.count}
+                    compact={m.compact}
+                    transit={m.transit}
+                    more={m.more}
+                    shadowOnly
+                  />
+                </g>
+              );
+            })}
+            {buildingMinis.map((m) => {
+              if (m.compact && (m.count == null || m.count <= 0)) return null;
+              if (m.more != null && m.more <= 0) return null;
+              const owner =
+                state.territories[m.territoryId]?.owner ?? "neutral";
+              const col = factionColor(owner);
+              return (
+                <g
+                  key={`sh-${m.key}`}
+                  transform={`translate(${m.x}, ${m.y})`}
+                >
+                  <GroundedBuildingMini
+                    territoryId={m.territoryId}
+                    clipId={`rf-bldg-sh-${m.key}`}
+                    size={m.size}
+                    zoomScale={zoomScale}
+                    factionHex={col}
+                    count={m.count}
+                    compact={m.compact}
+                    constructing={m.constructing}
+                    progress={m.progress}
+                    more={m.more}
+                    shadowOnly
+                  />
+                </g>
+              );
+            })}
+          </g>
+        )}
+
         {(unitMinis.length > 0 || transitMinis.length > 0) && (
           <g className="rf-map__units">
             {[...unitMinis, ...transitMinis].map((m) => {
@@ -1505,6 +1594,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     compact={m.compact}
                     transit={m.transit}
                     more={m.more}
+                    omitShadow
                   />
                 </g>
               );
@@ -1534,6 +1624,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     constructing={m.constructing}
                     progress={m.progress}
                     more={m.more}
+                    omitShadow
                   />
                 </g>
               );

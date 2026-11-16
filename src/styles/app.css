@@ -1171,8 +1171,14 @@
   opacity: 0.92;
 }
 
-.rf-map__unit.is-grounded .rf-map__contact-shadow {
-  opacity: 0.85;
+.rf-map__mini-shadows {
+  pointer-events: none;
+}
+
+.rf-map__mini-shadows .rf-map__contact-shadow,
+.rf-map__unit.is-grounded .rf-map__contact-shadow,
+.rf-map__bldg.is-grounded .rf-map__contact-shadow {
+  opacity: 0.8;
 }
 
 .rf-map__bldgs {
@@ -1186,9 +1192,12 @@
 }
 
 .rf-map__bldg image,
-.rf-map__bldg.is-grounded image {
+.rf-map__bldg.is-grounded image,
+.rf-map__bldg-art {
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
+  /* Mute bright white building art toward the slate terrain. */
+  filter: saturate(0.42) brightness(0.58) contrast(0.88);
 }
 
 .rf-map__bldg.is-compact {

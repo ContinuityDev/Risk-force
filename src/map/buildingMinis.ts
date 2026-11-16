@@ -4,6 +4,11 @@ import { activeMapId } from "../data/maps/activate";
 import type { TerritoryDef } from "../data/types";
 import type { PlacedBuilding, TerritoryState } from "../engine/state";
 import { getSpriteUrl } from "../sprites/registry";
+import {
+  claimInteriorCluster,
+  claimInteriorSlot,
+  getTerritoryAnchors,
+} from "./territoryAnchors";
 
 /** Median territory area for the active map — used to scale plot-size gates. */
 let medianCache: { mapId: string; med: number } | null = null;
@@ -55,15 +60,6 @@ export interface LabelBox {
   y: number;
   w: number;
   h: number;
-}
-
-function overlaps(a: Box, b: Box, pad = 1.5): boolean {
-  return !(
-    a.x + a.w / 2 + pad < b.x - b.w / 2 ||
-    a.x - a.w / 2 - pad > b.x + b.w / 2 ||
-    a.y + a.h / 2 + pad < b.y - b.h / 2 ||
-    a.y - a.h / 2 - pad > b.y + b.h / 2
-  );
 }
 
 /** Higher = more important for the mid-zoom shortlist. */
@@ -183,55 +179,14 @@ function toMini(
 function tryPlaceCompact(
   t: TerritoryDef,
   buildings: PlacedBuilding[],
-  baseX: number,
-  baseY: number,
   size: number,
   gap: number,
   occupied: Box[],
 ): PlacedMini | null {
-  const box: Box = { x: baseX, y: baseY, w: size * 1.2, h: size * 1.2 };
-  // Prefer below / beside — never an above-label offset that covers glyphs.
-  const offsets = [
-    { x: 0, y: 0 },
-    { x: 0, y: size + gap },
-    { x: size + gap, y: 0 },
-    { x: -(size + gap), y: 0 },
-    { x: size + gap, y: size + gap },
-    { x: -(size + gap), y: size + gap },
-    { x: 0, y: (size + gap) * 2 },
-    { x: (size + gap) * 2, y: (size + gap) * 2 },
-    { x: -(size + gap) * 2, y: (size + gap) * 2 },
-    { x: 0, y: (size + gap) * 3.5 },
-  ];
-  for (const off of offsets) {
-    const b: Box = { x: baseX + off.x, y: baseY + off.y, w: box.w, h: box.h };
-    if (occupied.some((o) => overlaps(b, o, gap * 0.5))) continue;
-    occupied.push(b);
-    let spriteId = "building-nexus";
-    try {
-      spriteId = getBuilding(sortBuildings(buildings)[0]!.buildingId).sprite.id;
-    } catch {
-      /* */
-    }
-    return {
-      key: `${t.id}:compact`,
-      territoryId: t.id,
-      buildingId: "command_nexus",
-      spriteId,
-      spriteUrl: getSpriteUrl(spriteId),
-      x: b.x,
-      y: b.y,
-      size,
-      constructing: false,
-      progress: 1,
-      compact: true,
-      count: buildings.length,
-    };
-  }
-  // Last resort: far below the pole, ignore soft pad so a marker always shows.
-  const fy = baseY + (size + gap) * 4.5;
-  const last: Box = { x: baseX, y: fy, w: box.w, h: box.h };
-  occupied.push(last);
+  const slot = claimInteriorSlot(t, size, occupied, gap * 0.5);
+  if (!slot) return null;
+  const b: Box = { x: slot.x, y: slot.y, w: size * 1.15, h: size * 1.15 };
+  occupied.push(b);
   let spriteId = "building-nexus";
   try {
     spriteId = getBuilding(sortBuildings(buildings)[0]!.buildingId).sprite.id;
@@ -244,8 +199,8 @@ function tryPlaceCompact(
     buildingId: "command_nexus",
     spriteId,
     spriteUrl: getSpriteUrl(spriteId),
-    x: last.x,
-    y: last.y,
+    x: slot.x,
+    y: slot.y,
     size,
     constructing: false,
     progress: 1,
@@ -254,32 +209,9 @@ function tryPlaceCompact(
   };
 }
 
-/** Grid positions centered on (cx, cy), row-major. */
-function gridSlots(
-  n: number,
-  cols: number,
-  size: number,
-  gap: number,
-  cx: number,
-  cy: number,
-): Array<{ x: number; y: number }> {
-  const rows = Math.ceil(n / cols);
-  const gridW = cols * size + (cols - 1) * gap;
-  const gridH = rows * size + (rows - 1) * gap;
-  const x0 = cx - gridW / 2 + size / 2;
-  const y0 = cy - gridH / 2 + size / 2;
-  const out: Array<{ x: number; y: number }> = [];
-  for (let i = 0; i < n; i++) {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    out.push({ x: x0 + c * (size + gap), y: y0 + r * (size + gap) });
-  }
-  return out;
-}
-
 /**
- * Place building thumbnails near each territory's label pole.
- * Screen size grows with zoom-in; deep zoom uses a compact grid/cluster.
+ * Place building thumbnails on interior land anchors (never on water).
+ * Screen size grows with zoom-in; deep zoom uses a compact inland cluster.
  */
 export function layoutBuildingMinis(
   territories: TerritoryDef[],
@@ -293,13 +225,12 @@ export function layoutBuildingMinis(
   const tier = miniZoomTier(zoomScale);
   const size = iconWorldSize(zoomScale, cam.w, tier);
   const gap = Math.max(0.8, size * 0.16);
-  const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
-  // Inflate label boxes so building pads never cover name glyphs.
+  // Soft label avoid — prefer inland slots that don't cover glyphs.
   const occupied: Box[] = labels.map((l) => ({
     x: l.x,
     y: l.y,
-    w: Math.max(l.w * 1.35, size * 2.4, 10),
-    h: Math.max(l.h * 1.55, size * 0.95, 4),
+    w: Math.max(l.w * 1.15, size * 1.8, 8),
+    h: Math.max(l.h * 1.25, size * 0.8, 3.5),
   }));
   const out: PlacedMini[] = [];
 
@@ -308,43 +239,29 @@ export function layoutBuildingMinis(
   for (const t of ranked) {
     const ts = territoryState[t.id];
     if (showTerritory && !showTerritory(t, ts)) continue;
-    // Skip empty / razed bases — never emit compact pads or +N for 0 buildings.
     const buildings = (ts?.buildings ?? []).filter((b) => b.hp > 0);
     if (!buildings.length) continue;
 
-    const ax = t.label.x;
-    const ay = t.label.y;
+    const pole = getTerritoryAnchors(t).pole;
     if (
-      ax < cam.x - 40 ||
-      ax > cam.x + cam.w + 40 ||
-      ay < cam.y - 40 ||
-      ay > cam.y + cam.h + 40
+      pole.x < cam.x - 40 ||
+      pole.x > cam.x + cam.w + 40 ||
+      pole.y < cam.y - 40 ||
+      pole.y > cam.y + cam.h + 40
     ) {
       continue;
     }
 
-    const lbl = labelById[t.id];
-    const baseX = lbl?.x ?? ax;
-    const belowY = lbl
-      ? lbl.y + lbl.h / 2 + gap + size / 2
-      : ay + size * 0.9;
-
     if (tier === "world") {
-      // World zoom: unit strength chips own the pole. Building pads at this
-      // scale just double-stack Europe into an unreadible cloud.
+      // World zoom: unit strength chips own the pole.
       continue;
     }
 
     const sorted = sortBuildings(buildings);
-    // Mid on small plots: one compact pad. Larger territories keep a short row.
-    // Threshold is relative to the active map median so Civil War states aren't
-    // forced into Earth-tuned "tiny" compact markers.
     if (tier === "mid" && isSmallPlot(t.area)) {
       const compact = tryPlaceCompact(
         t,
         buildings,
-        baseX,
-        belowY + size * 0.35,
         Math.max(size * 0.8, 1.5),
         gap,
         occupied,
@@ -352,104 +269,55 @@ export function layoutBuildingMinis(
       if (compact) out.push(compact);
       continue;
     }
-    // Mid: ≤3 pads. Deep: up to full cluster — always below the label.
+
     const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
-    const cols =
-      tier === "deep"
-        ? Math.min(
-            3,
-            Math.max(2, Math.ceil(Math.sqrt(shown.length + (moreCount ? 1 : 0)))),
-          )
-        : shown.length + (moreCount ? 1 : 0) <= 3
-          ? shown.length + (moreCount ? 1 : 0)
-          : 3;
-
     const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
-    // Prefer further below / never sit on the label. Side lanes via baseX shift.
-    const yAnchors = [
-      belowY + size * 0.45,
-      belowY + size * 1.35,
-      belowY + size * 2.4,
-    ];
-    const xShifts = [0, size * 1.4, -size * 1.4, size * 2.2, -size * 2.2];
+    const centers = claimInteriorCluster(
+      t,
+      slotCount,
+      size,
+      occupied,
+      gap * 0.5,
+    );
 
-    let placed: PlacedMini[] | null = null;
-
-    outer: for (const xShift of xShifts) {
-      for (const cy of yAnchors) {
-        const slots = gridSlots(
-          slotCount,
-          cols,
-          size,
-          gap,
-          baseX + xShift,
-          cy,
-        );
-        const trial: PlacedMini[] = [];
-        const trialBoxes: Box[] = [];
-        let ok = true;
-
-        for (let i = 0; i < shown.length; i++) {
-          const slot = slots[i]!;
-          const box: Box = { x: slot.x, y: slot.y, w: size, h: size };
-          if (
-            occupied.some((o) => overlaps(box, o, gap * 0.55)) ||
-            trialBoxes.some((o) => overlaps(box, o, gap * 0.3))
-          ) {
-            ok = false;
-            break;
-          }
-          const mini = toMini(t.id, shown[i]!, slot.x, slot.y, size);
-          if (!mini) continue;
-          trialBoxes.push(box);
-          trial.push(mini);
-        }
-        if (!ok || trial.length === 0) continue;
-
-        if (moreCount > 0 && slots[shown.length]) {
-          const slot = slots[shown.length]!;
-          const moreSize = size * 0.85;
-          const box: Box = { x: slot.x, y: slot.y, w: moreSize, h: moreSize };
-          if (
-            !occupied.some((o) => overlaps(box, o, gap * 0.55)) &&
-            !trialBoxes.some((o) => overlaps(box, o, gap * 0.3))
-          ) {
-            trial.push({
-              key: `${t.id}:more`,
-              territoryId: t.id,
-              buildingId: "_more",
-              spriteId: "",
-              spriteUrl: "",
-              x: slot.x,
-              y: slot.y,
-              size: moreSize,
-              constructing: false,
-              progress: 1,
-              more: moreCount,
-            });
-            trialBoxes.push(box);
-          }
-        }
-
-        placed = trial;
-        for (const box of trialBoxes) occupied.push(box);
-        break outer;
+    if (centers.length >= shown.length) {
+      const trial: PlacedMini[] = [];
+      for (let i = 0; i < shown.length; i++) {
+        const c = centers[i]!;
+        const mini = toMini(t.id, shown[i]!, c.x, c.y, size);
+        if (!mini) continue;
+        occupied.push({ x: c.x, y: c.y, w: size, h: size });
+        trial.push(mini);
+      }
+      if (moreCount > 0 && centers[shown.length]) {
+        const c = centers[shown.length]!;
+        const moreSize = size * 0.85;
+        occupied.push({ x: c.x, y: c.y, w: moreSize, h: moreSize });
+        trial.push({
+          key: `${t.id}:more`,
+          territoryId: t.id,
+          buildingId: "_more",
+          spriteId: "",
+          spriteUrl: "",
+          x: c.x,
+          y: c.y,
+          size: moreSize,
+          constructing: false,
+          progress: 1,
+          more: moreCount,
+        });
+      }
+      if (trial.length) {
+        out.push(...trial);
+        continue;
       }
     }
 
-    if (placed) {
-      out.push(...placed);
-      continue;
-    }
-
-    // Mid/deep fallback: always show a compact marker when the cluster won't fit
     const compact = tryPlaceCompact(
       t,
       buildings,
-      baseX,
-      belowY,
       Math.max(size * 0.85, 1.6),
       gap,
       occupied,
