@@ -100,6 +100,45 @@ export type GameAction =
         path: string[];
       };
     }
+  | {
+      type: "CREATE_SQUAD";
+      payload: {
+        territoryId: string;
+        force: StrikeForceSlot[];
+        name?: string;
+      };
+    }
+  | {
+      type: "RENAME_SQUAD";
+      payload: { squadId: string; name: string };
+    }
+  | { type: "DISBAND_SQUAD"; payload: { squadId: string } }
+  | {
+      type: "MERGE_SQUADS";
+      payload: { intoId: string; fromId: string };
+    }
+  | {
+      type: "ORDER_SQUAD_MOVE";
+      payload: { squadId: string; toId: string; path?: string[] };
+    }
+  | {
+      type: "DEPART_SQUAD";
+      payload: {
+        squadId: string;
+        force: StrikeForceSlot[];
+        mode: "garrison" | "new_squad";
+        name?: string;
+      };
+    }
+  | {
+      type: "ADD_TO_SQUAD";
+      payload: {
+        squadId: string;
+        fromId: string;
+        force: StrikeForceSlot[];
+      };
+    }
+  | { type: "SELECT_SQUAD"; payload: { squadId: string | null } }
   | { type: "SET_AI_ATTACK_PLANS"; payload: { plans: AiAttackPlan[] } }
   | { type: "APPEND_TURN_LOG"; payload: { lines: string[] } }
   | {

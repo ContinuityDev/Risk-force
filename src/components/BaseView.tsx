@@ -28,6 +28,7 @@ import {
   unitTrainTurns,
   workerCapForBuilding,
 } from "../engine/training";
+import { workerEffectForBuilding } from "../engine/workerEffects";
 import { pulseResources } from "../ui/resourcePulse";
 import { CostLabel } from "./CostLabel";
 import { Drawer } from "./Drawer";
@@ -69,7 +70,8 @@ export function BaseView({
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(
     null,
   );
-  const [demolishId, setDemolishId] = useState<string | null>(null);
+  /** Pending delete confirmation (from building menu Delete). */
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   /** Desktop hover preview cell. */
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
   /**
@@ -334,22 +336,9 @@ export function BaseView({
                         y < b.y + def.size.h
                       );
                     });
-                    if (inst && demolishId === inst.instanceId) {
-                      if (inst.buildingId !== "command_nexus") {
-                        dispatch({
-                          type: "DEMOLISH_BUILDING",
-                          payload: {
-                            territoryId: tid,
-                            instanceId: inst.instanceId,
-                          },
-                        });
-                      }
-                      setDemolishId(null);
-                      return;
-                    }
                     if (inst) {
                       setSelectedInstanceId(inst.instanceId);
-                      setDemolishId(inst.instanceId);
+                      setDeleteConfirmId(null);
                       setPendingPlace(null);
                       setSelectedBuilding(null);
                       setDrawerMode(null);
@@ -363,7 +352,7 @@ export function BaseView({
                       return;
                     }
                     setSelectedInstanceId(null);
-                    setDemolishId(null);
+                    setDeleteConfirmId(null);
                     setBuildingMenu(null);
                     setDrawerMode(null);
                     if (!selectedBuilding) return;
@@ -441,7 +430,7 @@ export function BaseView({
               <div
                 key={inst.instanceId}
                 className={`rf-base__structure${
-                  demolishId === inst.instanceId ? " is-target" : ""
+                  deleteConfirmId === inst.instanceId ? " is-target" : ""
                 }${constructing ? " is-building" : ""}`}
                 data-instance-id={inst.instanceId}
                 style={{
@@ -594,7 +583,7 @@ export function BaseView({
                   setDrawerOpen(true);
                 }}
               >
-                Staff
+                Workers
               </button>
               <button
                 type="button"
@@ -608,8 +597,61 @@ export function BaseView({
               >
                 Info
               </button>
+              {selectedDef.id !== "command_nexus" && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="rf-base__ctx-item rf-base__ctx-item--danger"
+                  data-testid="building-delete"
+                  onClick={() => {
+                    setBuildingMenu(null);
+                    setDeleteConfirmId(selectedInst.instanceId);
+                  }}
+                >
+                  Delete
+                </button>
+              )}
             </div>
           )}
+
+        {deleteConfirmId && selectedInst?.instanceId === deleteConfirmId && (
+          <div className="rf-base__delete-confirm" role="alertdialog">
+            <p>
+              Demolish {selectedDef?.name ?? "this building"}? Workers return to
+              the free pool.
+            </p>
+            <div className="rf-base__delete-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setDeleteConfirmId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger"
+                data-testid="building-delete-confirm"
+                disabled={!canAct || !tid}
+                onClick={() => {
+                  if (!tid) return;
+                  dispatch({
+                    type: "DEMOLISH_BUILDING",
+                    payload: {
+                      territoryId: tid,
+                      instanceId: deleteConfirmId,
+                    },
+                  });
+                  setDeleteConfirmId(null);
+                  setSelectedInstanceId(null);
+                  setBuildingMenu(null);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
 
         {shortLandscape && (
           <button
@@ -673,14 +715,19 @@ export function BaseView({
                 >
                   ← {selectedDef.name}
                 </button>
-                <span className="rf-label">Staff</span>
+                <span className="rf-label">Workers</span>
               </div>
               <p className="rf-hint">
-                Free workers: {freeWorkers}. Output scales with assigned staff.
+                Free workers: {freeWorkers}. Staffing scales this building&apos;s
+                effect.
               </p>
               {(() => {
                 const cap = workerCapForBuilding(selectedInst.buildingId);
                 const cur = selectedInst.workers ?? 0;
+                const effect = workerEffectForBuilding(
+                  selectedInst.buildingId,
+                  cur,
+                );
                 const locked =
                   !canAct || selectedInst.buildRemaining > 0;
                 const setWorkers = (next: number) =>
@@ -719,6 +766,12 @@ export function BaseView({
                         +
                       </button>
                     </div>
+                    <p
+                      className="rf-base__staff-effect"
+                      data-testid="worker-effect"
+                    >
+                      {effect.label}
+                    </p>
                   </div>
                 );
               })()}
@@ -753,9 +806,17 @@ export function BaseView({
               </p>
               <p className="rf-base__blurb">{buildingBlurb(selectedDef)}</p>
               <p className="rf-hint">
-                HP {Math.ceil(selectedInst.hp)}/{selectedDef.maxHp} · Staff{" "}
+                HP {Math.ceil(selectedInst.hp)}/{selectedDef.maxHp} · Workers{" "}
                 {selectedInst.workers ?? 0}/
                 {workerCapForBuilding(selectedInst.buildingId)}
+              </p>
+              <p className="rf-base__staff-effect" data-testid="info-worker-effect">
+                {
+                  workerEffectForBuilding(
+                    selectedInst.buildingId,
+                    selectedInst.workers ?? 0,
+                  ).label
+                }
               </p>
             </section>
           )}
@@ -1084,7 +1145,8 @@ export function BaseView({
           </ul>
           <p className="rf-hint">
             Select a structure, then click an empty pad (on phones: tap to
-            preview, then Confirm). Tap a building for Train / Staff / Info.
+            preview, then Confirm). Tap a building for Train / Workers / Info /
+            Delete.
             Long-press a building for stats.
           </p>
             </>

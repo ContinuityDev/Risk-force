@@ -31,6 +31,8 @@ const EMPTY_MENU: GameState = {
   nextInstanceId: 1,
   aiAttackPlans: [],
   armiesInTransit: [],
+  squads: [],
+  selectedSquadId: null,
   pendingCapture: null,
   turnLog: [],
   relations: {},

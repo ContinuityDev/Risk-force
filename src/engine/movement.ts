@@ -15,9 +15,12 @@ import {
   normalizeForce,
   takeFromGarrison,
 } from "./garrisonHp";
+import { findRoute } from "./pathfinding";
+import { applySquadArrival } from "./squads";
 import type {
   ArmyTransit,
   GameState,
+  Squad,
   StrikeForceSlot,
   TerritoryState,
 } from "./state";
@@ -183,6 +186,12 @@ export function canOrderMove(
   return { ok: true };
 }
 
+export interface StartArmyMoveOpts {
+  pathRemaining?: string[];
+  squadId?: string;
+  joiningSquadId?: string;
+}
+
 /** Deduct garrison and enqueue a transit army. */
 export function startArmyMove(
   state: GameState,
@@ -190,6 +199,7 @@ export function startArmyMove(
   fromId: string,
   toId: string,
   force: StrikeForceSlot[],
+  opts: StartArmyMoveOpts = {},
 ): GameState {
   const check = canOrderMove(state, playerId, fromId, toId, force);
   if (!check.ok) return { ...state, message: check.reason };
@@ -214,6 +224,11 @@ export function startArmyMove(
     force: marchForce,
     turnsRemaining: turns,
     totalTurns: turns,
+    pathRemaining: opts.pathRemaining?.length
+      ? [...opts.pathRemaining]
+      : undefined,
+    squadId: opts.squadId,
+    joiningSquadId: opts.joiningSquadId,
   };
 
   return {
@@ -230,7 +245,8 @@ export function startArmyMove(
 
 /**
  * Tick armies for the player whose turn is starting.
- * Friendly arrivals merge into garrison; enemy arrivals open a battle.
+ * Friendly arrivals merge into garrison (or squad); enemy arrivals open a battle.
+ * Join columns re-route toward their squad each hop.
  */
 export function tickArmiesForPlayer(
   state: GameState,
@@ -241,9 +257,11 @@ export function tickArmiesForPlayer(
   let territories: Record<string, TerritoryState> = {
     ...state.territories,
   };
+  let squads: Squad[] = [...(state.squads ?? [])];
   const log = [...(state.turnLog ?? [])];
   let battle: ReturnType<typeof createBattle> | null = null;
   let battleMessage: string | null = null;
+  let engagedSquadId: string | null = null;
 
   for (const army of armies) {
     if (army.owner !== playerId) {
@@ -261,11 +279,66 @@ export function tickArmiesForPlayer(
     }
     const dest = territories[army.toId];
     if (!dest) continue;
+
+    // Multi-hop continue
     if (dest.owner === playerId) {
-      const rest = army.pathRemaining ?? [];
+      let rest = [...(army.pathRemaining ?? [])];
+
+      // Join columns: re-aim at live squad destination before next hop
+      if (army.joiningSquadId) {
+        const squad = squads.find((s) => s.id === army.joiningSquadId);
+        if (!squad) {
+          territories = {
+            ...territories,
+            [army.toId]: mergeIntoGarrison(dest, army.force),
+          };
+          log.push(
+            `Joiners settled in ${getTerritory(army.toId).name} (squad gone).`,
+          );
+          continue;
+        }
+        const liveTarget =
+          squad.status === "marching" && squad.transitId
+            ? (() => {
+                const t =
+                  remaining.find((a) => a.id === squad.transitId) ||
+                  armies.find((a) => a.id === squad.transitId);
+                if (!t) return squad.territoryId;
+                const pr = t.pathRemaining ?? [];
+                return pr.length ? pr[pr.length - 1]! : t.toId;
+              })()
+            : squad.territoryId;
+        if (liveTarget === army.toId) {
+          const arrived = applySquadArrival(
+            { ...state, territories, squads, armiesInTransit: remaining },
+            { ...army, turnsRemaining: 0 },
+            territories,
+            squads,
+            log,
+          );
+          if (arrived.consumed) {
+            territories = arrived.territories;
+            squads = arrived.squads;
+            log.length = 0;
+            log.push(...arrived.log);
+            continue;
+          }
+        }
+        if (liveTarget !== army.toId) {
+          const route = findRoute(army.toId, liveTarget, army.force, {
+            avoidEnemy: true,
+            owner: playerId,
+            territories,
+          });
+          if (route && route.path.length >= 2) {
+            rest = route.path.slice(1);
+          }
+        }
+      }
+
       if (rest.length > 0) {
         const nextHop = rest[0]!;
-        const turns = travelTurns(army.toId, nextHop, army.force);
+        const turns = travelTurns(army.toId, nextHop, army.force, territories);
         remaining.push({
           ...army,
           fromId: army.toId,
@@ -274,11 +347,36 @@ export function tickArmiesForPlayer(
           totalTurns: turns,
           pathRemaining: rest.slice(1),
         });
+        // Keep squad.territoryId as last occupied hop while marching
+        if (army.squadId) {
+          squads = squads.map((s) =>
+            s.id === army.squadId
+              ? { ...s, territoryId: army.toId, transitId: army.id, status: "marching" }
+              : s,
+          );
+        }
         log.push(
           `Column continues ${getTerritory(army.toId).name} → ${getTerritory(nextHop).name}.`,
         );
         continue;
       }
+
+      // Final friendly arrival
+      const arrived = applySquadArrival(
+        { ...state, territories, squads, armiesInTransit: remaining },
+        army,
+        territories,
+        squads,
+        log,
+      );
+      if (arrived.consumed) {
+        territories = arrived.territories;
+        squads = arrived.squads;
+        log.length = 0;
+        log.push(...arrived.log);
+        continue;
+      }
+      // Plain reinforce (no squad tags)
       territories = {
         ...territories,
         [army.toId]: mergeIntoGarrison(dest, army.force),
@@ -286,27 +384,40 @@ export function tickArmiesForPlayer(
       log.push(`Reinforcements arrived in ${getTerritory(army.toId).name}.`);
       continue;
     }
-    const snap: GameState = { ...state, territories };
+
+    // Enemy / neutral — battle (squad or raw column)
+    const snap: GameState = { ...state, territories, squads };
     battle = createBattle(snap, army.toId, playerId, army.force, army.fromId);
     battleMessage = `Arriving army engages in ${getTerritory(army.toId).name}.`;
     log.push(`Arrival battle · ${getTerritory(army.toId).name}.`);
+    if (army.squadId) {
+      engagedSquadId = army.squadId;
+      squads = squads.map((s) =>
+        s.id === army.squadId
+          ? { ...s, status: "engaged", transitId: undefined, force: [] }
+          : s,
+      );
+    }
   }
 
   if (battle) {
     return {
       ...state,
       territories,
+      squads,
       armiesInTransit: remaining,
       turnLog: log,
       battle,
       phase: "battle",
       screen: "battle",
       message: battleMessage,
+      selectedSquadId: engagedSquadId ?? state.selectedSquadId,
     };
   }
   return {
     ...state,
     territories,
+    squads,
     armiesInTransit: remaining,
     turnLog: log,
   };

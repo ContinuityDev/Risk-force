@@ -45,6 +45,15 @@ import {
 import { findRoute } from "./pathfinding";
 import { canPlaceBuilding } from "./placement";
 import {
+  addUnitsToSquad,
+  createSquad,
+  departSquad,
+  disbandSquad,
+  mergeSquads,
+  orderSquadMove,
+  renameSquad,
+} from "./squads";
+import {
   applyPopulationGrowth,
   spendCampaignBudget,
 } from "./population";
@@ -104,6 +113,9 @@ export function reduce(state: GameState, action: GameAction): GameState {
         mapId: s.mapId ?? "world_war",
         territories,
         players,
+        squads: s.squads ?? [],
+        selectedSquadId: s.selectedSquadId ?? null,
+        armiesInTransit: s.armiesInTransit ?? [],
         newsFeed: s.newsFeed ?? [],
         newsUnread: s.newsUnread ?? 0,
         newsDigest: s.newsDigest ?? null,
@@ -128,10 +140,20 @@ export function reduce(state: GameState, action: GameAction): GameState {
     }
 
     case "SELECT_TERRITORY":
-      return { ...state, selectedTerritoryId: action.payload.territoryId };
+      return {
+        ...state,
+        selectedTerritoryId: action.payload.territoryId,
+        // Territory taps clear squad selection unless picking a destination.
+        selectedSquadId: action.payload.territoryId
+          ? state.selectedSquadId
+          : null,
+      };
 
-    case "SET_SCREEN":
-      return { ...state, screen: action.payload.screen };
+    case "SET_SCREEN": {
+      const screen =
+        action.payload.screen === "invade" ? "squads" : action.payload.screen;
+      return { ...state, screen };
+    }
 
     case "DISMISS_MESSAGE":
       return { ...state, message: null };
@@ -564,10 +586,92 @@ export function reduce(state: GameState, action: GameAction): GameState {
       if (!route || route.path.length < 2) {
         return { ...state, message: "No route to destination." };
       }
-      // March first hop now; remaining path stored on army via successive orders later.
       const firstTo = route.path[1]!;
-      return startArmyMove(state, pid, fromId, firstTo, force);
+      return startArmyMove(state, pid, fromId, firstTo, force, {
+        pathRemaining: route.path.slice(2),
+      });
     }
+
+    case "CREATE_SQUAD": {
+      if (state.phase !== "play") return state;
+      return createSquad(
+        state,
+        activePlayerId(state),
+        action.payload.territoryId,
+        action.payload.force,
+        action.payload.name,
+      );
+    }
+
+    case "RENAME_SQUAD": {
+      if (state.phase !== "play") return state;
+      return renameSquad(
+        state,
+        activePlayerId(state),
+        action.payload.squadId,
+        action.payload.name,
+      );
+    }
+
+    case "DISBAND_SQUAD": {
+      if (state.phase !== "play") return state;
+      return disbandSquad(
+        state,
+        activePlayerId(state),
+        action.payload.squadId,
+      );
+    }
+
+    case "MERGE_SQUADS": {
+      if (state.phase !== "play") return state;
+      return mergeSquads(
+        state,
+        activePlayerId(state),
+        action.payload.intoId,
+        action.payload.fromId,
+      );
+    }
+
+    case "ORDER_SQUAD_MOVE": {
+      if (state.phase !== "play") return state;
+      return orderSquadMove(
+        state,
+        activePlayerId(state),
+        action.payload.squadId,
+        action.payload.toId,
+        action.payload.path,
+      );
+    }
+
+    case "DEPART_SQUAD": {
+      if (state.phase !== "play") return state;
+      return departSquad(
+        state,
+        activePlayerId(state),
+        action.payload.squadId,
+        action.payload.force,
+        action.payload.mode,
+        action.payload.name,
+      );
+    }
+
+    case "ADD_TO_SQUAD": {
+      if (state.phase !== "play") return state;
+      return addUnitsToSquad(
+        state,
+        activePlayerId(state),
+        action.payload.squadId,
+        action.payload.fromId,
+        action.payload.force,
+      );
+    }
+
+    case "SELECT_SQUAD":
+      return {
+        ...state,
+        selectedSquadId: action.payload.squadId,
+        screen: action.payload.squadId ? "map" : state.screen,
+      };
 
     case "START_INVASION": {
       // March into the target — battle opens on arrival via tickArmiesForPlayer.

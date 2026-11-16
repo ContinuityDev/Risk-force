@@ -142,6 +142,19 @@ export interface PlayerState {
   armyTemplates?: ArmyTemplate[];
 }
 
+/** Named standing force carved from a garrison (replaces Invade flow). */
+export interface Squad {
+  id: string;
+  name: string;
+  owner: FactionId;
+  /** Plot the squad occupies when idle; last known when marching. */
+  territoryId: string;
+  force: StrikeForceSlot[];
+  status: "idle" | "marching" | "engaged";
+  /** Active ArmyTransit id while status === "marching". */
+  transitId?: string;
+}
+
 /** Army marching between territories. */
 export interface ArmyTransit {
   id: string;
@@ -153,6 +166,10 @@ export interface ArmyTransit {
   totalTurns: number;
   /** Remaining multi-hop waypoints after `toId` (friendly transit). */
   pathRemaining?: string[];
+  /** This column IS a named squad relocating / attacking. */
+  squadId?: string;
+  /** This column is joining the named squad on co-location. */
+  joiningSquadId?: string;
 }
 
 /** After a successful attack, choose how many survivors occupy. */
@@ -289,7 +306,8 @@ export type Screen =
   | "map"
   | "base"
   | "research"
-  | "invade"
+  | "squads"
+  | "invade" // legacy alias — redirects to squads
   | "battle"
   | "capture"
   | "save"
@@ -348,6 +366,10 @@ export interface GameState {
   aiAttackPlans: AiAttackPlan[];
   /** Armies currently marching. */
   armiesInTransit: ArmyTransit[];
+  /** Named standing forces (player + AI). */
+  squads: Squad[];
+  /** Currently selected squad on the map / Squads tab. */
+  selectedSquadId: string | null;
   /** Capture occupation choice pending after attacker win. */
   pendingCapture: PendingCapture | null;
   /** Recent AI / system notices (elimination, arrivals, AI summary). */
