@@ -47,6 +47,10 @@ export function Hud({
   const ledger = computeEnergyLedger(state, activePlayer.id);
   const netSign = ledger.net >= 0 ? "+" : "−";
   const netAbs = Math.abs(ledger.net);
+  /** Deep deficit: worse than ~35% of burn or under −40 (matches economy sim floor). */
+  const deepDeficit =
+    ledger.net < -40 ||
+    ledger.net / Math.max(1, ledger.upkeep + ledger.campaign) < -0.35;
 
   useEffect(() => {
     return subscribeResourcePulse((ids) => {
@@ -127,11 +131,18 @@ export function Hud({
           </span>
           <strong>{Math.floor(r.energy)}</strong>
           <small
-            className={`rf-hud__upkeep${ledger.net >= 0 ? " is-pos" : " is-neg"}`}
+            className={`rf-hud__upkeep${
+              ledger.net >= 0 ? " is-pos" : deepDeficit ? " is-crit" : " is-neg"
+            }`}
           >
             {netSign}
             {netAbs}/t
           </small>
+          {deepDeficit && (
+            <span className="rf-hud__deficit-warn" title="Energy burn is critical">
+              !
+            </span>
+          )}
           {tipId === "energy" && (
             <span className="rf-hud__ledger is-open" role="tooltip">
               <strong>{RESOURCE_META.energy.label}</strong>
@@ -142,6 +153,12 @@ export function Hud({
                 = {ledger.net >= 0 ? "+" : ""}
                 {ledger.net} net
               </span>
+              {deepDeficit && (
+                <span className="rf-hud__ledger-warn">
+                  Critical burn — disband surplus units, sell on the Orbital
+                  Market, or staff more reactors.
+                </span>
+              )}
               <span className="rf-hud__ledger-tip">{RESOURCE_META.energy.tip}</span>
             </span>
           )}
@@ -337,7 +354,7 @@ export function Hud({
 
       <button
         type="button"
-        className="ghost rf-hud__more"
+        className={`ghost rf-hud__more${moreOpen ? " is-open" : ""}`}
         aria-expanded={moreOpen}
         onClick={() => setMoreOpen(true)}
       >

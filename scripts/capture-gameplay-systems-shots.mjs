@@ -75,6 +75,28 @@ async function runViewport(browser, viewport, tag) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
   await startCampaign(page);
 
+  // 0) Fresh-game HUD at turn 1 (no garrison inflation) + dock chrome
+  await page.evaluate(() => {
+    const s = window.__RF__.getState();
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...s,
+          message: null,
+          screen: "map",
+          phase: "play",
+          selectedTerritoryId: null,
+          economySummary: null,
+        },
+      },
+    });
+  });
+  await page.waitForTimeout(400);
+  await dismissToast(page);
+  await shot(page, `${tag}-fresh-hud-turn1`);
+  await shot(page, `${tag}-dock`);
+
   // 1) Territory panel — occupied + terrain
   await page.evaluate(() => {
     const s = window.__RF__.getState();
@@ -125,11 +147,12 @@ async function runViewport(browser, viewport, tag) {
     if (!from) {
       from = Object.entries(s.territories).find(([, t]) => t.owner === "player")?.[0];
     }
+    // Only inflate the strike origin — boosting every owned territory
+    // created the fake −1030/t HUD burn in earlier screenshots.
     const territories = { ...s.territories };
-    for (const [id, t] of Object.entries(territories)) {
-      if (t.owner !== "player") continue;
-      territories[id] = {
-        ...t,
+    if (from && territories[from]) {
+      territories[from] = {
+        ...territories[from],
         garrison: {
           trooper: 14,
           hover_tank: 2,

@@ -103,3 +103,18 @@ describe("economy balance sim", () => {
     }
   });
 });
+
+  it("seed 77 hard start is near break-even (capture-script NRG was a fake)", () => {
+    const state = createInitialState({
+      humanCount: 1,
+      aiCount: 1,
+      multiplayerMode: "solo",
+      seed: 77,
+      difficulty: "hard",
+    });
+    const ledger = computeEnergyLedger(state, "player");
+    expect(ledger.net).toBeGreaterThan(-40);
+    expect(
+      Math.abs(ledger.net) / Math.max(1, ledger.upkeep + ledger.campaign),
+    ).toBeLessThan(0.35);
+  });

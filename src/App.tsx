@@ -628,6 +628,7 @@ export default function App() {
           isHumanTurn={isHumanTurn}
           dispatch={dispatch}
           onOpenMarket={() => setMarketOpen(true)}
+          marketOpen={marketOpen}
         />
         {tutorialActive && (
           <TutorialOverlay

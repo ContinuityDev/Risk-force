@@ -47,10 +47,14 @@ export function MarketView({
             <strong>
               {q.from} ↔ {q.to}
             </strong>
-            <small>
-              Sell {q.from}: {q.sellRate.toFixed(2)} {q.to}/ea · Buy {q.to}:{" "}
-              {q.buyRate.toFixed(2)} {q.from}/ea
-            </small>
+            <div className="rf-market__rates">
+              <span>
+                Sell {q.from}: <em>{q.sellRate.toFixed(2)}</em> {q.to}/ea
+              </span>
+              <span>
+                Buy {q.to}: <em>{q.buyRate.toFixed(2)}</em> {q.from}/ea
+              </span>
+            </div>
           </li>
         ))}
       </ul>
@@ -59,6 +63,7 @@ export function MarketView({
         <label className="rf-field">
           <span className="rf-label">Spend</span>
           <select
+            className="rf-control"
             value={from}
             onChange={(e) => setFrom(e.target.value as ResourceId)}
           >
@@ -70,6 +75,7 @@ export function MarketView({
         <label className="rf-field">
           <span className="rf-label">Receive</span>
           <select
+            className="rf-control"
             value={to}
             onChange={(e) => setTo(e.target.value as ResourceId)}
           >
@@ -81,6 +87,7 @@ export function MarketView({
         <label className="rf-field">
           <span className="rf-label">Amount</span>
           <input
+            className="rf-control"
             type="number"
             min={1}
             value={amount}
