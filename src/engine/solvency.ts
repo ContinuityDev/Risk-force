@@ -4,6 +4,7 @@
 
 import { GAME_LOOP } from "../data/gameLoop";
 import { getUnit } from "../data/units";
+import { unitDisplayName } from "../ui/displayNames";
 import type { GameState } from "./state";
 import { ensureTerritoryHp, takeFromGarrison } from "./garrisonHp";
 import { computeEnergyLedger } from "./economy";
@@ -47,7 +48,7 @@ export function disbandUnits(
         },
       },
     },
-    message: `Disbanded ${count}× ${unitId} (+${refund} energy).`,
+    message: `Disbanded ${count}× ${unitDisplayName(unitId)} (+${refund} energy).`,
   };
 }
 

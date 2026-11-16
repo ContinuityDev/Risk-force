@@ -41,7 +41,9 @@ import {
   aiCaptureDisposition,
   resolveCaptureDisposition,
 } from "./occupation";
+import { scrubOrdersForTerritory } from "./orderCleanup";
 import { checkEliminationsAndVictory } from "./victory";
+import { territoryDisplayName } from "../ui/displayNames";
 
 function dist(ax: number, ay: number, bx: number, by: number): number {
   return Math.hypot(ax - bx, ay - by);
@@ -286,7 +288,7 @@ export function createBattle(
     status: "running",
     mods,
     log: [
-      `Assault on ${territoryId} initiated.`,
+      `Assault on ${territoryDisplayName(territoryId)} initiated.`,
       `Strike force: ${atkCount} · Garrison: ${defUnitCount} · Turrets: ${defCount}.`,
     ],
   };
@@ -792,7 +794,7 @@ export function retreatBattle(state: GameState): GameState {
       phase: "play",
       screen: "map",
       pendingCapture: null,
-      message: `Assault aborted — survivors falling back to ${fromId}.`,
+      message: `Assault aborted — survivors falling back to ${territoryDisplayName(fromId)}.`,
     };
   }
 
@@ -901,22 +903,32 @@ export function applyBattleResult(state: GameState): GameState {
           territories,
           battle: null,
           pendingCapture: pending,
+          plannedRoute: null,
         },
         disposition,
         total,
       );
-      return checkEliminationsAndVictory(occupied, previousOwner);
+      return checkEliminationsAndVictory(
+        scrubOrdersForTerritory(occupied, tid, {
+          notice: occupied.message,
+        }),
+        previousOwner,
+      );
     }
-    return {
-      ...state,
-      players,
-      territories,
-      battle: null,
-      pendingCapture: pending,
-      phase: "capture",
-      screen: "capture",
-      message: `${tid} captured — choose occupation strength.`,
-    };
+    return scrubOrdersForTerritory(
+      {
+        ...state,
+        players,
+        territories,
+        battle: null,
+        pendingCapture: pending,
+        plannedRoute: null,
+        phase: "capture",
+        screen: "capture",
+        message: `${territoryDisplayName(tid)} captured — choose occupation strength.`,
+      },
+      tid,
+    );
   }
 
   territories = {
@@ -1039,6 +1051,6 @@ export function confirmCaptureOccupation(
     battle: null,
     phase: "play",
     screen: "map",
-    message: `${tid} occupied with ${take} survivors.`,
+    message: `${territoryDisplayName(tid)} occupied with ${take} survivor${take === 1 ? "" : "s"}.`,
   };
 }

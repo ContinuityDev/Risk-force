@@ -591,15 +591,83 @@
 .rf-hud__nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.3rem 0.55rem;
   justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+}
+
+.rf-hud__nav-primary,
+.rf-hud__nav-tools {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.rf-hud__nav-tools {
+  margin-left: 0.15rem;
 }
 
 .rf-hud__nav button {
-  padding: 0.35rem 0.65rem;
-  font-size: 0.78rem;
+  padding: 0.32rem 0.55rem;
+  font-size: 0.74rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.rf-hud__end-turn {
+  margin-left: 0.2rem;
+}
+
+/* Mid desktop (≈1024): nav on its own row — one tidy line, End Turn right. */
+@media (max-width: 1180px) and (min-width: 901px) {
+  .rf-hud {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "id resources news"
+      "nav nav nav";
+    row-gap: 0.4rem;
+    column-gap: 0.75rem;
+  }
+
+  .rf-hud__identity {
+    grid-area: id;
+  }
+
+  .rf-hud__resources {
+    grid-area: resources;
+    justify-content: flex-end;
+  }
+
+  .rf-hud__news {
+    grid-area: news;
+  }
+
+  .rf-hud__nav--desktop {
+    grid-area: nav;
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 0.45rem;
+  }
+
+  .rf-hud__nav-primary {
+    flex: 0 1 auto;
+  }
+
+  .rf-hud__nav-tools {
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+
+  .rf-hud__nav button {
+    padding: 0.28rem 0.48rem;
+    font-size: 0.7rem;
+  }
 }
 
 .rf-hud__message,
@@ -814,11 +882,11 @@
 }
 
 .rf-map__eta {
-  font-family: Georgia, "Times New Roman", serif;
-  letter-spacing: 0.04em;
+  font-family: var(--rf-font-display);
+  letter-spacing: 0.02em;
   paint-order: stroke fill;
   stroke: #081018;
-  stroke-width: 2.5px;
+  stroke-width: 0.4px;
 }
 
 .rf-capture {
@@ -1081,11 +1149,12 @@
 }
 
 .rf-map__units {
+  /* Never block territory hit-testing — selection uses elementsFromPoint. */
   pointer-events: none;
 }
 
 .rf-map__unit-hit {
-  pointer-events: auto;
+  pointer-events: none;
   cursor: pointer;
 }
 
@@ -1102,10 +1171,12 @@
 }
 
 .rf-map__bldgs {
-  pointer-events: auto;
+  /* Overlays must not swallow taps on the territory path beneath. */
+  pointer-events: none;
 }
 
 .rf-map__bldg-hit {
+  pointer-events: none;
   cursor: pointer;
 }
 
@@ -4873,12 +4944,19 @@
 
 .rf-map__planned-seg {
   animation: rf-route-dash 6s linear infinite;
-  filter: drop-shadow(0 0 2px rgba(126, 200, 232, 0.55));
+  filter: drop-shadow(0 0 1px rgba(126, 200, 232, 0.35));
+}
+
+.rf-map__route-pill {
+  pointer-events: none;
 }
 
 .rf-map__route-eta {
   font-family: var(--rf-font-display);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  paint-order: stroke fill;
+  stroke: rgba(8, 16, 24, 0.8);
+  stroke-width: 0.35px;
 }
 
 @media (orientation: landscape) and (max-height: 500px) {

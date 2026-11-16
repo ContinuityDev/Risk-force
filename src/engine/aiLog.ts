@@ -2,9 +2,10 @@ import { getBuilding } from "../data/buildings";
 import { TERRITORIES } from "../data/map/territories";
 import { getUnit } from "../data/units";
 import type { GameAction } from "./actions";
+import { unitDisplayName } from "../ui/displayNames";
 
 function territoryLabel(id: string): string {
-  return TERRITORIES.find((t) => t.id === id)?.name ?? id;
+  return TERRITORIES.find((t) => t.id === id)?.name ?? id.replace(/_/g, " ");
 }
 
 function forceSummary(
@@ -50,7 +51,7 @@ export function describeAiAction(
       return `${displayName} trains ${uName}×${action.payload.count} in ${territoryLabel(action.payload.territoryId)}`;
     }
     case "MOVE_GARRISON":
-      return `${displayName} reinforces ${territoryLabel(action.payload.toId)} from ${territoryLabel(action.payload.fromId)} (${action.payload.unitId}×${action.payload.count})`;
+      return `${displayName} reinforces ${territoryLabel(action.payload.toId)} from ${territoryLabel(action.payload.fromId)} (${unitDisplayName(action.payload.unitId)}×${action.payload.count})`;
     case "ORDER_MOVE": {
       const head = action.payload.force.reduce((n, s) => n + s.count, 0);
       return `${displayName} marches ${head} from ${territoryLabel(action.payload.fromId)} → ${territoryLabel(action.payload.toId)}`;

@@ -47,7 +47,7 @@ describe("buildingMinis", () => {
     // world compact stays small; mid/deep jump into the readable band
     expect(targetScreenPx(1)).toBeLessThanOrEqual(14);
     expect(targetScreenPx(0.35)).toBeGreaterThan(targetScreenPx(1));
-    expect(targetScreenPx(0.1)).toBeGreaterThanOrEqual(28);
+    expect(targetScreenPx(0.1)).toBeGreaterThanOrEqual(22);
     expect(targetScreenPx(0.08)).toBeLessThanOrEqual(40);
   });
 

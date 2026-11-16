@@ -105,7 +105,9 @@ export function buildingPriority(buildingId: string): number {
 
 export function miniZoomTier(zoomScale: number): MiniZoomTier {
   if (zoomScale >= 0.85) return "world";
-  if (zoomScale >= 0.32) return "mid";
+  // Building pads only appear once zoomed in further — mid was too noisy
+  // over Europe / the US Northeast at regional framing.
+  if (zoomScale >= 0.42) return "mid";
   return "deep";
 }
 
@@ -129,11 +131,11 @@ export function iconWorldSize(
 ): number {
   // Fraction of the visible camera width → roughly constant*growing screen px
   const frac =
-    tier === "deep" ? 0.072 : tier === "mid" ? 0.042 : 0.016;
+    tier === "deep" ? 0.058 : tier === "mid" ? 0.034 : 0.013;
   const raw = camW * frac;
-  // Hard clamps in world units (deep camW≈80 → ~5.8wu ≈ 35–40px on ~560px svg)
-  const min = tier === "deep" ? 4.5 : tier === "mid" ? 2.2 : 1.5;
-  const max = tier === "deep" ? 9.5 : tier === "mid" ? 6.5 : 3.2;
+  // Hard clamps in world units — slightly tighter so dense regions stay readable.
+  const min = tier === "deep" ? 3.6 : tier === "mid" ? 1.8 : 1.2;
+  const max = tier === "deep" ? 7.5 : tier === "mid" ? 5.0 : 2.6;
   void zoomScale;
   return Math.min(max, Math.max(min, raw));
 }
@@ -285,6 +287,8 @@ export function layoutBuildingMinis(
   zoomScale: number,
   cam: { x: number; y: number; w: number; h: number },
   labels: LabelBox[],
+  /** When set, only emit chrome for focused territories (declutter). */
+  showTerritory?: (t: TerritoryDef, ts: TerritoryState | undefined) => boolean,
 ): PlacedMini[] {
   const tier = miniZoomTier(zoomScale);
   const size = iconWorldSize(zoomScale, cam.w, tier);
@@ -303,6 +307,7 @@ export function layoutBuildingMinis(
 
   for (const t of ranked) {
     const ts = territoryState[t.id];
+    if (showTerritory && !showTerritory(t, ts)) continue;
     // Skip empty / razed bases — never emit compact pads or +N for 0 buildings.
     const buildings = (ts?.buildings ?? []).filter((b) => b.hp > 0);
     if (!buildings.length) continue;

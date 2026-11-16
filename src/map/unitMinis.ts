@@ -244,10 +244,14 @@ export function layoutUnitMinis(
   cam: { x: number; y: number; w: number; h: number },
   labels: LabelBox[],
   occupiedExtra: Box[] = [],
+  /** When set, only emit chrome for focused territories (declutter). */
+  showTerritory?: (t: TerritoryDef, ts: TerritoryState | undefined) => boolean,
+  /** When true, emit a single compact chip (neighbor neutrals). */
+  wantCompact?: (t: TerritoryDef, ts: TerritoryState | undefined) => boolean,
 ): PlacedUnitMini[] {
   const tier: MiniZoomTier = miniZoomTier(zoomScale);
   // Shrink chips so long names (Western China / Kazakhstan) stay readable.
-  const sizeScale = tier === "world" ? 0.72 : tier === "mid" ? 0.7 : 0.82;
+  const sizeScale = tier === "world" ? 0.62 : tier === "mid" ? 0.62 : 0.74;
   const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
   const gap = Math.max(0.55, size * 0.2);
   const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
@@ -268,6 +272,7 @@ export function layoutUnitMinis(
 
   for (const t of ranked) {
     const ts = territoryState[t.id];
+    if (showTerritory && !showTerritory(t, ts)) continue;
     const garrison = ts?.garrison ?? {};
     const sorted = sortGarrison(garrison);
     if (!sorted.length) continue;
@@ -288,14 +293,18 @@ export function layoutUnitMinis(
     const labelTop = lbl ? lbl.y - lbl.h / 2 : ay - 2;
     const labelBot = lbl ? lbl.y + lbl.h / 2 : ay + 2;
     const total = sorted.reduce((s, u) => s + u.count, 0);
+    const compactOnly = Boolean(wantCompact?.(t, ts));
 
-    // ── World: exactly one compact strength chip ───────────────
-    if (tier === "world") {
+    // ── World / neighbor-compact: exactly one strength chip ────
+    if (tier === "world" || compactOnly) {
       // Skip speckles relative to the active map (Earth Europe / CW NE).
-      const med = mapMedianArea();
-      if (t.area < med * 0.35) continue;
-      if (total <= 1 && t.area < med * 0.85) continue;
-      if (zoomScale >= 0.9 && t.area < med * 0.5) continue;
+      // Neighbor focus chips always render — they're intentional chrome.
+      if (!compactOnly) {
+        const med = mapMedianArea();
+        if (t.area < med * 0.45) continue;
+        if (total <= 2 && t.area < med * 0.95) continue;
+        if (zoomScale >= 0.88 && t.area < med * 0.65) continue;
+      }
 
       const chipSize = size;
       const halfLabel = Math.max((lbl?.w ?? size * 2) / 2, chipSize * 0.9);
@@ -549,6 +558,7 @@ export function layoutTransitUnitMinis(
         size,
         {
           armyId: army.id,
+          territoryId: army.toId,
           transit: true,
           compact: tier === "world",
           owner: army.owner,

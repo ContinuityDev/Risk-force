@@ -608,6 +608,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
       }
       return {
         ...marched,
+        plannedRoute: null,
         message: `Invasion force marching on ${getTerritory(toId).name}.`,
       };
     }
@@ -697,6 +698,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
         selectedTerritoryId: null,
         screen: "map",
         aiAttackPlans: [],
+        plannedRoute: null,
         turnLog:
           cur.players[pid]?.kind === "ai"
             ? cur.turnLog

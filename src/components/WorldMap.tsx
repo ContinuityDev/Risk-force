@@ -44,6 +44,13 @@ import {
   layoutBuildingMinis,
 } from "../map/buildingMinis";
 import {
+  armyTerritoryIdSet,
+  forceCompactUnitChrome,
+  shouldShowBuildingMinis,
+  shouldShowMapChrome,
+  type MapChromeFocus,
+} from "../map/mapChrome";
+import {
   garrisonFingerprint,
   layoutTransitUnitMinis,
   layoutUnitMinis,
@@ -144,13 +151,15 @@ function camToViewBox(cam: Camera): string {
  * Progressive labels:
  * - World zoom: 2-letter / short abbreviations for every plot that fits.
  * - Mid/deep: larger territories unlock first; prefer full names, fall back
- *   to abbreviations. Collision → shrink / abbreviate; never hide an unlocked
- *   label that fits. Hover/selection names live in the panel.
+ *   to abbreviations.
+ * Collision → shrink / abbreviate, then **hide** lower-priority labels
+ * (never overlap). Selected / owned plots win over quiet neutrals.
  */
 function layoutLabels(
   territories: TerritoryDef[],
   zoomScale: number,
   cam: Camera,
+  priorityIds?: ReadonlySet<string>,
 ): PlacedLabel[] {
   const worldZoom = zoomScale >= 0.85;
 
@@ -176,7 +185,12 @@ function layoutLabels(
     );
   });
 
-  const ranked = [...visible].sort((a, b) => b.area - a.area);
+  const ranked = [...visible].sort((a, b) => {
+    const ap = priorityIds?.has(a.id) ? 1 : 0;
+    const bp = priorityIds?.has(b.id) ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return b.area - a.area;
+  });
   const placed: PlacedLabel[] = [];
 
   for (const t of ranked) {
@@ -190,9 +204,9 @@ function layoutLabels(
     // frame stays readable without drowning in full state names.
     const candidates: Array<{ text: string; screenPx: number }> = worldZoom
       ? [
-          { text: short, screenPx: short.length <= 3 ? 9 : 8 },
-          { text: short, screenPx: 7.5 },
-          { text: short, screenPx: 6.5 },
+          { text: short, screenPx: short.length <= 3 ? 8.5 : 7.5 },
+          { text: short, screenPx: 7 },
+          { text: short, screenPx: 6 },
         ]
       : [
           { text: full, screenPx: preferScreen },
@@ -214,18 +228,21 @@ function layoutLabels(
         w: approxTextWidth(c.text, size),
         h: size + 2 * zoomScale,
       };
-      const pad = worldZoom ? 1.2 : 3;
+      // Dense theaters (Europe / NE): wider pad so labels cull instead of stack.
+      const pad = worldZoom ? 2.2 : 4.2;
       if (!placed.some((p) => overlaps(cand, p, pad))) {
         chosen = cand;
         break;
       }
     }
+    // No fit → hide (lower priority already placed wins).
     if (chosen) placed.push(chosen);
   }
   return placed;
 }
 
-const PAN_SELECT_SLOP_PX = 10;
+/** Touch fingers jitter more than mouse — allow a larger tap vs pan threshold. */
+const PAN_SELECT_SLOP_PX = 16;
 
 export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -248,6 +265,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   useEffect(() => {
     setOpsMode(null);
     setInvadeOpen(false);
+    setInvadePlans([]);
   }, [state.selectedTerritoryId]);
   useEffect(() => {
     const mq = window.matchMedia(
@@ -334,6 +352,51 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     [state.territories, humanId],
   );
 
+  const selectedNeighborSet = useMemo(() => {
+    const id = state.selectedTerritoryId;
+    if (!id) return new Set<string>();
+    const def = TERRITORIES.find((t) => t.id === id);
+    return new Set(def?.neighbors ?? []);
+  }, [state.selectedTerritoryId]);
+
+  const chromeFocus: MapChromeFocus = useMemo(
+    () => ({
+      humanId,
+      selectedId: state.selectedTerritoryId,
+      selectedNeighbors: selectedNeighborSet,
+      armyTerritoryIds: armyTerritoryIdSet(state.armiesInTransit),
+    }),
+    [humanId, state.selectedTerritoryId, selectedNeighborSet, state.armiesInTransit],
+  );
+
+  const showChrome = useCallback(
+    (t: TerritoryDef, ts: import("../engine/state").TerritoryState | undefined) =>
+      shouldShowMapChrome(t, ts, chromeFocus),
+    [chromeFocus],
+  );
+  const showBuildings = useCallback(
+    (t: TerritoryDef, ts: import("../engine/state").TerritoryState | undefined) =>
+      shouldShowBuildingMinis(t, ts, chromeFocus),
+    [chromeFocus],
+  );
+  const compactUnits = useCallback(
+    (t: TerritoryDef, ts: import("../engine/state").TerritoryState | undefined) =>
+      forceCompactUnitChrome(t, ts, chromeFocus),
+    [chromeFocus],
+  );
+
+  const labelPriorityIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (humanId) {
+      for (const t of TERRITORIES) {
+        if (state.territories[t.id]?.owner === humanId) ids.add(t.id);
+      }
+    }
+    if (state.selectedTerritoryId) ids.add(state.selectedTerritoryId);
+    for (const n of selectedNeighborSet) ids.add(n);
+    return ids;
+  }, [humanId, state.territories, state.selectedTerritoryId, selectedNeighborSet]);
+
   const zoomScale = camera.w / OCEAN_VIEW.w;
   const viewBox = camToViewBox(camera);
 
@@ -345,8 +408,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         TERRITORIES,
         deferredCam.w / OCEAN_VIEW.w,
         deferredCam,
+        labelPriorityIds,
       ),
-    [deferredCam],
+    [deferredCam, labelPriorityIds],
   );
 
   const bldgFp = useMemo(
@@ -361,10 +425,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         deferredCam.w / OCEAN_VIEW.w,
         deferredCam,
         labels,
+        showBuildings,
       ),
     // bldgFp tracks building mutations without deep-comparing territory state
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deferredCam, labels, bldgFp],
+    [deferredCam, labels, bldgFp, showBuildings],
   );
 
   const garFp = useMemo(
@@ -389,9 +454,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       deferredCam,
       labels,
       occupied,
+      showChrome,
+      compactUnits,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deferredCam, labels, buildingMinis, garFp]);
+  }, [deferredCam, labels, buildingMinis, garFp, showChrome, compactUnits]);
   const transitMinis = useMemo(
     () =>
       layoutTransitUnitMinis(
@@ -403,6 +470,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [deferredCam, transitFp],
   );
+
+  /** Keep latest selection id for same-tap sheet reopen without stale closures. */
+  const selectedIdRef = useRef(state.selectedTerritoryId);
+  selectedIdRef.current = state.selectedTerritoryId;
 
   const scheduleCamera = useCallback((next: Camera) => {
     cameraRef.current = next;
@@ -461,19 +532,72 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     };
   };
 
+  const resolveTerritoryAtPoint = useCallback(
+    (clientX: number, clientY: number, target: Element): string | null => {
+      // Prefer explicit mini/chip/path attributes when present (and not the svg root).
+      const fromAttr =
+        target
+          .closest?.("path[data-territory-id], [data-territory-id].rf-map__unit-hit, [data-territory-id].rf-map__bldg-hit")
+          ?.getAttribute("data-territory-id") ?? null;
+      if (fromAttr) return fromAttr;
+      // Walk the stack under the finger so label/mini overlays (pointer-events
+      // none) never block territory selection — including tiny plots.
+      const stack =
+        typeof document !== "undefined"
+          ? document.elementsFromPoint(clientX, clientY)
+          : [];
+      const hits: Array<{ id: string; el: Element }> = [];
+      for (const el of stack) {
+        if (!(el instanceof Element)) continue;
+        if (!el.classList?.contains("rf-map__territory")) continue;
+        const tid = el.getAttribute("data-territory-id");
+        if (tid) hits.push({ id: tid, el });
+      }
+      if (!hits.length) return null;
+      if (hits.length === 1) return hits[0]!.id;
+      // Overlapping SVG fills (dense NE / Europe): prefer the path that
+      // actually contains the point, then the smallest plot.
+      const svg = svgRef.current;
+      if (svg) {
+        const pt = svg.createSVGPoint();
+        const ctm = svg.getScreenCTM();
+        if (ctm) {
+          const inv = ctm.inverse();
+          pt.x = clientX;
+          pt.y = clientY;
+          const local = pt.matrixTransform(inv);
+          const containing = hits.filter(({ el }) => {
+            if (!(el instanceof SVGGeometryElement)) return false;
+            if (typeof el.isPointInFill !== "function") return true;
+            const sp = svg.createSVGPoint();
+            sp.x = local.x;
+            sp.y = local.y;
+            return el.isPointInFill(sp);
+          });
+          const pool = containing.length ? containing : hits;
+          pool.sort((a, b) => {
+            const aa = TERRITORIES.find((t) => t.id === a.id)?.area ?? 1;
+            const ba = TERRITORIES.find((t) => t.id === b.id)?.area ?? 1;
+            return aa - ba;
+          });
+          return pool[0]!.id;
+        }
+      }
+      return hits[0]!.id;
+    },
+    [],
+  );
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0 && e.button !== 1) return;
       const target = e.target as Element;
-      const onTerritory = Boolean(
-        target.closest?.(
-          ".rf-map__territory, .rf-map__bldg-hit, .rf-map__unit-hit",
-        ),
+      const territoryId = resolveTerritoryAtPoint(
+        e.clientX,
+        e.clientY,
+        target,
       );
-      const territoryId =
-        target
-          .closest?.("[data-territory-id]")
-          ?.getAttribute("data-territory-id") ?? null;
+      const onTerritory = Boolean(territoryId);
 
       (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
       pointersRef.current.set(e.pointerId, {
@@ -501,7 +625,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       g.startMid = { x: e.clientX, y: e.clientY };
       setDragging(true);
     },
-    [],
+    [resolveTerritoryAtPoint],
   );
 
   const onPointerMove = useCallback(
@@ -583,9 +707,15 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           !g.moved &&
           g.pendingTerritoryId
         ) {
+          const tid = g.pendingTerritoryId;
+          // Same-id re-tap must reopen the short-landscape sheet (closing the
+          // drawer keeps selection, so SELECT alone was a no-op before).
+          if (tid === selectedIdRef.current) {
+            setDetailOpen(true);
+          }
           dispatch({
             type: "SELECT_TERRITORY",
-            payload: { territoryId: g.pendingTerritoryId },
+            payload: { territoryId: tid },
           });
         }
         g.mode = "none";
@@ -626,10 +756,13 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     ? TERRITORIES.find((t) => t.id === hoveredId)
     : null;
 
+  // Capture / owner flip can leave invade cards pointing at friendly land.
   useEffect(() => {
-    setInvadeOpen(false);
-    setInvadePlans([]);
-  }, [state.selectedTerritoryId]);
+    if (!selectedIsEnemy && invadeOpen) {
+      setInvadeOpen(false);
+      setInvadePlans([]);
+    }
+  }, [selectedIsEnemy, invadeOpen, selectedTs?.owner]);
 
   // Friendly neighbors for march UI
   const marchTargets = useMemo(() => {
@@ -799,7 +932,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </g>
         )}
 
-        {invadeOpen && invadePlans.length > 0 && selected && (
+        {invadeOpen &&
+          selectedIsEnemy &&
+          invadePlans.length > 0 &&
+          selected && (
           <g className="rf-map__invade-plans" pointerEvents="none">
             {invadePlans.map((plan) => {
               const from = TERRITORIES.find((t) => t.id === plan.fromId);
@@ -855,13 +991,13 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     opacity="0.85"
                     markerEnd="url(#rf-march-arrow)"
                   />
-                  <circle cx={mx} cy={my} r={5 * zoomScale} fill={col} />
+                  <circle cx={mx} cy={my} r={Math.max(2.2, 4.2 * zoomScale)} fill={col} />
                   <text
                     x={mx}
-                    y={my - 7 * zoomScale}
+                    y={my - 6 * zoomScale}
                     textAnchor="middle"
                     className="rf-map__eta"
-                    fontSize={Math.max(7, 9 * zoomScale)}
+                    fontSize={8.5 * zoomScale}
                     fill="#e8eef4"
                   >
                     ETA {army.turnsRemaining} · {headCount}
@@ -1586,8 +1722,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   d={`M ${from.label.x} ${from.label.y} L ${to.label.x} ${to.label.y}`}
                   fill="none"
                   stroke="#b8f0ff"
-                  strokeWidth={Math.max(4, 6.5 * zoomScale)}
-                  strokeDasharray="8 4"
+                  strokeWidth={Math.max(0.7, 1.6 * zoomScale)}
+                  strokeDasharray={`${5.5 * zoomScale} ${3 * zoomScale}`}
                   strokeLinecap="round"
                   opacity="1"
                   className="rf-map__planned-seg"
@@ -1596,9 +1732,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             })}
             {(() => {
               const path = state.plannedRoute!;
-              const mid = path[Math.floor(path.length / 2)]!;
-              const midT = TERRITORIES.find((t) => t.id === mid);
-              if (!midT) return null;
+              const a = TERRITORIES.find((t) => t.id === path[0]);
+              const b = TERRITORIES.find(
+                (t) => t.id === path[path.length - 1],
+              );
+              if (!a || !b) return null;
               let total = 0;
               for (let i = 0; i < path.length - 1; i++) {
                 total += travelTurns(path[i]!, path[i + 1]!, [
@@ -1606,27 +1744,49 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 ]);
               }
               const hops = path.length - 1;
+              const label = `${hops} hop${hops === 1 ? "" : "s"} · ${total} turn${total === 1 ? "" : "s"}`;
+              // Midpoint of the full route, nudged perpendicular so it
+              // doesn't sit on the origin/target name labels.
+              // Size like territory labels: screenPx × zoomScale (zoomScale
+              // shrinks when zoomed in — absolute floors look huge).
+              const mx = (a.label.x + b.label.x) / 2;
+              const my = (a.label.y + b.label.y) / 2;
+              const dx = b.label.x - a.label.x;
+              const dy = b.label.y - a.label.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const offset = 16 * zoomScale;
+              const px = mx + (-dy / len) * offset;
+              const py = my + (dx / len) * offset;
+              const fontSize = 9 * zoomScale;
+              const textW = approxTextWidth(label, fontSize);
+              const padX = 3.4 * zoomScale;
+              const padY = 2 * zoomScale;
+              const rw = textW + padX * 2;
+              const rh = fontSize + padY * 2;
               return (
-                <g transform={`translate(${midT.label.x}, ${midT.label.y - 12})`}>
+                <g
+                  className="rf-map__route-pill"
+                  transform={`translate(${px}, ${py})`}
+                >
                   <rect
-                    x={-38}
-                    y={-12}
-                    width={76}
-                    height={18}
-                    rx={2}
-                    fill="rgba(8,16,24,0.94)"
-                    stroke="#9fdfff"
-                    strokeWidth={0.9}
+                    x={-rw / 2}
+                    y={-rh / 2}
+                    width={rw}
+                    height={rh}
+                    rx={rh / 2}
+                    fill="rgba(8,16,24,0.9)"
+                    stroke="rgba(159,223,255,0.45)"
+                    strokeWidth={0.45 * zoomScale}
                   />
                   <text
                     textAnchor="middle"
-                    y={2}
+                    dominantBaseline="middle"
                     className="rf-map__route-eta"
                     fill="#e8f7ff"
-                    fontSize={8}
-                    fontWeight={700}
+                    fontSize={fontSize}
+                    fontWeight={600}
                   >
-                    {hops} hop{hops === 1 ? "" : "s"} · {total}t
+                    {label}
                   </text>
                 </g>
               );

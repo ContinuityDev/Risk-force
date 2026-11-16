@@ -3,8 +3,10 @@
  */
 
 import { GAME_LOOP } from "../data/gameLoop";
+import { territoryDisplayName } from "../ui/displayNames";
 import type { GameState, PendingCapture, TerritoryState } from "./state";
 import { mergeIntoGarrison, normalizeForce, syncHpArray } from "./garrisonHp";
+import { scrubOrdersForTerritory } from "./orderCleanup";
 import type { StrikeForceSlot } from "./state";
 
 export function outputMultiplier(ts: TerritoryState): number {
@@ -80,7 +82,7 @@ export function stabilizeTerritory(
         occupiedTurns: GAME_LOOP.occupation.stabilizeTurns,
       },
     },
-    message: `${territoryId} stabilized — full output restored.`,
+    message: `${territoryDisplayName(territoryId)} stabilized — full output restored.`,
   };
 }
 
@@ -224,16 +226,23 @@ function placeOccupation(
     }
   }
 
-  return {
-    ...state,
-    players,
-    territories,
-    pendingCapture: null,
-    battle: null,
-    phase: "play",
-    screen: "map",
-    message: `${tid} ${disposition === "raze" ? "razed" : "secured"} · ${take} occupy.`,
-  };
+  return scrubOrdersForTerritory(
+    {
+      ...state,
+      players,
+      territories,
+      pendingCapture: null,
+      battle: null,
+      plannedRoute: null,
+      phase: "play",
+      screen: "map",
+      message:
+        disposition === "raze"
+          ? `${territoryDisplayName(tid)} razed. ${take} unit${take === 1 ? "" : "s"} occupying.`
+          : `${territoryDisplayName(tid)} secured. ${take} unit${take === 1 ? "" : "s"} occupying.`,
+    },
+    tid,
+  );
 }
 
 /** AI default: keep if many buildings, else raze. */
