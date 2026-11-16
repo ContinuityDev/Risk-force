@@ -1,7 +1,25 @@
 import { getBuilding, isTrainingBuilding } from "../data/buildings";
+import { TERRITORIES } from "../data/map/territories";
+import { activeMapId } from "../data/maps/activate";
 import type { TerritoryDef } from "../data/types";
 import type { PlacedBuilding, TerritoryState } from "../engine/state";
 import { getSpriteUrl } from "../sprites/registry";
+
+/** Median territory area for the active map — used to scale plot-size gates. */
+let medianCache: { mapId: string; med: number } | null = null;
+export function mapMedianArea(): number {
+  const id = activeMapId();
+  if (medianCache?.mapId === id) return medianCache.med;
+  const areas = TERRITORIES.map((t) => t.area).sort((a, b) => a - b);
+  const med = areas[Math.floor(areas.length / 2)] ?? 0.01;
+  medianCache = { mapId: id, med };
+  return med;
+}
+
+/** True when a plot is small relative to the active map (not absolute Earth units). */
+export function isSmallPlot(area: number, factor = 0.85): boolean {
+  return area < mapMedianArea() * factor;
+}
 
 export type MiniZoomTier = "world" | "mid" | "deep";
 
@@ -314,7 +332,9 @@ export function layoutBuildingMinis(
 
     const sorted = sortBuildings(buildings);
     // Mid on small plots: one compact pad. Larger territories keep a short row.
-    if (tier === "mid" && t.area < 0.012) {
+    // Threshold is relative to the active map median so Civil War states aren't
+    // forced into Earth-tuned "tiny" compact markers.
+    if (tier === "mid" && isSmallPlot(t.area)) {
       const compact = tryPlaceCompact(
         t,
         buildings,

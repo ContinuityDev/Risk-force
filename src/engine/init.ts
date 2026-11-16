@@ -6,9 +6,12 @@ import {
 import { createDefaultRelations } from "../data/diplomacy";
 import { AI_FACTIONS, FACTION_NAMES } from "../data/factions";
 import { GAME_LOOP } from "../data/gameLoop";
+import { activateMap, activeMapId } from "../data/maps/activate";
+import type { MapId } from "../data/maps/types";
 import { TERRITORIES } from "../data/map/territories";
-import type { FactionId } from "../data/types";
+import type { FactionId, TerritoryDef } from "../data/types";
 import type { NewGamePayload } from "./actions";
+import { makeNeutralTerritory } from "./neutrals";
 import { mulberry32, shuffleInPlace } from "./rng";
 import type { GameState, PlayerState, TerritoryState } from "./state";
 import { emptyResources } from "./state";
@@ -87,8 +90,6 @@ function starterBuildings(
 ): TerritoryState["buildings"] {
   const shift = owner === "player" ? 0 : owner === "faction_a" ? 1 : 0;
   const row = shift % 2;
-  // Lean starter base: one reactor + refinery + depot staffed, light defenses.
-  // Keeps turn-1 energy near break-even and supply from collapsing.
   return [
     {
       instanceId: `b${nextId.n++}`,
@@ -103,6 +104,15 @@ function starterBuildings(
       instanceId: `b${nextId.n++}`,
       buildingId: "reactor",
       x: 0,
+      y: 0,
+      hp: 240,
+      buildRemaining: 0,
+      workers: 2,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
+      buildingId: "reactor",
+      x: 1,
       y: 0,
       hp: 240,
       buildRemaining: 0,
@@ -156,29 +166,113 @@ function starterBuildings(
   ];
 }
 
+/** BFS hop distance on the live territory graph. */
+export function territoryGraphDistance(fromId: string, toId: string): number {
+  if (fromId === toId) return 0;
+  const byId = new Map(TERRITORIES.map((t) => [t.id, t]));
+  const q: string[] = [fromId];
+  const dist = new Map<string, number>([[fromId, 0]]);
+  while (q.length) {
+    const cur = q.shift()!;
+    const d = dist.get(cur)!;
+    const node = byId.get(cur);
+    if (!node) continue;
+    for (const n of node.neighbors) {
+      if (dist.has(n)) continue;
+      if (n === toId) return d + 1;
+      dist.set(n, d + 1);
+      q.push(n);
+    }
+  }
+  return 999;
+}
+
+/** Prefer connected, non-tiny land for opening positions. */
+export function viableStartTerritories(): TerritoryDef[] {
+  const areas = TERRITORIES.map((t) => t.area).sort((a, b) => a - b);
+  const median = areas[Math.floor(areas.length / 2)] ?? 0.01;
+  const minArea = Math.max(median * 0.35, 0.004);
+  return TERRITORIES.filter(
+    (t) => t.neighbors.length >= 2 && t.area >= minArea,
+  );
+}
+
 /**
- * Balanced random territory deal: shuffle territories with seeded RNG,
- * deal round-robin so counts differ by at most 1.
+ * One territory per faction, spread by graph distance, preferring viable land.
+ * Remaining territories stay Neutral.
  */
+export function assignOneStartEach(
+  factionIds: FactionId[],
+  seed: number,
+): Record<FactionId, string> {
+  const rand = mulberry32(seed ^ 0x51ed2a01);
+  const pool = shuffleInPlace([...viableStartTerritories()], rand);
+  // Prefer larger first when scores tie
+  pool.sort((a, b) => b.area - a.area + (rand() - 0.5) * 0.002);
+
+  const minDist = Math.max(
+    GAME_LOOP.neutrals.minStartDistance,
+    Math.floor(Math.sqrt(TERRITORIES.length / Math.max(1, factionIds.length))),
+  );
+
+  const picks: string[] = [];
+  for (let attempt = 0; attempt < 4 && picks.length < factionIds.length; attempt++) {
+    const need = minDist - attempt;
+    picks.length = 0;
+    const order = shuffleInPlace([...pool], rand);
+    for (const cand of order) {
+      if (picks.length >= factionIds.length) break;
+      const ok = picks.every(
+        (p) => territoryGraphDistance(p, cand.id) >= need,
+      );
+      if (ok) picks.push(cand.id);
+    }
+  }
+  // Fallback: fill remaining with farthest available
+  if (picks.length < factionIds.length) {
+    const used = new Set(picks);
+    for (const cand of pool) {
+      if (picks.length >= factionIds.length) break;
+      if (used.has(cand.id)) continue;
+      let bestMin = -1;
+      let bestId = cand.id;
+      for (const c of pool) {
+        if (used.has(c.id)) continue;
+        const m = picks.length
+          ? Math.min(...picks.map((p) => territoryGraphDistance(p, c.id)))
+          : 99;
+        if (m > bestMin) {
+          bestMin = m;
+          bestId = c.id;
+        }
+      }
+      used.add(bestId);
+      picks.push(bestId);
+    }
+  }
+
+  const out = {} as Record<FactionId, string>;
+  factionIds.forEach((fid, i) => {
+    out[fid] = picks[i] ?? pool[i % pool.length]!.id;
+  });
+  return out;
+}
+
+/** @deprecated Prefer assignOneStartEach — kept for tests that still deal bags. */
 export function assignTerritoriesBalanced(
   factionIds: FactionId[],
   seed: number,
 ): Record<FactionId, string[]> {
-  const rand = mulberry32(seed ^ 0x7f4a7c15);
-  const ids = shuffleInPlace(
-    TERRITORIES.map((t) => t.id),
-    rand,
-  );
-  const bags: Record<string, string[]> = {};
-  for (const f of factionIds) bags[f] = [];
-  ids.forEach((tid, i) => {
-    const f = factionIds[i % factionIds.length]!;
-    bags[f]!.push(tid);
-  });
-  return bags as Record<FactionId, string[]>;
+  const starts = assignOneStartEach(factionIds, seed);
+  const bags = {} as Record<FactionId, string[]>;
+  for (const f of factionIds) bags[f] = [starts[f]!];
+  return bags;
 }
 
 export function createInitialState(payload: NewGamePayload): GameState {
+  const mapId = (payload.mapId ?? "world_war") as MapId;
+  activateMap(mapId);
+
   const seed = payload.seed ?? Date.now() % 1_000_000;
   const humanCount = Math.max(1, Math.min(4, payload.humanCount));
   const aiCount = Math.max(0, Math.min(3, payload.aiCount));
@@ -229,77 +323,48 @@ export function createInitialState(payload: NewGamePayload): GameState {
 
   const playerOrder = [...humans, ...ais];
   const nextId = { n: 1 };
-  const deal = assignTerritoriesBalanced(playerOrder, seed);
+  const starts = assignOneStartEach(playerOrder, seed);
+  const startSet = new Set(Object.values(starts));
 
   const territories: Record<string, TerritoryState> = {};
   for (const fid of playerOrder) {
-    const bag = deal[fid] ?? [];
-    // Largest territories get a pop bonus
-    const ranked = [...bag].sort((a, b) => {
-      const ta = TERRITORIES.find((t) => t.id === a)!;
-      const tb = TERRITORIES.find((t) => t.id === b)!;
-      return tb.area - ta.area;
-    });
-    bag.forEach((tid) => {
-      // Fewer cores → less early upkeep; expand to grow income + logistics load.
-      const isCore = ranked.indexOf(tid) < Math.max(1, Math.ceil(bag.length * 0.18));
-      territories[tid] = {
-        owner: fid,
-        buildings: isCore ? starterBuildings(nextId, fid) : [],
-        supplyStock: isCore ? 24 : 6,
-        population:
-          GAME_LOOP.startingPopulation +
-          (isCore ? GAME_LOOP.startingPopBonus : 0),
-        // Core workers cover starter staffing (nexus1+reactor2+refinery2+depot2+turret1).
-        workers: isCore ? 10 : 1,
-        garrison: (() => {
-          if (!isCore) return { trooper: 1 };
-          const base: Record<string, number> = {
-            trooper: fid === humans[0] ? 4 : 3,
-            assault_mech: 1,
-          };
-          const doctrine = getDoctrine(players[fid]?.doctrineId);
-          for (const [uid, n] of Object.entries(doctrine.openingGarrison ?? {})) {
-            base[uid] = (base[uid] ?? 0) + n;
-          }
-          return base;
-        })(),
-        garrisonHp: {},
-        trainingQueue: [],
-        control: "core",
-        occupiedTurns: 0,
-        movedThisTurn: false,
-      };
-    });
-  }
-
-  // Safety: any territory missed (shouldn't happen)
-  for (const t of TERRITORIES) {
-    if (!territories[t.id]) {
-      const owner = playerOrder[0]!;
-      territories[t.id] = {
-        owner,
-        buildings: [],
-        supplyStock: 5,
-        population: GAME_LOOP.startingPopulation,
-        workers: 1,
-        garrison: { trooper: 1 },
-        garrisonHp: {},
-        trainingQueue: [],
-        control: "core",
-        occupiedTurns: 0,
-        movedThisTurn: false,
-      };
+    const tid = starts[fid]!;
+    const doctrine = getDoctrine(players[fid]?.doctrineId);
+    const garrison: Record<string, number> = {
+      trooper: fid === humans[0] ? 6 : 5,
+      assault_mech: 1,
+    };
+    for (const [uid, n] of Object.entries(doctrine.openingGarrison ?? {})) {
+      garrison[uid] = (garrison[uid] ?? 0) + n;
     }
+    territories[tid] = {
+      owner: fid,
+      buildings: starterBuildings(nextId, fid),
+      supplyStock: 28,
+      population:
+        GAME_LOOP.startingPopulation + GAME_LOOP.startingPopBonus + 4,
+      // Staff nexus + dual reactors + refinery + depot + turret (10) with spare.
+      workers: 12,
+      garrison,
+      garrisonHp: {},
+      trainingQueue: [],
+      control: "core",
+      occupiedTurns: 0,
+      movedThisTurn: false,
+    };
   }
 
-  const firstHumanTerritory =
-    Object.entries(territories).find(([, ts]) => ts.owner === humans[0])?.[0] ??
-    null;
+  for (const t of TERRITORIES) {
+    if (startSet.has(t.id)) continue;
+    territories[t.id] = makeNeutralTerritory(t, nextId);
+  }
+
+  const firstHumanTerritory = starts[humans[0]!] ?? null;
 
   return {
     version: 1,
     seed,
+    mapId: activeMapId(),
     turn: 1,
     phase: "play",
     activePlayerIndex: 0,
@@ -311,7 +376,8 @@ export function createInitialState(payload: NewGamePayload): GameState {
     screen: "map",
     multiplayerMode: payload.multiplayerMode,
     winner: null,
-    message: "Campaigning drives recruitment — land alone is not enough.",
+    message:
+      "One homeland each — the rest is Neutral. Expand, then dominate.",
     nextInstanceId: nextId.n,
     aiAttackPlans: [],
     armiesInTransit: [],
@@ -340,6 +406,7 @@ export function createMenuState(): GameState {
       aiCount: 2,
       multiplayerMode: "solo",
       seed: 1,
+      mapId: "world_war",
     }),
     screen: "menu",
     message: null,

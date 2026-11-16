@@ -757,6 +757,35 @@
   font-size: 0.72rem;
 }
 
+.rf-map__legend-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rf-map__legend-toggle .rf-label {
+  margin: 0;
+}
+
+.rf-map__legend-chevron {
+  opacity: 0.7;
+  font-size: 0.7rem;
+}
+
+.rf-map__legend.is-collapsed {
+  min-width: auto;
+  padding: 0.4rem 0.55rem;
+}
+
 .rf-map__legend ul {
   margin: 0.35rem 0 0;
   padding: 0;
@@ -938,10 +967,117 @@
   transition: fill-opacity 0.15s ease, stroke 0.15s ease, filter 0.15s ease;
 }
 
+.rf-map__territory.is-neutral {
+  fill-opacity: 0.62;
+}
+
 .rf-map__territory:hover {
   fill-opacity: 0.88 !important;
   filter: brightness(1.08);
   stroke: var(--rf-accent);
+}
+
+.rf-map__sheet-owner.is-neutral {
+  color: #a8b0ba;
+  letter-spacing: 0.04em;
+}
+
+.rf-lobby__maps {
+  margin-bottom: 0.85rem;
+}
+
+.rf-lobby__map-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 0.45rem;
+}
+
+.rf-lobby__map-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.45rem;
+  border: 1px solid rgba(126, 182, 201, 0.28);
+  background: rgba(12, 24, 36, 0.55);
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rf-lobby__map-card.is-selected {
+  border-color: var(--rf-accent);
+  box-shadow: 0 0 0 1px rgba(126, 182, 201, 0.35);
+}
+
+.rf-lobby__map-thumb {
+  width: 100%;
+  height: auto;
+  max-height: 140px;
+  aspect-ratio: 2.2 / 1;
+  object-fit: contain;
+  object-position: center;
+  border-radius: 3px;
+  background: #0a1520;
+}
+
+.rf-lobby__map-card strong {
+  font-size: 0.92rem;
+}
+
+.rf-lobby__map-card span {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  line-height: 1.3;
+}
+
+@media (max-width: 520px) {
+  .rf-lobby__map-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Compact map picker for short landscape (~844×390). */
+@media (orientation: landscape) and (max-height: 430px) {
+  .rf-lobby__map-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+  }
+
+  .rf-lobby__map-card {
+    padding: 0.3rem;
+    gap: 0.12rem;
+  }
+
+  .rf-lobby__map-thumb {
+    max-height: 110px;
+    aspect-ratio: 2.4 / 1;
+  }
+
+  .rf-lobby__map-card strong {
+    font-size: 0.8rem;
+  }
+
+  .rf-lobby__map-card span {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.65rem;
+  }
+
+  .rf-lobby__maps .rf-lobby__tag--compact {
+    margin: 0.15rem 0 0;
+    font-size: 0.65rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 390px) {
+  .rf-lobby__map-thumb {
+    max-height: 100px;
+  }
 }
 
 .rf-map__units {

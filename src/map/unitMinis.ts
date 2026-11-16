@@ -12,6 +12,8 @@ import type { ArmyTransit, TerritoryState } from "../engine/state";
 import { getSpriteUrl } from "../sprites/registry";
 import {
   iconWorldSize,
+  isSmallPlot,
+  mapMedianArea,
   miniZoomTier,
   type LabelBox,
   type MiniZoomTier,
@@ -289,10 +291,11 @@ export function layoutUnitMinis(
 
     // ── World: exactly one compact strength chip ───────────────
     if (tier === "world") {
-      // Europe clutter: skip speckles and tiny plots entirely.
-      if (t.area < 0.0045) continue;
-      if (total <= 1 && t.area < 0.01) continue;
-      if (zoomScale >= 0.9 && t.area < 0.006) continue;
+      // Skip speckles relative to the active map (Earth Europe / CW NE).
+      const med = mapMedianArea();
+      if (t.area < med * 0.35) continue;
+      if (total <= 1 && t.area < med * 0.85) continue;
+      if (zoomScale >= 0.9 && t.area < med * 0.5) continue;
 
       const chipSize = size;
       const halfLabel = Math.max((lbl?.w ?? size * 2) / 2, chipSize * 0.9);
@@ -355,9 +358,9 @@ export function layoutUnitMinis(
     // Mid: compact for small plots / single-type; larger territories keep a
     // multi-type row below the label (labels paint above minis in WorldMap).
     const forceCompact =
-      tier === "mid" && (t.area < 0.012 || sorted.length === 1);
+      tier === "mid" && (isSmallPlot(t.area) || sorted.length === 1);
     if (forceCompact) {
-      const chipSize = size * (t.area < 0.005 ? 0.75 : 0.85);
+      const chipSize = size * (isSmallPlot(t.area, 0.4) ? 0.75 : 0.85);
       // Below / above only — side-at-label-Y was clipping "Western China" etc.
       const halfLabel = Math.max((lbl?.w ?? size * 2.4) / 2, chipSize * 1.15);
       const aboveY = labelTop - gap * 1.6 - chipSize / 2;

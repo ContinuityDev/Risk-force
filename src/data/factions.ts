@@ -9,7 +9,7 @@ export const FACTION_NAMES: Record<FactionId, string> = {
   faction_a: "Faction A",
   faction_b: "Faction B",
   faction_c: "Faction C",
-  neutral: "Unclaimed",
+  neutral: "Neutral",
 };
 
 export const FACTION_COLORS: Record<FactionId, string> = {
@@ -17,7 +17,8 @@ export const FACTION_COLORS: Record<FactionId, string> = {
   faction_a: "#b87070",
   faction_b: "#6a8eb8",
   faction_c: "#b89a5a",
-  neutral: "#5c6b7e",
+  /** Distinct grey for unclaimed land. */
+  neutral: "#7a8490",
 };
 
 export const AI_FACTIONS: FactionId[] = ["faction_a", "faction_b", "faction_c"];

@@ -15,32 +15,36 @@ describe("AI multi-front + border defense", () => {
     });
     const aiId = "faction_b"; // flanking 0.85
     expect(state.players[aiId]).toBeTruthy();
-    const owned = TERRITORIES.filter(
-      (t) => state.territories[t.id]?.owner === aiId,
-    );
-    const frontiers = owned.filter((t) =>
-      t.neighbors.some((n) => state.territories[n]?.owner !== aiId),
-    );
-    expect(frontiers.length).toBeGreaterThanOrEqual(2);
 
-    for (const t of frontiers.slice(0, 5)) {
-      state = {
-        ...state,
-        territories: {
-          ...state.territories,
-          [t.id]: {
-            ...state.territories[t.id]!,
-            garrison: {
-              trooper: 10,
-              assault_mech: 3,
-              hover_tank: 2,
-            },
-          },
-        },
-      };
-    }
+    // Seed two owned frontiers (one-start world needs artificial expansion)
+    const home = Object.entries(state.territories).find(
+      ([, ts]) => ts.owner === aiId,
+    )![0];
+    const n1 = TERRITORIES.find((t) => t.id === home)!.neighbors[0]!;
+    const n2 =
+      TERRITORIES.find((t) => t.id === home)!.neighbors.find((n) => n !== n1) ??
+      TERRITORIES.find((t) => t.id === n1)!.neighbors.find(
+        (n) => n !== home && state.territories[n]?.owner !== aiId,
+      )!;
     state = {
       ...state,
+      territories: {
+        ...state.territories,
+        [home]: {
+          ...state.territories[home]!,
+          garrison: { trooper: 10, assault_mech: 3, hover_tank: 2 },
+        },
+        [n1]: {
+          ...state.territories[n1]!,
+          owner: aiId,
+          garrison: { trooper: 10, assault_mech: 3, hover_tank: 2 },
+        },
+        [n2]: {
+          ...state.territories[n2]!,
+          owner: aiId,
+          garrison: { trooper: 10, assault_mech: 3, hover_tank: 2 },
+        },
+      },
       players: {
         ...state.players,
         [aiId]: {
@@ -73,29 +77,37 @@ describe("AI multi-front + border defense", () => {
       seed: 12,
     });
     const aiId = "faction_a"; // defense 0.85
-    const owned = TERRITORIES.filter(
-      (t) => state.territories[t.id]?.owner === aiId,
-    );
-    const frontiers = owned.filter((t) =>
-      t.neighbors.some((n) => state.territories[n]?.owner !== aiId),
-    );
-    const safe = owned.filter((t) => !frontiers.some((f) => f.id === t.id));
-    expect(frontiers.length).toBeGreaterThan(0);
-    expect(safe.length).toBeGreaterThan(0);
+    // Pick a connected pair: frontier (adjacent to foreign land) + safe rear.
+    const pair = TERRITORIES.find((t) => {
+      const n0 = t.neighbors[0];
+      return !!n0 && t.neighbors.length >= 2;
+    })!;
+    const frontierId = pair.id;
+    const rearId = pair.neighbors[1]!;
+    const foreign = pair.neighbors.find(
+      (n) => n !== rearId,
+    )!;
 
-    const weakFront = frontiers[0]!;
-    const fatRear = safe[0]!;
     state = {
       ...state,
       territories: {
         ...state.territories,
-        [weakFront.id]: {
-          ...state.territories[weakFront.id]!,
+        [frontierId]: {
+          ...state.territories[frontierId]!,
+          owner: aiId,
           garrison: { trooper: 1 },
+          buildings: state.territories[frontierId]!.buildings,
         },
-        [fatRear.id]: {
-          ...state.territories[fatRear.id]!,
+        [rearId]: {
+          ...state.territories[rearId]!,
+          owner: aiId,
           garrison: { trooper: 12, assault_mech: 2 },
+          // Interior if all neighbors are owned — also mark other neighbors as ours briefly
+        },
+        [foreign]: {
+          ...state.territories[foreign]!,
+          owner: "player",
+          garrison: { trooper: 3 },
         },
       },
       activePlayerIndex: state.playerOrder.indexOf(aiId),
@@ -113,12 +125,26 @@ describe("AI multi-front + border defense", () => {
       },
     };
 
+    // Make rear fully interior: claim all its non-frontier neighbors
+    const rearOwned: Record<string, typeof state.territories[string]> = {
+      ...state.territories,
+    };
+    for (const n of TERRITORIES.find((t) => t.id === rearId)!.neighbors) {
+      if (n === frontierId) continue;
+      rearOwned[n] = {
+        ...rearOwned[n]!,
+        owner: aiId,
+        garrison: { trooper: 2 },
+      };
+    }
+    state = { ...state, territories: rearOwned };
+
     const actions = planAiTurn(state);
     const reinforce = actions.filter((a) => a.type === "MOVE_GARRISON");
     expect(reinforce.length).toBeGreaterThanOrEqual(1);
     const toFront = reinforce.find(
       (a) =>
-        a.type === "MOVE_GARRISON" && a.payload.toId === weakFront.id,
+        a.type === "MOVE_GARRISON" && a.payload.toId === frontierId,
     );
     expect(toFront).toBeTruthy();
   });

@@ -3,14 +3,14 @@ import { createInitialState } from "./init";
 import { checkEliminationsAndVictory } from "./victory";
 
 describe("victory / elimination", () => {
-  it("eliminates a faction with no territories and crowns sole owner", () => {
+  it("eliminates a faction with no territories and crowns sole owner of all land", () => {
     let state = createInitialState({
       humanCount: 1,
       aiCount: 2,
       multiplayerMode: "solo",
       seed: 2,
     });
-    // Give everything to player
+    // Give everything (including neutrals) to player
     const territories = { ...state.territories };
     for (const id of Object.keys(territories)) {
       territories[id] = { ...territories[id]!, owner: "player" };

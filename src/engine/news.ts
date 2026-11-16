@@ -170,12 +170,17 @@ export function newsFromBattleResult(
   const def = factionName(battle.defender);
   const where = territoryLabel(battle.territoryId);
   if (captured) {
+    const fromNeutral = previousOwner === "neutral";
     return makeNewsItem({
       turn,
       category: "territory",
       factionId: battle.attacker,
-      headline: `${atk} seizes ${where}`,
-      body: `Taken from ${factionName(previousOwner)}. ${def} garrison collapsed.`,
+      headline: fromNeutral
+        ? `${atk} claims neutral ${where}`
+        : `${atk} seizes ${where}`,
+      body: fromNeutral
+        ? `Neutral garrison at ${where} collapsed. Occupation begins.`
+        : `Taken from ${factionName(previousOwner)}. ${def} garrison collapsed.`,
     });
   }
   return makeNewsItem({

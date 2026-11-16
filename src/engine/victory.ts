@@ -1,4 +1,5 @@
 import { factionName } from "../data/factions";
+import { activeMap } from "../data/maps/activate";
 import type { FactionId } from "../data/types";
 import type { GameState } from "./state";
 
@@ -26,8 +27,12 @@ export function checkEliminationsAndVictory(
     (id) => owned.has(id) && !players[id]?.eliminated,
   );
 
-  if (living.length === 1) {
+  // Domination requires every territory — including Neutral land.
+  const neutralsRemain = owned.has("neutral");
+
+  if (living.length === 1 && !neutralsRemain) {
     const winner = living[0]!;
+    const theater = activeMap().meta.name;
     return {
       ...state,
       players,
@@ -35,7 +40,7 @@ export function checkEliminationsAndVictory(
       winner,
       phase: "ended",
       screen: "victory",
-      message: `${factionName(winner)} controls the Earth Theater.`,
+      message: `${factionName(winner)} controls the entire ${theater} theater.`,
       battle: null,
       pendingCapture: null,
     };

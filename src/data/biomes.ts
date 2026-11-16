@@ -137,10 +137,23 @@ export function inferBiome(tdef: TerritoryDef): BiomeId {
 }
 
 const CACHE = new Map<string, BiomeId>();
+let OVERRIDE: Record<string, BiomeId> | null = null;
+
+export function setBiomeOverrides(next: Record<string, BiomeId> | null): void {
+  OVERRIDE = next;
+}
+
+export function clearBiomeCache(): void {
+  CACHE.clear();
+}
 
 export function getBiome(territoryId: string): BiomeId {
   const hit = CACHE.get(territoryId);
   if (hit) return hit;
+  if (OVERRIDE?.[territoryId]) {
+    CACHE.set(territoryId, OVERRIDE[territoryId]!);
+    return OVERRIDE[territoryId]!;
+  }
   const tdef = TERRITORIES.find((t) => t.id === territoryId);
   const biome = tdef ? inferBiome(tdef) : "plains";
   CACHE.set(territoryId, biome);

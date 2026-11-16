@@ -27,8 +27,9 @@ export const GAME_LOOP = {
   campaigning: {
     /** Max energy that can be earmarked as campaign budget per turn. */
     maxBudget: 200,
-    defaultBudget: 25,
-    aiDefaultBudget: 30,
+    /** Lean opening spend so a one-territory start stays energy-positive. */
+    defaultBudget: 10,
+    aiDefaultBudget: 12,
   },
 
   training: {
@@ -126,11 +127,26 @@ export const GAME_LOOP = {
   },
 
   victory: {
-    /** Default win remains total domination; optional VP race uses these. */
+    /** Default win remains total domination (all territories incl. neutrals). */
     pointsPerTerritory: 1,
     pointsPerCore: 2,
     pointsPerContinent: 8,
     defaultTurnLimit: 0,
+  },
+
+  /**
+   * One-start setup: each faction begins with a single core;
+   * remaining territories are Neutral until invaded.
+   */
+  neutrals: {
+    /** Multiplier on static defender counts. */
+    garrisonScale: 1,
+    /** Troopers regenerated per full turn on under-garrisoned neutrals. */
+    regenPerTurn: 1,
+    /** Soft cap = opening garrison × this. */
+    regenCapFactor: 1.15,
+    /** Minimum graph distance between faction starting territories. */
+    minStartDistance: 3,
   },
 
   /**
@@ -236,17 +252,17 @@ export const HELP = {
   workers:
     "Workers staff buildings (boosting output up to a cap) and speed construction. Assign them in the base view.",
   invasion:
-    "Attack from an adjacent territory using its garrison. You fight defending units and armed/command structures. After a win, choose Raze (cash bump, wipe buildings) or Keep (damaged buildings need repair), then how many survivors occupy. Captured land is occupied until stabilized.",
+    "Attack from an adjacent territory using its garrison — including grey Neutral land. You fight defending units and armed/command structures. After a win, choose Raze (cash bump, wipe buildings) or Keep (damaged buildings need repair), then how many survivors occupy. Captured land is occupied until stabilized.",
   ai:
-    "AI factions build real economies, respect supply, use the market, stabilize captures, and may retreat from losing battles. Their turns resolve instantly — the Orbital Wire summarizes what happened.",
+    "AI factions expand into adjacent Neutrals early (weakest / valuable first), build real economies, fight other factions, and may retreat from losing battles. Neutrals never take turns. AI resolves instantly — the Orbital Wire summarizes what happened.",
   upkeep:
     "Units and workers cost energy every turn. Energy floors at 0 (no debt spiral); insolvency still idles production and causes desertion. Disband units for a partial refund if payroll is too high.",
   movement:
     "Move armies along multi-hop neighbor routes. Travel takes multiple turns based on distance, slowest unit, terrain, and sea crossings. Route lines show the path; arriving at an enemy starts a battle. Retreat sends survivors home.",
   continents:
-    "Own every territory on a continent to earn bonus energy, alloy, and population each turn. Bonuses are listed on the map legend.",
+    "Region bonuses (continents / USA regions) only apply once you hold every territory in that region — Neutral land blocks the bonus until captured.",
   victory:
-    "Default: total domination. Optional VP race scores territories, cores, and continents; with a turn limit the VP leader wins if time expires.",
+    "Default: total domination — control every territory including Neutrals. Optional VP race scores territories, cores, and completed regions; with a turn limit the VP leader wins if time expires.",
   terrain:
     "Each territory has a biome (plains, urban, mountain, desert, arctic, jungle, coastal) that modifies combat and travel. Units that did not move are fortified; shield walls and bunkers deepen the bonus.",
   logistics:

@@ -28,10 +28,16 @@ import {
   forceSupplyCost,
   spend,
 } from "./economy";
+import { activateMap } from "../data/maps/activate";
 import { createInitialState, createMenuState } from "./init";
+import { regenerateNeutralGarrisons } from "./neutrals";
 import { payInvasionSupply } from "./logistics";
 import { applyMarketTrade } from "./market";
-import { startArmyMove, tickArmiesForPlayer } from "./movement";
+import {
+  canOrderMove,
+  startArmyMove,
+  tickArmiesForPlayer,
+} from "./movement";
 import {
   resolveCaptureDisposition,
   stabilizeTerritory,
@@ -70,6 +76,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "LOAD_STATE": {
       const s = action.payload.state;
+      activateMap(s.mapId ?? "world_war");
       const territories: typeof s.territories = {};
       for (const [id, ts] of Object.entries(s.territories ?? {})) {
         territories[id] = {
@@ -94,6 +101,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
       }
       return {
         ...s,
+        mapId: s.mapId ?? "world_war",
         territories,
         players,
         newsFeed: s.newsFeed ?? [],
@@ -574,17 +582,14 @@ export function reduce(state: GameState, action: GameAction): GameState {
       if (!to || to.owner === pid) {
         return { ...state, message: "Pick an enemy territory." };
       }
-      const fromDef = getTerritory(fromId);
-      if (!fromDef.neighbors.includes(toId)) {
-        return { ...state, message: "Target must be adjacent." };
-      }
       if (!force.length || force.every((f) => f.count <= 0)) {
         return { ...state, message: "Assemble a strike force." };
       }
-      for (const slot of force) {
-        if ((from.garrison[slot.unitId] ?? 0) < slot.count) {
-          return { ...state, message: "Not enough units in local garrison." };
-        }
+      // Adjacency for ground, sea lanes for naval, jump range for air —
+      // same rules as army moves (multi-turn travel via startArmyMove).
+      const reach = canOrderMove(state, pid, fromId, toId, force);
+      if (!reach.ok) {
+        return { ...state, message: reach.reason };
       }
       const supplyNeed = forceSupplyCost(
         force,
@@ -700,6 +705,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
         strikeTargeting: null,
       };
       if (wrapped) {
+        next = regenerateNeutralGarrisons(next);
         next = rollTheaterEvent(next);
       }
       const nextPid = next.playerOrder[idx]!;
