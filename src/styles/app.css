@@ -3335,15 +3335,29 @@
     display: none;
   }
 
+  .rf-invade .rf-view-header > p.rf-resource {
+    font-size: 0.72rem;
+  }
+
+  .rf-invade__modes {
+    margin-top: 0.15rem;
+  }
+
+  .rf-invade__modes button {
+    min-height: 2rem;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+  }
+
   .rf-invade__row {
     grid-template-columns: 1fr 1fr;
     gap: 0.45rem;
     align-items: start;
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.35rem;
   }
 
   .rf-picker__list {
-    max-height: min(22vh, 5.5rem);
+    max-height: min(18vh, 4.75rem);
   }
 
   .rf-invade__force {
