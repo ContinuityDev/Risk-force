@@ -129,15 +129,17 @@ async function zoomOntoTerritory(page, territoryId, wheels = 8) {
       const svg = document.querySelector('[data-tutorial="map-svg"]');
       if (!svg) return;
       const path =
+        document.querySelector(`[data-territory-id="${id}"]`) ||
         document.querySelector(`.rf-map__territory[data-id="${id}"]`) ||
-        document.querySelector(`path[data-id="${id}"]`) ||
-        document.querySelector(`[data-territory-id="${id}"]`);
+        document.querySelector(`path[data-id="${id}"]`);
       let clientX;
       let clientY;
       if (path) {
         const bb = path.getBoundingClientRect();
-        clientX = bb.left + bb.width / 2;
-        clientY = bb.top + bb.height / 2;
+        // Bias toward the name glyph (upper-middle) so deep zooms keep
+        // Sweden/Finland labels + inland minis in frame together.
+        clientX = bb.left + bb.width * 0.42;
+        clientY = bb.top + bb.height * 0.42;
       } else {
         const rect = svg.getBoundingClientRect();
         clientX = rect.left + rect.width * 0.55;
