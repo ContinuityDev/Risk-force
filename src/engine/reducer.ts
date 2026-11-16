@@ -1,7 +1,7 @@
 import { getBuilding } from "../data/buildings";
 import { GAME_LOOP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
-import { getResearch } from "../data/research";
+import type { FactionId } from "../data/types";
 import { getUnit } from "../data/units";
 import type { GameAction } from "./actions";
 import {
@@ -32,7 +32,7 @@ import {
   spendCampaignBudget,
 } from "./population";
 import { applyResearch, tickResearchForPlayer } from "./research";
-import type { GameState } from "./state";
+import type { GameState, TurnEconomySummary } from "./state";
 import {
   assignBuildingWorkers,
   enqueueUnit,
@@ -40,6 +40,7 @@ import {
   tickTraining,
 } from "./training";
 import { checkEliminationsAndVictory } from "./victory";
+import { checkTurnLimitVictory } from "./victoryPoints";
 import { disbandUnits } from "./solvency";
 
 export { createMenuState };

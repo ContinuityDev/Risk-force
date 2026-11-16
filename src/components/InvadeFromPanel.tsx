@@ -181,32 +181,6 @@ export function InvadeFromPanel({
         </button>
       </header>
 
-      {combinedForce.length > 0 && (
-        <div className="rf-invade-from__forecast">
-          <p>
-            Win odds{" "}
-            <strong>{Math.round(forecast.winChance * 100)}%</strong>
-            {" · "}
-            Exp. losses ~{forecast.expectedAttackerLosses} / enemy ~
-            {forecast.expectedDefenderLosses}
-          </p>
-          <p className="rf-hint">
-            Frontage {stack.count}/{stack.cap}
-            {stack.overstack > 0
-              ? ` · overstack −${Math.round((1 - stack.efficiency) * 100)}% eff`
-              : " · full efficiency"}
-          </p>
-          <div className="rf-invade-from__counters">
-            {combinedForce.slice(0, 3).map((s) => (
-              <div key={s.unitId}>
-                <small>{getUnit(s.unitId).name}</small>
-                <CounterStrip unitId={s.unitId} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="rf-invade-from__body">
         <span className="rf-label">Invade from</span>
         {origins.length === 0 && (
@@ -325,6 +299,31 @@ export function InvadeFromPanel({
       </div>
 
       <footer className="rf-invade-from__footer">
+        {combinedForce.length > 0 && (
+          <div className="rf-invade-from__forecast">
+            <p>
+              Win odds{" "}
+              <strong>{Math.round(forecast.winChance * 100)}%</strong>
+              {" · "}
+              Exp. losses ~{forecast.expectedAttackerLosses} / enemy ~
+              {forecast.expectedDefenderLosses}
+            </p>
+            <p className="rf-hint">
+              Frontage {stack.count}/{stack.cap}
+              {stack.overstack > 0
+                ? ` · overstack −${Math.round((1 - stack.efficiency) * 100)}% eff`
+                : " · full efficiency"}
+            </p>
+            <div className="rf-invade-from__counters">
+              {combinedForce.slice(0, 3).map((s) => (
+                <div key={s.unitId}>
+                  <small>{getUnit(s.unitId).name}</small>
+                  <CounterStrip unitId={s.unitId} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="rf-resource">
           <span className="rf-label">Supply</span>
           <strong>

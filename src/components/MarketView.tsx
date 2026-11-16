@@ -101,6 +101,24 @@ export function MarketView({
           Trade
         </button>
       </div>
+      {from !== to && (
+        <p className="rf-market__preview" role="status">
+          Preview: spend {amount} {from} → receive{" "}
+          {(() => {
+            const q = quotes.find(
+              (x) =>
+                (x.from === from && x.to === to) ||
+                (x.from === to && x.to === from),
+            );
+            if (!q) return "?";
+            if (q.from === from && q.to === to) {
+              return (amount * q.sellRate).toFixed(1);
+            }
+            return (amount / q.buyRate).toFixed(1);
+          })()}{" "}
+          {to}
+        </p>
+      )}
     </div>
   );
 }

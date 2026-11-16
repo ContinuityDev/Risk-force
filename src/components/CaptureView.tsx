@@ -85,9 +85,9 @@ export function CaptureView({ state, dispatch }: CaptureViewProps) {
           >
             Keep
             <small>
-              {buildingCount} structures at{" "}
-              {Math.round(GAME_LOOP.occupation.keepBuildingHpMult * 100)}% HP
-              (repair needed)
+              {buildingCount === 0
+                ? "No structures left — occupy the empty site"
+                : `${buildingCount} structure${buildingCount === 1 ? "" : "s"} retained at ${Math.round(GAME_LOOP.occupation.keepBuildingHpMult * 100)}% HP`}
             </small>
           </button>
         </div>

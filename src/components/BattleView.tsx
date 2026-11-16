@@ -12,14 +12,16 @@ import {
   getSpriteUrl,
 } from "../sprites/registry";
 import { DirSprite } from "./DirSprite";
-import { Sprite } from "./Sprite";
 
 interface DmgFloater {
   id: string;
+  targetId: string;
   x: number;
   y: number;
   text: string;
   side: "atk" | "def";
+  /** Vertical stagger so simultaneous hits don't stack as one blob. */
+  lane: number;
 }
 
 /** Muzzle flash offset as % of actor box, keyed by 8-dir frame (barrel tip). */
@@ -128,15 +130,20 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
   useEffect(() => {
     if (!battle) return;
     const next: DmgFloater[] = [];
+    const laneAt = (x: number, y: number) =>
+      next.filter((f) => Math.hypot(f.x - x, f.y - y) < 40).length;
     for (const u of battle.units) {
       const prev = prevHp.current[u.id];
       if (prev !== undefined && u.hp < prev) {
+        const lane = laneAt(u.x, u.y);
         next.push({
           id: `f-${u.id}-${battle.time}-${prev}`,
-          x: u.x,
-          y: u.y,
+          targetId: u.id,
+          x: u.x + lane * 18 - 8,
+          y: u.y - 22 - lane * 28,
           text: `−${Math.max(1, Math.round(prev - u.hp))}`,
           side: u.side === "attacker" ? "atk" : "def",
+          lane,
         });
       }
       prevHp.current[u.id] = u.hp;
@@ -144,26 +151,36 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
     for (const d of battle.defenses) {
       const prev = prevHp.current[d.id];
       if (prev !== undefined && d.hp < prev) {
+        const lane = laneAt(d.x, d.y);
         next.push({
           id: `f-${d.id}-${battle.time}-${prev}`,
-          x: d.x,
-          y: d.y,
+          targetId: d.id,
+          x: d.x + lane * 18 - 8,
+          y: d.y - 22 - lane * 28,
           text: `−${Math.max(1, Math.round(prev - d.hp))}`,
           side: "def",
+          lane,
         });
       }
       prevHp.current[d.id] = d.hp;
     }
     if (next.length) {
-      setFloaters((cur) => [...cur, ...next].slice(-28));
+      // One floater per target — replaces prior so digits never concatenate.
+      setFloaters((cur) => {
+        const byUnit = new Map<string, DmgFloater>();
+        for (const f of cur) byUnit.set(f.targetId, f);
+        for (const f of next) byUnit.set(f.targetId, f);
+        return [...byUnit.values()].slice(-14);
+      });
     }
   }, [battle]);
 
   useEffect(() => {
     if (!floaters.length) return;
+    const ids = new Set(floaters.map((f) => f.id));
     const t = window.setTimeout(() => {
-      setFloaters((cur) => cur.slice(Math.max(0, cur.length - 12)));
-    }, 900);
+      setFloaters((cur) => cur.filter((f) => !ids.has(f.id)));
+    }, 650);
     return () => window.clearTimeout(t);
   }, [floaters]);
 
@@ -523,7 +540,11 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
               <span
                 key={f.id}
                 className={`rf-battle__dmg rf-battle__dmg--${f.side}`}
-                style={{ left: pos.left, top: pos.top }}
+                style={{
+                  left: pos.left,
+                  top: pos.top,
+                  ["--rf-dmg-lane" as string]: String(f.lane),
+                }}
               >
                 {f.text}
               </span>
@@ -621,12 +642,13 @@ export function BattleView({ state, dispatch }: BattleViewProps) {
         </aside>
       </div>
 
-      <div className="rf-battle__legend">
-        <Sprite id="fx-laser" size={24} anim="none" />
-        <Sprite id="fx-plasma" size={20} anim="none" />
-        <Sprite id="fx-explosion" size={22} anim="none" />
+      <div className="rf-battle__legend" aria-label="HP legend">
+        <span className="rf-battle__legend-swatch is-atk" aria-hidden />
+        <span>Attacker HP</span>
+        <span className="rf-battle__legend-swatch is-def" aria-hidden />
+        <span>Defender HP</span>
         <span className="rf-text-dim">
-          Live fire · {battle.elapsed.toFixed(1)}s
+          · {battle.elapsed.toFixed(1)}s
           {battle.projectiles.length > 0
             ? ` · ${battle.projectiles.length} in flight`
             : ""}

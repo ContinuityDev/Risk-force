@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { biomeLabel } from "../data/biomes";
 import { HELP } from "../data/gameLoop";
 import { getTerritory, TERRITORIES } from "../data/map/territories";
@@ -44,6 +44,16 @@ export function InvadeView({
   const [toId, setToId] = useState("");
   const [force, setForce] = useState<Record<string, number>>({});
   const [mode, setMode] = useState<"invade" | "reinforce">("invade");
+
+  // Keep launch origin in sync when selection changes (map → Army, LOAD_STATE).
+  useEffect(() => {
+    const sel = state.selectedTerritoryId;
+    if (sel && state.territories[sel]?.owner === activePlayer.id && sel !== fromId) {
+      setFromId(sel);
+      setToId("");
+      setForce({});
+    }
+  }, [state.selectedTerritoryId, state.territories, activePlayer.id, fromId]);
 
   const fromDef = fromId ? getTerritory(fromId) : null;
   const fromTs = fromId ? state.territories[fromId] : null;
@@ -200,24 +210,6 @@ export function InvadeView({
         />
       </div>
 
-      {slots.length > 0 && (
-        <div className="rf-invade__forecast">
-          <p>
-            Frontage {stack.count}/{stack.cap}
-            {stack.overstack > 0
-              ? ` · −${Math.round((1 - stack.efficiency) * 100)}% eff`
-              : ""}
-            {route ? ` · Route ${route.path.length - 1} hops` : ""}
-          </p>
-          {forecast && (
-            <p>
-              Win odds <strong>{Math.round(forecast.winChance * 100)}%</strong>
-              {" · "}Exp. losses ~{forecast.expectedAttackerLosses}
-            </p>
-          )}
-        </div>
-      )}
-
       <section className="rf-invade__force">
         <span className="rf-label">Assemble strike force from local garrison</span>
         {garrisonUnits.length === 0 && (
@@ -260,6 +252,24 @@ export function InvadeView({
       </section>
 
       <footer className="rf-invade__footer">
+        {slots.length > 0 && (
+          <div className="rf-invade__forecast">
+            <p>
+              Frontage {stack.count}/{stack.cap}
+              {stack.overstack > 0
+                ? ` · −${Math.round((1 - stack.efficiency) * 100)}% eff`
+                : " · full efficiency"}
+              {route ? ` · ${route.path.length - 1} hops` : ""}
+            </p>
+            {forecast && (
+              <p>
+                Win odds{" "}
+                <strong>{Math.round(forecast.winChance * 100)}%</strong>
+                {" · "}Exp. losses ~{forecast.expectedAttackerLosses}
+              </p>
+            )}
+          </div>
+        )}
         <button
           type="button"
           className="primary"
