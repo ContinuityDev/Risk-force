@@ -8,6 +8,7 @@ import {
   claimInteriorCluster,
   claimInteriorSlot,
   getTerritoryAnchors,
+  groundedOccupancyBox,
   labelKeepOutBox,
 } from "./territoryAnchors";
 
@@ -131,9 +132,9 @@ export function iconWorldSize(
     tier === "deep" ? 0.048 : tier === "mid" ? 0.034 : 0.013;
   const raw = camW * frac;
   // Hard clamps — deep zoom stays small enough to fit a full building cluster
-  // inland beside the country label (e.g. 4 on Sweden).
-  const min = tier === "deep" ? 3.0 : tier === "mid" ? 1.8 : 1.2;
-  const max = tier === "deep" ? 5.2 : tier === "mid" ? 5.0 : 2.6;
+  // inland beside the country label (e.g. 4 on Sweden with upright sprites).
+  const min = tier === "deep" ? 2.8 : tier === "mid" ? 1.8 : 1.2;
+  const max = tier === "deep" ? 4.0 : tier === "mid" ? 5.0 : 2.6;
   void zoomScale;
   return Math.min(max, Math.max(min, raw));
 }
@@ -187,8 +188,7 @@ function tryPlaceCompact(
 ): PlacedMini | null {
   const slot = claimInteriorSlot(t, size, occupied, gap * 0.5);
   if (!slot) return null;
-  const b: Box = { x: slot.x, y: slot.y, w: size * 1.15, h: size * 1.15 };
-  occupied.push(b);
+  occupied.push(groundedOccupancyBox(slot.x, slot.y, size * 1.15));
   let spriteId = "building-nexus";
   try {
     spriteId = getBuilding(sortBuildings(buildings)[0]!.buildingId).sprite.id;
@@ -269,29 +269,39 @@ export function layoutBuildingMinis(
 
     const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
     const shown = sorted.slice(0, maxShow);
-    const centers = claimInteriorCluster(
-      t,
-      shown.length + 1,
-      size,
-      occupied,
-      gap * 0.28,
-    );
+    // Deep: shrink until the full set fits inland beside the label.
+    // Mid: one try at the zoom size, then compact fallback.
+    const sizeTries =
+      tier === "deep"
+        ? [size, size * 0.88, size * 0.76, Math.max(2.6, size * 0.65)]
+        : [size];
+    let placed = false;
+    for (const trySize of sizeTries) {
+      const centers = claimInteriorCluster(
+        t,
+        shown.length + (tier === "mid" ? 1 : 0),
+        trySize,
+        occupied,
+        gap * 0.28,
+      );
+      const need = shown.length;
+      if (centers.length < need && tier === "deep") continue;
+      if (centers.length === 0) break;
 
-    if (centers.length > 0) {
       const placeN = Math.min(shown.length, centers.length);
       const trial: PlacedMini[] = [];
       for (let i = 0; i < placeN; i++) {
         const c = centers[i]!;
-        const mini = toMini(t.id, shown[i]!, c.x, c.y, size);
+        const mini = toMini(t.id, shown[i]!, c.x, c.y, trySize);
         if (!mini) continue;
-        occupied.push({ x: c.x, y: c.y, w: size, h: size });
+        occupied.push(groundedOccupancyBox(c.x, c.y, trySize));
         trial.push(mini);
       }
       const leftover = sorted.length - placeN;
       if (leftover > 0 && centers[placeN]) {
         const c = centers[placeN]!;
-        const moreSize = size * 0.85;
-        occupied.push({ x: c.x, y: c.y, w: moreSize, h: moreSize });
+        const moreSize = trySize * 0.85;
+        occupied.push(groundedOccupancyBox(c.x, c.y, moreSize));
         trial.push({
           key: `${t.id}:more`,
           territoryId: t.id,
@@ -311,9 +321,11 @@ export function layoutBuildingMinis(
       }
       if (trial.length) {
         out.push(...trial);
-        continue;
+        placed = true;
+        break;
       }
     }
+    if (placed) continue;
 
     const compact = tryPlaceCompact(
       t,

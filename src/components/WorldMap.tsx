@@ -52,6 +52,7 @@ import {
 } from "../map/mapChrome";
 import {
   getTerritoryAnchors,
+  groundedOccupancyBox,
   marchLandPoint,
 } from "../map/territoryAnchors";
 import {
@@ -453,12 +454,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     [state.armiesInTransit],
   );
   const unitMinis = useMemo(() => {
-    const occupied = buildingMinis.map((m) => ({
-      x: m.x,
-      y: m.y,
-      w: m.size,
-      h: m.size,
-    }));
+    const occupied = buildingMinis.map((m) =>
+      groundedOccupancyBox(m.x, m.y, m.size),
+    );
     return layoutUnitMinis(
       TERRITORIES,
       state.territories,

@@ -10,6 +10,7 @@ import {
   clearTerritoryAnchorCache,
   footprintInsideRing,
   getTerritoryAnchors,
+  groundedOccupancyBox,
   isInsideTerritoryLand,
   labelKeepOutBox,
   parseSvgPathRings,
@@ -56,7 +57,9 @@ function assertMinisClearLabels(
   labels: { id: string; x: number; y: number; w: number; h: number }[],
 ) {
   for (const m of minis) {
-    const box = { x: m.x, y: m.y, w: m.size, h: m.size };
+    // Grounded sprites rise above the foot — collide that AABB, not a
+    // foot-centered square (which under-counts upward extent).
+    const box = groundedOccupancyBox(m.x, m.y, m.size);
     for (const l of labels) {
       const keep = labelKeepOutBox(l, m.size);
       expect(

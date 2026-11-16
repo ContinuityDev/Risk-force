@@ -134,8 +134,9 @@ describe("buildingMinis", () => {
     );
     const deepIcons = deep.filter((m) => !m.more && !m.compact);
     expect(deepIcons.length).toBe(4);
-    // Deep icons should be large enough to read (~screenPx * scale)
-    expect(deepIcons[0]!.size).toBeGreaterThan(4);
+    // Deep icons stay compact enough to clear the country label (~≤4 wu).
+    expect(deepIcons[0]!.size).toBeGreaterThan(2.5);
+    expect(deepIcons[0]!.size).toBeLessThanOrEqual(4.0);
   });
 
   it("falls back to a compact marker when the cluster cannot fit", () => {

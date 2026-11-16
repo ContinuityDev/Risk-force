@@ -276,8 +276,27 @@ export function boxesOverlap(
 }
 
 /**
+ * Center-based AABB of a grounded mini whose foot sits at `(x, y)`.
+ * Sprites rise above the foot (CoN-style), so occupancy is biased upward —
+ * a foot just south of a label still collides if we only checked a
+ * foot-centered square.
+ */
+export function groundedOccupancyBox(
+  x: number,
+  y: number,
+  size: number,
+): { x: number; y: number; w: number; h: number } {
+  const w = size * 0.92;
+  const h = size * 1.05;
+  // ~84% of the box sits above the foot; a thin pad below covers the shadow.
+  return { x, y: y - h * 0.42, w, h };
+}
+
+/**
  * Keep-out box around a territory name glyph so minis never cover the label.
- * `w`/`h` are the laid-out text extents; padded generously vs mini size.
+ * `w`/`h` are the laid-out text extents; padded generously vs mini size and
+ * biased south — grounded sprites whose feet sit below the glyph still clear
+ * the name with their upright body.
  */
 export function labelKeepOutBox(
   label: { x: number; y: number; w: number; h: number },
@@ -285,10 +304,11 @@ export function labelKeepOutBox(
 ): { x: number; y: number; w: number; h: number } {
   return {
     x: label.x,
-    y: label.y,
-    // Wide enough to clear the full glyph; height covers the text + halo.
-    w: Math.max(label.w * 1.35, miniSize * 2.1, 9),
-    h: Math.max(label.h * 1.85, miniSize * 0.95, 4.5),
+    // Bias the keep-out below the glyph so south-of-label feet don't rise
+    // back into the letters.
+    y: label.y + miniSize * 0.28,
+    w: Math.max(label.w * 1.45, miniSize * 2.4, 11),
+    h: Math.max(label.h * 2.4, miniSize * 1.9, 8),
   };
 }
 
@@ -402,7 +422,8 @@ export function claimInteriorSlot(
     if (!footprintInsideRing(s.x, s.y, landHalf, landHalf, ring, 0.35)) {
       return null;
     }
-    const box = { x: s.x, y: s.y, w: size, h: size };
+    // Collide with the upright sprite body, not a foot-centered square.
+    const box = groundedOccupancyBox(s.x, s.y, size);
     if (occupied.some((o) => boxesOverlap(box, o, softPad))) return null;
     return s;
   };
@@ -410,8 +431,9 @@ export function claimInteriorSlot(
     const hit = tryPoint(s, half, pad);
     if (hit) return hit;
   }
-  // Soften keep-out pad only — keep land clearance so minis stay inland.
-  const softPad = pad * 0.55;
+  // Soften peer-mini pad only — never relax below a floor so label keep-outs
+  // stay hard (sprites must not rise into the country name).
+  const softPad = Math.max(pad * 0.7, 0.35);
   for (const s of anchors.slots) {
     const hit = tryPoint(s, half, softPad);
     if (hit) return hit;
@@ -436,7 +458,7 @@ export function claimInteriorCluster(
     const p = claimInteriorSlot(t, size, localOcc, pad);
     if (!p) break;
     out.push(p);
-    localOcc.push({ x: p.x, y: p.y, w: size, h: size });
+    localOcc.push(groundedOccupancyBox(p.x, p.y, size));
   }
   return out;
 }

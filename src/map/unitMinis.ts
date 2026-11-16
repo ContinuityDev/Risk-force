@@ -22,6 +22,7 @@ import {
   claimInteriorCluster,
   claimInteriorSlot,
   getTerritoryAnchors,
+  groundedOccupancyBox,
   labelKeepOutBox,
   marchLandPoint,
 } from "./territoryAnchors";
@@ -182,7 +183,7 @@ export function layoutUnitMinis(
     const placeCompact = (chipSize: number) => {
       const slot = claimInteriorSlot(t, chipSize, occupied, gap * 0.7);
       if (!slot) return false;
-      occupied.push({ x: slot.x, y: slot.y, w: chipSize, h: chipSize });
+      occupied.push(groundedOccupancyBox(slot.x, slot.y, chipSize));
       const top = sorted[0]!;
       const m = toMini(
         `${t.id}:troops`,
@@ -233,7 +234,7 @@ export function layoutUnitMinis(
       for (let i = 0; i < shown.length; i++) {
         const c = centers[i]!;
         const u = shown[i]!;
-        occupied.push({ x: c.x, y: c.y, w: size, h: size });
+        occupied.push(groundedOccupancyBox(c.x, c.y, size));
         const m = toMini(
           `${t.id}:${u.unitId}`,
           u.unitId,
@@ -248,7 +249,7 @@ export function layoutUnitMinis(
       if (moreCount > 0 && centers[shown.length]) {
         const c = centers[shown.length]!;
         const moreSize = size * 0.85;
-        occupied.push({ x: c.x, y: c.y, w: moreSize, h: moreSize });
+        occupied.push(groundedOccupancyBox(c.x, c.y, moreSize));
         out.push({
           key: `${t.id}:more`,
           territoryId: t.id,
