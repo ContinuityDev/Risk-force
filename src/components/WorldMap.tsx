@@ -81,12 +81,13 @@ interface Camera {
 
 const MIN_VIEW_W = 80;
 /** At world framing (scale≈1) no labels. As scale drops (zoom in), larger territories unlock first. */
-const LABEL_AREA_THRESHOLDS = [
-  { maxScale: 0.72, minArea: 0.012 },
-  { maxScale: 0.48, minArea: 0.004 },
-  { maxScale: 0.32, minArea: 0.0012 },
-  { maxScale: 0.2, minArea: 0.00035 },
-  { maxScale: 0.12, minArea: 0 },
+/** Relative to map median area so Civil War NE states unlock like Earth nations. */
+const LABEL_REL_THRESHOLDS = [
+  { maxScale: 0.72, minRel: 1.0 },
+  { maxScale: 0.48, minRel: 0.25 },
+  { maxScale: 0.35, minRel: 0.04 },
+  { maxScale: 0.25, minRel: 0.01 },
+  { maxScale: 0.16, minRel: 0 },
 ];
 
 function hexToRgba(hex: string, a: number): string {
@@ -151,11 +152,14 @@ function layoutLabels(
 ): PlacedLabel[] {
   if (zoomScale >= 0.95) return [];
 
-  let minArea = Infinity;
-  for (const t of LABEL_AREA_THRESHOLDS) {
-    if (zoomScale <= t.maxScale) minArea = t.minArea;
+  const areas = territories.map((t) => t.area).sort((a, b) => a - b);
+  const median = areas[Math.floor(areas.length / 2)] ?? 0.01;
+  let minRel = Infinity;
+  for (const t of LABEL_REL_THRESHOLDS) {
+    if (zoomScale <= t.maxScale) minRel = t.minRel;
   }
-  if (!Number.isFinite(minArea)) return [];
+  if (!Number.isFinite(minRel)) return [];
+  const minArea = median * minRel;
 
   const visible = territories.filter((t) => {
     if (t.area < minArea) return false;
@@ -663,6 +667,21 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               opacity="0.1"
             />
           </pattern>
+          <pattern
+            id="rf-neutral-hatch"
+            width="7"
+            height="7"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(38)"
+          >
+            <rect width="7" height="7" fill="transparent" />
+            <path
+              d="M0 0 L0 7"
+              stroke="#5c5346"
+              strokeWidth="1.15"
+              opacity="0.42"
+            />
+          </pattern>
           <filter id="rf-land-glow" x="-8%" y="-8%" width="116%" height="116%">
             <feGaussianBlur stdDeviation="1.2" result="blur" />
             <feMerge>
@@ -872,16 +891,29 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 className={`rf-map__territory${isSelected ? " is-selected" : ""}${isNeutral ? " is-neutral" : ""}`}
                 data-territory-id={t.id}
                 data-owner={owner}
-                fill={hexToRgba(base, isNeutral ? (isSelected ? 0.72 : 0.55) : isSelected ? 0.9 : 0.82)}
+                fill={hexToRgba(
+                  base,
+                  isNeutral ? (isSelected ? 0.88 : 0.78) : isSelected ? 0.9 : 0.82,
+                )}
                 stroke={
-                  isSelected ? "#e8f4f8" : isNeutral ? "#9aa3ad" : "#7eb6c9"
+                  isSelected ? "#e8f4f8" : isNeutral ? "#8a7a5c" : "#7eb6c9"
                 }
                 strokeDasharray={isNeutral ? `${2.2 * zoomScale} ${1.6 * zoomScale}` : undefined}
                 // Counter-scale: strokeWidth in user units × zoomScale ≈ constant screen px.
-                strokeWidth={(isSelected ? 1.4 : isNeutral ? 0.95 : 1.05) * zoomScale}
+                strokeWidth={(isSelected ? 1.4 : isNeutral ? 1.05 : 1.05) * zoomScale}
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
+              {isNeutral && (
+                <path
+                  d={t.path}
+                  className="rf-map__territory-hatch"
+                  fill="url(#rf-neutral-hatch)"
+                  stroke="none"
+                  pointerEvents="none"
+                  opacity={0.9}
+                />
+              )}
             </g>
           );
         })}

@@ -111,6 +111,15 @@ function starterBuildings(
     },
     {
       instanceId: `b${nextId.n++}`,
+      buildingId: "reactor",
+      x: 1,
+      y: 0,
+      hp: 240,
+      buildRemaining: 0,
+      workers: 2,
+    },
+    {
+      instanceId: `b${nextId.n++}`,
       buildingId: "refinery",
       x: 0,
       y: 2,
@@ -334,7 +343,8 @@ export function createInitialState(payload: NewGamePayload): GameState {
       supplyStock: 28,
       population:
         GAME_LOOP.startingPopulation + GAME_LOOP.startingPopBonus + 4,
-      workers: 10,
+      // Staff nexus + dual reactors + refinery + depot + turret (10) with spare.
+      workers: 12,
       garrison,
       garrisonHp: {},
       trainingQueue: [],

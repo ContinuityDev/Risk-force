@@ -49,7 +49,30 @@ function advanceRound(state: GameState): GameState {
 }
 
 describe("economy balance sim", () => {
-  it("starts roughly break-even (income ≈ upkeep + campaign)", () => {
+  it("one-start turn 1 energy net is clearly positive on both maps", () => {
+    for (const mapId of ["world_war", "civil_war"] as const) {
+      const state = createInitialState({
+        humanCount: 1,
+        aiCount: 2,
+        multiplayerMode: "solo",
+        seed: 42,
+        mapId,
+      });
+      for (const pid of state.playerOrder) {
+        const ledger = computeEnergyLedger(state, pid);
+        expect(
+          ledger.net,
+          `${mapId} ${pid} net ${ledger.net} (income ${ledger.income} upkeep ${ledger.upkeep} camp ${ledger.campaign})`,
+        ).toBeGreaterThanOrEqual(8);
+        expect(
+          ledger.income,
+          `${mapId} ${pid} income should cover upkeep+campaign`,
+        ).toBeGreaterThan(ledger.upkeep + ledger.campaign);
+      }
+    }
+  });
+
+  it("starts with sustainable ledger (income covers upkeep+campaign)", () => {
     const state = createInitialState({
       humanCount: 1,
       aiCount: 2,
@@ -58,14 +81,7 @@ describe("economy balance sim", () => {
     });
     for (const pid of state.playerOrder) {
       const ledger = computeEnergyLedger(state, pid);
-      const denom = Math.max(1, ledger.upkeep + ledger.campaign);
-      const ratio = Math.abs(ledger.net) / denom;
-      expect(
-        ratio,
-        `${pid} net ${ledger.net} (income ${ledger.income} upkeep ${ledger.upkeep} camp ${ledger.campaign})`,
-      ).toBeLessThan(0.45);
-      // Fresh start should not be deeply underwater
-      expect(ledger.net).toBeGreaterThan(-40);
+      expect(ledger.net).toBeGreaterThanOrEqual(0);
       const supply = state.players[pid]!.resources.supply;
       const supplyUp = computeSupplyUpkeep(state, pid);
       const supplyIn = computeIncome(state, pid).supply;
@@ -102,9 +118,8 @@ describe("economy balance sim", () => {
       }
     }
   });
-});
 
-  it("seed 77 hard start is near break-even (capture-script NRG was a fake)", () => {
+  it("seed 77 hard start is energy-positive (capture-script NRG was a fake)", () => {
     const state = createInitialState({
       humanCount: 1,
       aiCount: 1,
@@ -113,8 +128,6 @@ describe("economy balance sim", () => {
       difficulty: "hard",
     });
     const ledger = computeEnergyLedger(state, "player");
-    expect(ledger.net).toBeGreaterThan(-40);
-    expect(
-      Math.abs(ledger.net) / Math.max(1, ledger.upkeep + ledger.campaign),
-    ).toBeLessThan(0.4);
+    expect(ledger.net).toBeGreaterThanOrEqual(0);
   });
+});

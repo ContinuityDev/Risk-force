@@ -17,8 +17,8 @@ export const FACTION_COLORS: Record<FactionId, string> = {
   faction_a: "#b87070",
   faction_b: "#6a8eb8",
   faction_c: "#b89a5a",
-  /** Distinct grey for unclaimed land. */
-  neutral: "#7a8490",
+  /** Warm parchment — readable vs ocean slate, lets faction colours pop. */
+  neutral: "#c9b896",
 };
 
 export const AI_FACTIONS: FactionId[] = ["faction_a", "faction_b", "faction_c"];
