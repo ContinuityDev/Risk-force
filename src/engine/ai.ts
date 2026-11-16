@@ -1,3 +1,4 @@
+import { getDoctrine } from "../data/doctrines";
 import { BUILDING_LIST } from "../data/buildings";
 import { getAiPersonality } from "../data/gameLoop";
 import { GAME_LOOP } from "../data/gameLoop";
@@ -5,16 +6,28 @@ import { TERRITORIES } from "../data/map/territories";
 import { RESEARCH_LIST } from "../data/research";
 import { UNIT_LIST } from "../data/units";
 import type { GameAction } from "./actions";
+import {
+  COMMANDER_ROLES,
+  COMMANDER_TRAIN_COST,
+  hasCommanderRole,
+} from "./commanders";
+import { playerDoctrineId } from "./doctrine";
 import { canAfford } from "./economy";
 import { isSupplied } from "./logistics";
 import { canPlaceBuilding } from "./placement";
 import { canResearch, isUnlocked, researchTurns } from "./research";
+import { hasReconAsset } from "./recon";
 import type { AiAttackPlan, GameState, StrikeForceSlot } from "./state";
+import {
+  canLaunchStrike,
+  playerHasStrikeAsset,
+} from "./strikes";
 import {
   enqueueUnit,
   enqueueWorker,
   workerCapForBuilding,
 } from "./training";
+import type { StrikeKind } from "./state";
 
 function garrisonStrength(garrison: Record<string, number>): number {
   return Object.values(garrison).reduce((a, b) => a + b, 0);
@@ -72,10 +85,22 @@ export function planAiTurn(state: GameState): GameAction[] {
   actions.push({ type: "SET_CAMPAIGN_BUDGET", payload: { energy: budget } });
   simPlayer = { ...simPlayer, campaignBudget: budget };
 
-  // Research — start a multi-turn job (news "research started" is truthful)
+  const doctrine = getDoctrine(playerDoctrineId(simPlayer));
+  // Research — prefer doctrine branch, then cheapest
   const researchable = RESEARCH_LIST.filter((n) =>
     canResearch(simPlayer, n.id),
-  ).sort((a, b) => a.cost - b.cost);
+  ).sort((a, b) => {
+    const prefer = (branch: string) => {
+      if (doctrine.id === "vanguard" && branch === "infantry") return -2;
+      if (doctrine.id === "ironclad" && (branch === "armor" || branch === "infantry"))
+        return -2;
+      if (doctrine.id === "skyborne" && (branch === "air" || branch === "orbital"))
+        return -2;
+      if (doctrine.id === "spectre" && branch === "cyber") return -2;
+      return 0;
+    };
+    return prefer(a.branch) - prefer(b.branch) || a.cost - b.cost;
+  });
   if (
     researchable[0] &&
     !simPlayer.researchJob &&
@@ -259,7 +284,8 @@ export function planAiTurn(state: GameState): GameAction[] {
       if (b.id === "command_nexus") return ts.buildings.length === 0;
       if (!isUnlocked(simPlayer, b.id) && b.id !== "command_nexus") return false;
       if (!canAfford(simPlayer, b.cost)) return false;
-      if (b.category === "naval" || b.category === "orbital") return false;
+      if (b.category === "naval") return false;
+      if (b.category === "orbital" && doctrine.id !== "skyborne") return false;
       if (isFront) {
         return b.category === "defense" || b.category === "economy";
       }
@@ -334,22 +360,97 @@ export function planAiTurn(state: GameState): GameAction[] {
     }
   }
 
+  // War College — commission missing officers when possible
+  for (const t of owned) {
+    const ts = simTerritories[t.id]!;
+    const college = ts.buildings.some(
+      (b) =>
+        b.buildingId === "war_college" &&
+        b.buildRemaining <= 0 &&
+        b.hp > 0,
+    );
+    if (!college) continue;
+    for (const role of COMMANDER_ROLES) {
+      if (hasCommanderRole(simPlayer, role)) continue;
+      if (!canAfford(simPlayer, COMMANDER_TRAIN_COST)) break;
+      actions.push({
+        type: "TRAIN_COMMANDER",
+        payload: { territoryId: t.id, role },
+      });
+      simPlayer = {
+        ...simPlayer,
+        resources: {
+          ...simPlayer.resources,
+          energy: simPlayer.resources.energy - COMMANDER_TRAIN_COST.energy,
+          alloy: simPlayer.resources.alloy - COMMANDER_TRAIN_COST.alloy,
+          research:
+            simPlayer.resources.research - COMMANDER_TRAIN_COST.research,
+        },
+        commanders: [
+          ...(simPlayer.commanders ?? []),
+          {
+            id: `ai-cmd-${role}`,
+            role,
+            name: role,
+            attachedTerritoryId: t.id,
+          },
+        ],
+      };
+      break;
+    }
+  }
+
+  const simState = {
+    ...state,
+    territories: simTerritories,
+    players: { ...state.players, [pid]: simPlayer },
+  };
+
+  // Recon a frontier enemy when assets exist
+  if (hasReconAsset(simState, pid, "drone") || hasReconAsset(simState, pid, "satellite")) {
+    const target = frontier
+      .flatMap((t) =>
+        t.neighbors
+          .filter((n) => simTerritories[n]?.owner !== pid)
+          .map((n) => n),
+      )[0];
+    if (target) {
+      const mode = hasReconAsset(simState, pid, "drone") ? "drone" : "satellite";
+      actions.push({
+        type: "LAUNCH_RECON",
+        payload: { targetId: target, mode },
+      });
+    }
+  }
+
+  // Soften a hard target with strikes before invading
+  const strikeKinds: StrikeKind[] = ["cruise", "orbital", "kinetic"];
+  for (const kind of strikeKinds) {
+    if (!playerHasStrikeAsset(simState, pid, kind)) continue;
+    const enemy = TERRITORIES.find((t) => {
+      const ts = simTerritories[t.id];
+      return (
+        ts &&
+        ts.owner !== pid &&
+        t.neighbors.some((n) => simTerritories[n]?.owner === pid)
+      );
+    });
+    if (!enemy) continue;
+    const check = canLaunchStrike(simState, pid, kind, enemy.id);
+    if (!check.ok) continue;
+    actions.push({
+      type: "LAUNCH_STRIKE",
+      payload: { kind, targetId: enemy.id },
+    });
+    break;
+  }
+
   // Multi-front attack planning — show all axes; execute the primary strike
-  const plans = planAttacks(
-    { ...state, territories: simTerritories, players: { ...state.players, [pid]: simPlayer } },
-    pid,
-    persona,
-  );
+  const plans = planAttacks(simState, pid, persona);
   if (plans.length) {
     // Prefer supplied launch sites when possible
     const supplied =
-      plans.find((p) =>
-        isSupplied(
-          { ...state, territories: simTerritories },
-          p.fromId,
-          pid,
-        ),
-      ) ?? plans[0]!;
+      plans.find((p) => isSupplied(simState, p.fromId, pid)) ?? plans[0]!;
     actions.push({ type: "SET_AI_ATTACK_PLANS", payload: { plans } });
     actions.push({
       type: "START_INVASION",

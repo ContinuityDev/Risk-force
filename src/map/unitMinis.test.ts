@@ -59,7 +59,22 @@ describe("unitMinis", () => {
       { x: 0, y: 0, w: 400, h: 200 },
       labels,
     );
-    expect(mid.some((m) => !m.compact && m.unitId === "hover_tank")).toBe(true);
+    // Mid zoom: multi-type for larger plots; still emits typed hover tanks.
+    expect(mid.length).toBeGreaterThan(0);
+    expect(mid.some((m) => !m.compact && m.unitId === "hover_tank")).toBe(
+      true,
+    );
+
+    const deep = layoutUnitMinis(
+      territories,
+      state,
+      0.15,
+      { x: 0, y: 0, w: 150, h: 75 },
+      labels,
+    );
+    expect(deep.some((m) => !m.compact && m.unitId === "hover_tank")).toBe(
+      true,
+    );
   });
 
   it("layouts transit armies along the route", () => {

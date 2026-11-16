@@ -550,6 +550,40 @@ export function BaseView({
                     Train unit
                   </button>
                 )}
+              {selectedDef.id === "war_college" &&
+                selectedInst.buildRemaining <= 0 &&
+                tid &&
+                (
+                  [
+                    "infantry",
+                    "armor",
+                    "air",
+                    "cyber",
+                  ] as const
+                ).map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    role="menuitem"
+                    className="rf-base__ctx-item"
+                    disabled={
+                      !canAct ||
+                      (activePlayer.commanders ?? []).some((c) => c.role === role)
+                    }
+                    onClick={() => {
+                      setBuildingMenu(null);
+                      dispatch({
+                        type: "TRAIN_COMMANDER",
+                        payload: {
+                          territoryId: tid,
+                          role,
+                        },
+                      });
+                    }}
+                  >
+                    Commission {role} officer
+                  </button>
+                ))}
               <button
                 type="button"
                 role="menuitem"

@@ -1,5 +1,12 @@
+import type { DoctrineId } from "../data/doctrines";
 import type { FactionId } from "../data/types";
-import type { AiAttackPlan, Screen, StrikeForceSlot } from "./state";
+import type {
+  AiAttackPlan,
+  CommanderRole,
+  Screen,
+  StrikeForceSlot,
+  StrikeKind,
+} from "./state";
 
 /**
  * All game mutations go through these commands.
@@ -106,7 +113,40 @@ export type GameAction =
   | { type: "MARK_NEWS_READ" }
   | { type: "DISMISS_NEWS_DIGEST" }
   | { type: "DISMISS_ECONOMY_SUMMARY" }
-  | { type: "SET_PLANNED_ROUTE"; payload: { path: string[] | null } };
+  | { type: "SET_PLANNED_ROUTE"; payload: { path: string[] | null } }
+  | {
+      type: "TRAIN_COMMANDER";
+      payload: { territoryId: string; role: CommanderRole };
+    }
+  | {
+      type: "ATTACH_COMMANDER";
+      payload: { commanderId: string; territoryId: string | null };
+    }
+  | {
+      type: "LAUNCH_STRIKE";
+      payload: { kind: StrikeKind; targetId: string };
+    }
+  | {
+      type: "SET_STRIKE_TARGETING";
+      payload: { kind: StrikeKind | null };
+    }
+  | {
+      type: "LAUNCH_RECON";
+      payload: {
+        targetId: string;
+        mode: "drone" | "satellite";
+      };
+    }
+  | {
+      type: "SAVE_ARMY_TEMPLATE";
+      payload: { name: string; force: StrikeForceSlot[] };
+    }
+  | {
+      type: "DELETE_ARMY_TEMPLATE";
+      payload: { templateId: string };
+    }
+  | { type: "DISMISS_HANDOFF" }
+  | { type: "CLEAR_STRIKE_FX" };
 
 export type DifficultyId = "easy" | "normal" | "hard";
 
@@ -127,4 +167,8 @@ export interface NewGamePayload {
   turnLimit?: number;
   /** When true (and turnLimit > 0), VP race is active alongside domination. */
   victoryPointsEnabled?: boolean;
+  /** Doctrine for human player 0 (solo) or per-human list. */
+  doctrineId?: DoctrineId;
+  /** Per-human doctrines (hot-seat); falls back to doctrineId / vanguard. */
+  humanDoctrines?: DoctrineId[];
 }

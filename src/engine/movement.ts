@@ -83,19 +83,64 @@ export function slowestSpeed(force: StrikeForceSlot[]): number {
   return slow;
 }
 
+/** Classify a force for movement layer rules. */
+export function forceMoveLayer(
+  force: StrikeForceSlot[],
+): "naval" | "air" | "ground" {
+  let naval = 0;
+  let air = 0;
+  let other = 0;
+  for (const slot of force) {
+    if (slot.count <= 0) continue;
+    try {
+      const role = getUnit(slot.unitId).role;
+      if (role === "naval") naval += slot.count;
+      else if (role === "air" || AIRLIFT_IDS.has(slot.unitId)) air += slot.count;
+      else other += slot.count;
+    } catch {
+      other += slot.count;
+    }
+  }
+  const total = naval + air + other;
+  if (total <= 0) return "ground";
+  if (naval === total) return "naval";
+  if (air === total) return "air";
+  return "ground";
+}
+
+/** Air / dropship jump range in SVG px (speed-scaled). */
+export function airJumpRangePx(force: StrikeForceSlot[]): number {
+  const speed = Math.max(0.8, slowestSpeed(force));
+  return speed * GAME_LOOP.movement.pxPerSpeedPerTurn * 2.4;
+}
+
+export function canAirJump(fromId: string, toId: string, force: StrikeForceSlot[]): boolean {
+  return labelDist(fromId, toId) <= airJumpRangePx(force) + 0.01;
+}
+
 /** Turns required to march from → to with this force. */
 export function travelTurns(
   fromId: string,
   toId: string,
   force: StrikeForceSlot[],
+  territories?: Record<string, TerritoryState>,
 ): number {
+  const layer = forceMoveLayer(force);
   const dist = labelDist(fromId, toId);
   const speed = Math.max(0.35, slowestSpeed(force));
   let turns = Math.ceil(
     dist / (speed * GAME_LOOP.movement.pxPerSpeedPerTurn),
   );
-  if (isSeaLink(fromId, toId)) {
+  if (layer === "air") {
+    // Air jumps resolve faster — typically 1 turn within range.
+    turns = Math.min(turns, 2);
+    turns = Math.max(1, Math.ceil(turns * 0.65));
+  } else if (isSeaLink(fromId, toId)) {
     turns = Math.ceil(turns * GAME_LOOP.movement.seaMultiplier);
+    const debris =
+      (territories?.[fromId]?.debrisTurns ?? 0) > 0 ||
+      (territories?.[toId]?.debrisTurns ?? 0) > 0;
+    if (debris) turns += 1;
   }
   turns = Math.ceil(turns * travelBiomeMult(toId));
   return Math.max(1, Math.min(GAME_LOOP.movement.maxTurns, turns));
@@ -114,10 +159,6 @@ export function canOrderMove(
   }
   const to = state.territories[toId];
   if (!to) return { ok: false, reason: "Unknown destination." };
-  const def = getTerritory(fromId);
-  if (!def.neighbors.includes(toId)) {
-    return { ok: false, reason: "Destination must be adjacent." };
-  }
   if (!force.length || force.every((f) => f.count <= 0)) {
     return { ok: false, reason: "Select units to move." };
   }
@@ -125,6 +166,19 @@ export function canOrderMove(
     if ((from.garrison[slot.unitId] ?? 0) < slot.count) {
       return { ok: false, reason: "Not enough units in garrison." };
     }
+  }
+  const layer = forceMoveLayer(force);
+  const def = getTerritory(fromId);
+  if (layer === "naval") {
+    if (!isSeaLink(fromId, toId)) {
+      return { ok: false, reason: "Naval units need a sea lane / coast." };
+    }
+  } else if (layer === "air") {
+    if (!canAirJump(fromId, toId, force) && !def.neighbors.includes(toId)) {
+      return { ok: false, reason: "Air destination out of jump range." };
+    }
+  } else if (!def.neighbors.includes(toId)) {
+    return { ok: false, reason: "Destination must be adjacent." };
   }
   return { ok: true };
 }
@@ -151,7 +205,7 @@ export function startArmyMove(
     taken.push({ unitId: slot.unitId, count: slot.count, hps: pulled.hps });
   }
   const marchForce = normalizeForce(taken);
-  const turns = travelTurns(fromId, toId, marchForce);
+  const turns = travelTurns(fromId, toId, marchForce, state.territories);
   const army: ArmyTransit = {
     id: `army_${state.nextInstanceId}`,
     owner: playerId as ArmyTransit["owner"],

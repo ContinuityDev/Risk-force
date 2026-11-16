@@ -31,6 +31,7 @@ import { BaseView } from "./components/BaseView";
 import { BattleView } from "./components/BattleView";
 import { CaptureView } from "./components/CaptureView";
 import { EconomySummary } from "./components/EconomySummary";
+import { HandoffScreen } from "./components/HandoffScreen";
 import { Hud } from "./components/Hud";
 import { InvadeView } from "./components/InvadeView";
 import { LobbyScreen } from "./components/LobbyScreen";
@@ -179,6 +180,8 @@ export default function App() {
         neighbors: Record<string, string[]>;
         createBattle?: typeof import("./engine/combat").createBattle;
         openMarket?: () => void;
+        openNews?: () => void;
+        closeNews?: () => void;
         dismissMessage?: () => void;
       };
     };
@@ -189,6 +192,8 @@ export default function App() {
       neighbors: w.__RF__?.neighbors ?? {},
       createBattle: w.__RF__?.createBattle,
       openMarket: () => setMarketOpen(true),
+      openNews: () => setNewsOpen(true),
+      closeNews: () => setNewsOpen(false),
       dismissMessage: () => transport.dispatch({ type: "DISMISS_MESSAGE" }),
     };
     let cancelled = false;
@@ -652,6 +657,12 @@ export default function App() {
             state={state}
             dispatch={dispatch}
             onClose={() => setNewsOpen(false)}
+          />
+        )}
+        {state.handoff && (
+          <HandoffScreen
+            handoff={state.handoff}
+            onContinue={() => dispatch({ type: "DISMISS_HANDOFF" })}
           />
         )}
       </div>

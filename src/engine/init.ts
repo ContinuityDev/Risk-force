@@ -1,3 +1,8 @@
+import {
+  AI_DOCTRINE_BY_FACTION,
+  getDoctrine,
+  type DoctrineId,
+} from "../data/doctrines";
 import { createDefaultRelations } from "../data/diplomacy";
 import { AI_FACTIONS, FACTION_NAMES } from "../data/factions";
 import { GAME_LOOP } from "../data/gameLoop";
@@ -8,32 +13,28 @@ import { mulberry32, shuffleInPlace } from "./rng";
 import type { GameState, PlayerState, TerritoryState } from "./state";
 import { emptyResources } from "./state";
 
+/** Difficulty only scales AI budgets + bonus techs — no flat human tech dump. */
 const DIFFICULTY = {
   easy: {
-    energy: 420,
-    alloy: 100,
-    research: 16,
-    supply: 55,
-    tech: ["infantry_doctrine"] as string[],
+    energy: 400,
+    alloy: 90,
+    research: 14,
+    supply: 50,
+    techBonus: [] as string[],
   },
   normal: {
-    energy: 480,
-    alloy: 120,
-    research: 24,
-    supply: 70,
-    tech: ["infantry_doctrine", "mech_corps"] as string[],
+    energy: 460,
+    alloy: 115,
+    research: 22,
+    supply: 65,
+    techBonus: [] as string[],
   },
   hard: {
-    energy: 560,
-    alloy: 150,
-    research: 40,
-    supply: 90,
-    tech: [
-      "infantry_doctrine",
-      "mech_corps",
-      "grav_armor",
-      "drone_swarm",
-    ] as string[],
+    energy: 540,
+    alloy: 145,
+    research: 36,
+    supply: 85,
+    techBonus: ["plasma_doctrine", "nano_industry"] as string[],
   },
 } as const;
 
@@ -42,8 +43,16 @@ function makePlayer(
   kind: "human" | "ai",
   displayName: string,
   difficulty: "easy" | "normal" | "hard" = "normal",
+  doctrineId: DoctrineId = "vanguard",
 ): PlayerState {
   const diff = DIFFICULTY[difficulty];
+  const doctrine = getDoctrine(doctrineId);
+  const researched = [
+    ...new Set([
+      ...doctrine.openingTech,
+      ...(kind === "ai" ? diff.techBonus : []),
+    ]),
+  ];
   return {
     id,
     kind,
@@ -55,18 +64,7 @@ function makePlayer(
       research: kind === "human" ? 30 : diff.research,
       supply: kind === "human" ? 80 : diff.supply,
     },
-    researched:
-      kind === "human"
-        ? [
-            "infantry_doctrine",
-            "mech_corps",
-            "grav_armor",
-            "nano_industry",
-            "drone_swarm",
-            "plasma_doctrine",
-            "siege_protocols",
-          ]
-        : ["infantry_doctrine", "mech_corps"],
+    researched,
     researchJob: null,
     reserves: {},
     campaignBudget:
@@ -75,6 +73,11 @@ function makePlayer(
         : GAME_LOOP.campaigning.aiDefaultBudget,
     insolvent: false,
     eliminated: false,
+    doctrineId,
+    commanders: [],
+    strikeCooldowns: {},
+    recon: [],
+    armyTemplates: [],
   };
 }
 
@@ -206,10 +209,22 @@ export function createInitialState(payload: NewGamePayload): GameState {
     const name =
       payload.humanNames?.[i] ??
       (humanCount === 1 ? FACTION_NAMES.player : `Player ${i + 1}`);
-    players[id] = makePlayer(id, "human", name, difficulty);
+    const doctrineId: DoctrineId =
+      payload.humanDoctrines?.[i] ??
+      payload.doctrineId ??
+      "vanguard";
+    players[id] = makePlayer(id, "human", name, difficulty, doctrineId);
   });
   ais.forEach((id) => {
-    players[id] = makePlayer(id, "ai", FACTION_NAMES[id], difficulty);
+    const doctrineId =
+      AI_DOCTRINE_BY_FACTION[id] ?? ("ironclad" as DoctrineId);
+    players[id] = makePlayer(
+      id,
+      "ai",
+      FACTION_NAMES[id],
+      difficulty,
+      doctrineId,
+    );
   });
 
   const playerOrder = [...humans, ...ais];
@@ -237,13 +252,18 @@ export function createInitialState(payload: NewGamePayload): GameState {
           (isCore ? GAME_LOOP.startingPopBonus : 0),
         // Core workers cover starter staffing (nexus1+reactor2+refinery2+depot2+turret1).
         workers: isCore ? 10 : 1,
-        garrison: isCore
-          ? {
-              trooper: fid === humans[0] ? 5 : 4,
-              assault_mech: 1,
-              hover_tank: 1,
-            }
-          : { trooper: 1 },
+        garrison: (() => {
+          if (!isCore) return { trooper: 1 };
+          const base: Record<string, number> = {
+            trooper: fid === humans[0] ? 4 : 3,
+            assault_mech: 1,
+          };
+          const doctrine = getDoctrine(players[fid]?.doctrineId);
+          for (const [uid, n] of Object.entries(doctrine.openingGarrison ?? {})) {
+            base[uid] = (base[uid] ?? 0) + n;
+          }
+          return base;
+        })(),
         garrisonHp: {},
         trainingQueue: [],
         control: "core",
@@ -306,6 +326,10 @@ export function createInitialState(payload: NewGamePayload): GameState {
     victoryPointsEnabled: payload.victoryPointsEnabled ?? false,
     economySummary: null,
     plannedRoute: null,
+    strikeFx: [],
+    theaterEvents: [],
+    handoff: null,
+    strikeTargeting: null,
   };
 }
 

@@ -100,6 +100,18 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     screen: "map",
   },
   {
+    id: "doctrine",
+    title: "Doctrine",
+    body: "Your lobby doctrine (Vanguard / Ironclad / Skyborne / Spectre) sets opening techs and unit cost/stat mods. Difficulty only scales AI budgets — no free human tech dump.",
+    screen: "map",
+  },
+  {
+    id: "strikes-recon",
+    title: "Strikes & recon",
+    body: "On an enemy territory, launch cruise/orbital/kinetic strikes (cooldown + FX + news) or recon drones/sats for exact garrisons. Without recon, enemy stacks show as ranges.",
+    screen: "map",
+  },
+  {
     id: "logistics",
     title: "Supply & market",
     body: "Depots feed local supply stock in a radius — unsupplied armies attrit. Trade energy/alloy/supply on the Orbital Market from the HUD.",

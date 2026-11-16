@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { biomeLabel } from "../data/biomes";
+import { factionName } from "../data/factions";
 import { HELP } from "../data/gameLoop";
 import { getTerritory, TERRITORIES } from "../data/map/territories";
 import { getUnit, UNIT_LIST } from "../data/units";
+import type { FactionId } from "../data/types";
 import type { GameAction } from "../engine/actions";
+import { applyArmyTemplate } from "../engine/armyTemplates";
+import { commandersOnTerritory } from "../engine/commanders";
+import { roleDisplayName } from "../ui/displayNames";
 import { stackingPreview } from "../engine/combatMods";
 import { forceSupplyCost } from "../engine/economy";
 import { forecastBattle } from "../engine/forecast";
-import { travelTurns } from "../engine/movement";
+import { forceMoveLayer, travelTurns } from "../engine/movement";
 import { findRoute } from "../engine/pathfinding";
 import type { GameState, PlayerState, StrikeForceSlot } from "../engine/state";
 import { CounterStrip } from "./CounterStrip";
@@ -204,14 +209,75 @@ export function InvadeView({
             label: getTerritory(nid).name,
             meta:
               mode === "invade"
-                ? `${biomeLabel(nid)} · ${state.territories[nid]?.owner ?? "neutral"}`
+                ? `${biomeLabel(nid)} · ${factionName((state.territories[nid]?.owner ?? "neutral") as FactionId)}`
                 : biomeLabel(nid),
           }))}
         />
       </div>
 
+      {/* Commander + templates sit above the scrollable force list so they
+          are never clipped under the Launch-from / Target picker row. */}
+      <div className="rf-invade__ops">
+        {fromId &&
+          commandersOnTerritory(activePlayer, fromId).map((c) => (
+            <span
+              key={c.id}
+              className="rf-invade__cmd-chip"
+              title={HELP.commanders}
+            >
+              ★ {c.name} · {roleDisplayName(c.role)}
+            </span>
+          ))}
+        {(activePlayer.armyTemplates?.length ?? 0) > 0 && (
+          <div className="rf-invade__templates">
+            <span className="rf-label">Templates</span>
+            {activePlayer.armyTemplates!.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                className="rf-invade__tpl-chip"
+                disabled={!canAct}
+                onClick={() => {
+                  const applied = applyArmyTemplate(garrison, tpl);
+                  const next: Record<string, number> = {};
+                  for (const s of applied) next[s.unitId] = s.count;
+                  setForce(next);
+                }}
+              >
+                {tpl.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {slots.length > 0 && (
+          <button
+            type="button"
+            className="ghost rf-invade__save-tpl"
+            disabled={!canAct}
+            onClick={() =>
+              dispatch({
+                type: "SAVE_ARMY_TEMPLATE",
+                payload: { name: `Stack ${slots.length}`, force: slots },
+              })
+            }
+          >
+            Save as template
+          </button>
+        )}
+      </div>
+
       <section className="rf-invade__force">
         <span className="rf-label">Assemble strike force from local garrison</span>
+        {slots.length > 0 && (
+          <p className="rf-hint">
+            Movement layer: {forceMoveLayer(slots)}
+            {forceMoveLayer(slots) === "naval"
+              ? " (sea lanes only)"
+              : forceMoveLayer(slots) === "air"
+                ? " (jump within range)"
+                : ""}
+          </p>
+        )}
         {garrisonUnits.length === 0 && (
           <p className="rf-hint">No units stationed here — train them in Base.</p>
         )}

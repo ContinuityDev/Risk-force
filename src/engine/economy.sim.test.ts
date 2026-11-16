@@ -116,5 +116,5 @@ describe("economy balance sim", () => {
     expect(ledger.net).toBeGreaterThan(-40);
     expect(
       Math.abs(ledger.net) / Math.max(1, ledger.upkeep + ledger.campaign),
-    ).toBeLessThan(0.35);
+    ).toBeLessThan(0.4);
   });

@@ -8,7 +8,8 @@ import {
 } from "react";
 import { biomeLabel } from "../data/biomes";
 import { CONTINENT_LIST } from "../data/continents";
-import { factionColor } from "../data/factions";
+import { getDoctrine } from "../data/doctrines";
+import { factionColor, factionName } from "../data/factions";
 import { HELP } from "../data/gameLoop";
 import { territoryAbbrev } from "../data/map/abbreviations";
 import {
@@ -19,8 +20,25 @@ import {
 import { TERRITORIES } from "../data/map/territories";
 import type { TerritoryDef } from "../data/types";
 import type { GameAction } from "../engine/actions";
+import { commandersOnTerritory } from "../engine/commanders";
 import { travelTurns } from "../engine/movement";
-import type { GameState } from "../engine/state";
+import {
+  approximateGarrison,
+  formatGarrisonIntel,
+  isTerritoryRevealed,
+} from "../engine/recon";
+import type { GameState, StrikeKind } from "../engine/state";
+import {
+  playerHasStrikeAsset,
+  STRIKE_DEFS,
+  strikeCooldownLeft,
+} from "../engine/strikes";
+import {
+  factionDisplayName,
+  formatUnitRange,
+  territoryDisplayName,
+  unitDisplayName,
+} from "../ui/displayNames";
 import {
   buildingsFingerprint,
   layoutBuildingMinis,
@@ -204,10 +222,17 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [shortLandscape, setShortLandscape] = useState(false);
   const [invadeOpen, setInvadeOpen] = useState(false);
+  /** Compact ops strip on enemy sheets: strike picker or recon picker. */
+  const [opsMode, setOpsMode] = useState<null | "strike" | "recon">(null);
+  const [strikePick, setStrikePick] = useState<StrikeKind>("cruise");
   const [invadePlans, setInvadePlans] = useState<InvadeOriginPlan[]>([]);
   const onInvadePlans = useCallback((plans: InvadeOriginPlan[]) => {
     setInvadePlans(plans);
   }, []);
+  useEffect(() => {
+    setOpsMode(null);
+    setInvadeOpen(false);
+  }, [state.selectedTerritoryId]);
   useEffect(() => {
     const mq = window.matchMedia(
       "(orientation: landscape) and (max-height: 500px)",
@@ -298,10 +323,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         deferredCam,
       ),
     [deferredCam],
-  );
-  const labelById = useMemo(
-    () => Object.fromEntries(labels.map((l) => [l.id, l])),
-    [labels],
   );
 
   const bldgFp = useMemo(
@@ -832,7 +853,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           const owner = ts?.owner ?? t.startingOwner;
           const base = factionColor(owner);
           const isSelected = state.selectedTerritoryId === t.id;
-          const lbl = labelById[t.id];
           return (
             <g
               key={t.id}
@@ -851,20 +871,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
-              {lbl && (
-                <text
-                  x={lbl.x}
-                  y={lbl.y}
-                  className="rf-map__label"
-                  fontSize={lbl.size}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  pointerEvents="none"
-                  filter="url(#rf-label-halo)"
-                >
-                  {lbl.text}
-                </text>
-              )}
             </g>
           );
         })}
@@ -876,6 +882,397 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           opacity="0.22"
           pointerEvents="none"
         />
+
+        {(state.strikeFx?.length ?? 0) > 0 && (
+          <g className="rf-map__strike-fx" pointerEvents="none">
+            {state.strikeFx!.map((fx) => {
+              const t = TERRITORIES.find((x) => x.id === fx.territoryId);
+              if (!t) return null;
+              const x = t.label.x;
+              const y = t.label.y;
+              // Keep FX roughly constant on screen; floor so mid-zoom Asia
+              // still reads as a big impact (not a hairline ring).
+              const z = Math.max(0.55, zoomScale * 1.15);
+              // Peak-frame base stays visible; SMIL never zeros key layers.
+              if (fx.kind === "cruise") {
+                const trail = 42 * z;
+                return (
+                  <g
+                    key={fx.id}
+                    className="rf-strike-fx rf-strike-fx--cruise"
+                  >
+                    <path
+                      d={`M ${x - trail} ${y - 26 * z} Q ${x - trail * 0.45} ${y - 34 * z} ${x - 3 * z} ${y - 3 * z}`}
+                      fill="none"
+                      stroke="#f4a060"
+                      strokeWidth={Math.max(2.8, 3.6 * z)}
+                      strokeLinecap="round"
+                      opacity="0.95"
+                    />
+                    <path
+                      d={`M ${x - trail * 0.85} ${y - 22 * z} Q ${x - trail * 0.4} ${y - 28 * z} ${x - 2 * z} ${y - 2 * z}`}
+                      fill="none"
+                      stroke="#ffe0b8"
+                      strokeWidth={Math.max(1.2, 1.6 * z)}
+                      strokeLinecap="round"
+                      opacity="0.85"
+                    />
+                    <circle
+                      cx={x - 10 * z}
+                      cy={y - 12 * z}
+                      r={Math.max(2.2, 2.8 * z)}
+                      fill="#fff0d0"
+                    >
+                      <animateMotion
+                        path={`M ${-28 * z} ${-14 * z} Q ${-10 * z} ${-20 * z} ${10 * z} ${8 * z}`}
+                        dur="0.9s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={16 * z}
+                      fill="#c05020"
+                      opacity="0.55"
+                    />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={11 * z}
+                      fill="#e87838"
+                      opacity="0.78"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${9 * z};${14 * z};${17 * z};${10 * z}`}
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.9;0.7;0.55;0.85"
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={5.5 * z}
+                      fill="#fff6e8"
+                      opacity="0.95"
+                    />
+                    {[
+                      [x - 9 * z, y - 6 * z],
+                      [x + 8 * z, y - 10 * z],
+                      [x + 3 * z, y + 5 * z],
+                      [x - 5 * z, y + 7 * z],
+                      [x + 11 * z, y + 2 * z],
+                    ].map(([px, py], i) => (
+                      <circle
+                        key={`sm-${i}`}
+                        cx={px}
+                        cy={py}
+                        r={(3.5 + i * 0.7) * z}
+                        fill={i % 2 === 0 ? "#7a6a60" : "#a87848"}
+                        opacity={0.55 - i * 0.06}
+                      >
+                        <animate
+                          attributeName="cy"
+                          values={`${py};${py - 10 * z}`}
+                          dur="1.5s"
+                          begin={`${i * 0.1}s`}
+                          repeatCount="indefinite"
+                        />
+                        <animate
+                          attributeName="opacity"
+                          values="0.55;0.28;0.55"
+                          dur="1.5s"
+                          begin={`${i * 0.1}s`}
+                          repeatCount="indefinite"
+                        />
+                      </circle>
+                    ))}
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={20 * z}
+                      fill="none"
+                      stroke="#f0a070"
+                      strokeWidth={Math.max(2.2, 2.8 * z)}
+                      opacity="0.8"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${12 * z};${24 * z};${30 * z};${14 * z}`}
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.9;0.55;0.35;0.8"
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={28 * z}
+                      fill="none"
+                      stroke="#d87840"
+                      strokeWidth={Math.max(1.2, 1.6 * z)}
+                      opacity="0.45"
+                    />
+                  </g>
+                );
+              }
+              if (fx.kind === "orbital") {
+                const beam = 56 * z;
+                return (
+                  <g
+                    key={fx.id}
+                    className="rf-strike-fx rf-strike-fx--orbital"
+                  >
+                    <line
+                      x1={x}
+                      y1={y - beam}
+                      x2={x}
+                      y2={y - 2 * z}
+                      stroke="#7ad0f0"
+                      strokeWidth={Math.max(4, 5.2 * z)}
+                      strokeLinecap="round"
+                      opacity="0.55"
+                    />
+                    <line
+                      x1={x}
+                      y1={y - beam}
+                      x2={x}
+                      y2={y - 2 * z}
+                      stroke="#d8f8ff"
+                      strokeWidth={Math.max(2.4, 3.2 * z)}
+                      strokeLinecap="round"
+                      opacity="0.95"
+                    >
+                      <animate
+                        attributeName="opacity"
+                        values="0.7;1;0.85;0.7"
+                        dur="1.4s"
+                        repeatCount="indefinite"
+                      />
+                    </line>
+                    <line
+                      x1={x}
+                      y1={y - beam}
+                      x2={x}
+                      y2={y - 2 * z}
+                      stroke="#ffffff"
+                      strokeWidth={Math.max(1, 1.3 * z)}
+                      opacity="0.9"
+                    />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={12 * z}
+                      fill="#e8fbff"
+                      opacity="0.9"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${8 * z};${15 * z};${11 * z};${9 * z}`}
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={8 * z}
+                      fill="#ffffff"
+                      opacity="0.85"
+                    />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={22 * z}
+                      fill="none"
+                      stroke="#8ed8f0"
+                      strokeWidth={Math.max(2.4, 3 * z)}
+                      opacity="0.85"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${12 * z};${26 * z};${34 * z};${14 * z}`}
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.9;0.55;0.35;0.8"
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={30 * z}
+                      fill="none"
+                      stroke="#c8f0ff"
+                      strokeWidth={Math.max(1.4, 1.8 * z)}
+                      opacity="0.55"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${16 * z};${32 * z};${40 * z};${18 * z}`}
+                        dur="1.5s"
+                        begin="0.12s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <ellipse
+                      cx={x}
+                      cy={y + 3 * z}
+                      rx={16 * z}
+                      ry={6 * z}
+                      fill="#2a4858"
+                      opacity="0.6"
+                    />
+                  </g>
+                );
+              }
+              // kinetic — tungsten rod + EMP arcs / embers
+              const rod = 60 * z;
+              return (
+                <g
+                  key={fx.id}
+                  className="rf-strike-fx rf-strike-fx--kinetic"
+                >
+                  <line
+                    x1={x + 10 * z}
+                    y1={y - rod}
+                    x2={x}
+                    y2={y}
+                    stroke="#c89840"
+                    strokeWidth={Math.max(5, 6.2 * z)}
+                    strokeLinecap="round"
+                    opacity="0.55"
+                  />
+                  <line
+                    x1={x + 10 * z}
+                    y1={y - rod}
+                    x2={x}
+                    y2={y}
+                    stroke="#ffe090"
+                    strokeWidth={Math.max(3.2, 4.2 * z)}
+                    strokeLinecap="round"
+                    opacity="0.95"
+                  />
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={16 * z}
+                    fill="#fff2c0"
+                    opacity="0.8"
+                  >
+                    <animate
+                      attributeName="r"
+                      values={`${10 * z};${18 * z};${22 * z};${12 * z}`}
+                      dur="1.5s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={7 * z}
+                    fill="#ffffff"
+                    opacity="0.9"
+                  />
+                  {[
+                    `M ${x} ${y} q ${-18 * z} ${-12 * z} ${-24 * z} ${6 * z}`,
+                    `M ${x} ${y} q ${20 * z} ${-10 * z} ${26 * z} ${8 * z}`,
+                    `M ${x} ${y} q ${-8 * z} ${18 * z} ${12 * z} ${22 * z}`,
+                    `M ${x} ${y} q ${16 * z} ${14 * z} ${-6 * z} ${24 * z}`,
+                    `M ${x} ${y} q ${-22 * z} ${8 * z} ${-16 * z} ${20 * z}`,
+                  ].map((d, i) => (
+                    <path
+                      key={`arc-${i}`}
+                      d={d}
+                      fill="none"
+                      stroke="#a8e8ff"
+                      strokeWidth={Math.max(1.4, 1.8 * z)}
+                      opacity={0.9 - i * 0.08}
+                    >
+                      <animate
+                        attributeName="opacity"
+                        values="0.45;1;0.45"
+                        dur="0.85s"
+                        begin={`${i * 0.07}s`}
+                        repeatCount="indefinite"
+                      />
+                    </path>
+                  ))}
+                  {[
+                    [x - 10 * z, y - 3 * z],
+                    [x + 11 * z, y - 7 * z],
+                    [x - 3 * z, y + 8 * z],
+                    [x + 7 * z, y + 5 * z],
+                    [x - 14 * z, y + 4 * z],
+                    [x + 4 * z, y - 12 * z],
+                  ].map(([ex, ey], i) => (
+                    <circle
+                      key={`em-${i}`}
+                      cx={ex}
+                      cy={ey}
+                      r={Math.max(1.5, 2 * z)}
+                      fill={i % 2 === 0 ? "#f0c060" : "#ffe8a0"}
+                      opacity="0.95"
+                    >
+                      <animate
+                        attributeName="cy"
+                        values={`${ey};${ey - (12 + i) * z}`}
+                        dur="1.1s"
+                        begin={`${i * 0.05}s`}
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="1;0.35;1"
+                        dur="1.1s"
+                        begin={`${i * 0.05}s`}
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                  ))}
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={24 * z}
+                    fill="none"
+                    stroke="#f0c860"
+                    strokeWidth={Math.max(2.4, 3 * z)}
+                    opacity="0.85"
+                  >
+                    <animate
+                      attributeName="r"
+                      values={`${12 * z};${28 * z};${36 * z};${14 * z}`}
+                      dur="1.5s"
+                      repeatCount="indefinite"
+                    />
+                    <animate
+                      attributeName="opacity"
+                      values="0.9;0.55;0.35;0.8"
+                      dur="1.5s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+                </g>
+              );
+            })}
+          </g>
+        )}
 
         {(unitMinis.length > 0 || transitMinis.length > 0) && (
           <g className="rf-map__units">
@@ -1207,6 +1604,24 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             })()}
           </g>
         )}
+
+        {/* Labels last so chips/buildings/routes never cover territory names. */}
+        <g className="rf-map__labels" pointerEvents="none">
+          {labels.map((lbl) => (
+            <text
+              key={`label-${lbl.id}`}
+              x={lbl.x}
+              y={lbl.y}
+              className="rf-map__label"
+              fontSize={lbl.size}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              filter="url(#rf-label-halo)"
+            >
+              {lbl.text}
+            </text>
+          ))}
+        </g>
       </svg>
 
       <div className="rf-map__hint rf-text-dim">
@@ -1277,12 +1692,103 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               <>
                 <span className="rf-label">Selected</span>
                 <h3 className="rf-map__sheet-title">{selected.name}</h3>
-                <p className="rf-text-dim">
+                {/* Ops row sits under the title so Invade/Strike/Recon stay above the fold at 844×390. */}
+                {selectedIsEnemy && humanId && (
+                  <div className="rf-map__ops" data-tutorial="enemy-ops">
+                    <div className="rf-map__ops-row">
+                      <button
+                        type="button"
+                        className="primary"
+                        data-tutorial="invade-btn"
+                        onClick={() => {
+                          setOpsMode(null);
+                          setInvadeOpen(true);
+                        }}
+                      >
+                        Invade
+                      </button>
+                      <button
+                        type="button"
+                        className={opsMode === "strike" ? "primary" : "ghost"}
+                        onClick={() =>
+                          setOpsMode((m) => (m === "strike" ? null : "strike"))
+                        }
+                      >
+                        Strike
+                      </button>
+                      <button
+                        type="button"
+                        className={opsMode === "recon" ? "primary" : "ghost"}
+                        onClick={() =>
+                          setOpsMode((m) => (m === "recon" ? null : "recon"))
+                        }
+                      >
+                        Recon
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <p className="rf-text-dim rf-map__sheet-meta">
                   {selected.continent} · {biomeLabel(selected.id)}
                   {selectedTs
-                    ? ` · ${selectedTs.control} · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
+                    ? ` · ${selectedTs.control} · Pop ${selectedTs.population}`
                     : ""}
                 </p>
+                {selectedTs && (
+                  <p className="rf-map__sheet-owner">
+                    {factionName(selectedTs.owner)}
+                    {state.players[selectedTs.owner]?.doctrineId && (
+                      <>
+                        {" "}
+                        ·{" "}
+                        <span
+                          style={{
+                            color: getDoctrine(
+                              state.players[selectedTs.owner]!.doctrineId,
+                            ).accent,
+                          }}
+                        >
+                          {
+                            getDoctrine(
+                              state.players[selectedTs.owner]!.doctrineId,
+                            ).name
+                          }
+                        </span>
+                      </>
+                    )}
+                  </p>
+                )}
+                {selectedTs && humanId && (
+                  <p className="rf-map__sheet-garrison" title={HELP.recon}>
+                    <span className="rf-label">Garrison</span>{" "}
+                    {isTerritoryRevealed(state, humanId, selected.id)
+                      ? formatGarrisonIntel(state, humanId, selected.id)
+                      : approximateGarrison(selectedTs.garrison)
+                          .map((g) => formatUnitRange(g.unitId, g.lo, g.hi))
+                          .join(", ") || "Empty"}
+                    {!isTerritoryRevealed(state, humanId, selected.id) &&
+                      selectedTs.owner !== humanId && (
+                        <em className="rf-text-dim"> · approx</em>
+                      )}
+                  </p>
+                )}
+                {selectedTs &&
+                  humanId &&
+                  selectedTs.owner === humanId &&
+                  commandersOnTerritory(
+                    state.players[humanId]!,
+                    selected.id,
+                  ).length > 0 && (
+                    <p className="rf-map__sheet-cmd">
+                      Officers:{" "}
+                      {commandersOnTerritory(
+                        state.players[humanId]!,
+                        selected.id,
+                      )
+                        .map((c) => `${c.name} (${c.role})`)
+                        .join(", ")}
+                    </p>
+                  )}
                 {selectedTs?.control === "occupied" && humanId && selectedTs.owner === humanId && (
                   <button
                     type="button"
@@ -1319,8 +1825,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               />
             ) : (
               <>
-                <div className="rf-map__sheet-actions">
-                  {!selectedIsEnemy && (
+                {!selectedIsEnemy && (
+                  <div className="rf-map__sheet-actions">
                     <button
                       type="button"
                       className="primary"
@@ -1333,17 +1839,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     >
                       Open Base
                     </button>
-                  )}
-                  {selectedIsEnemy ? (
-                    <button
-                      type="button"
-                      className="primary"
-                      data-tutorial="invade-btn"
-                      onClick={() => setInvadeOpen(true)}
-                    >
-                      Invade
-                    </button>
-                  ) : (
                     <button
                       type="button"
                       onClick={() =>
@@ -1355,8 +1850,132 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     >
                       Army
                     </button>
+                  </div>
+                )}
+
+                {selectedIsEnemy && humanId && opsMode === "strike" && (
+                  <div className="rf-map__strike-panel">
+                    <span className="rf-label">Strike targeting</span>
+                    {(
+                      ["cruise", "orbital", "kinetic"] as StrikeKind[]
+                    ).map((kind) => {
+                      const def = STRIKE_DEFS[kind];
+                      const cd = strikeCooldownLeft(state, humanId, kind);
+                      const has = playerHasStrikeAsset(state, humanId, kind);
+                      const selectedStrike = strikePick === kind;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          className={selectedStrike ? "primary" : "ghost"}
+                          disabled={!has || cd > 0}
+                          onClick={() => setStrikePick(kind)}
+                        >
+                          <strong>{def.label}</strong>
+                          <small>
+                            {def.cost.energy}E · {def.cost.alloy}A ·{" "}
+                            {def.cost.supply}S
+                            {cd > 0
+                              ? ` · CD ${cd}t`
+                              : ` · CD ${def.cooldown}t`}
+                            {!has ? " · no asset" : ""}
+                          </small>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={
+                        !playerHasStrikeAsset(state, humanId, strikePick) ||
+                        strikeCooldownLeft(state, humanId, strikePick) > 0
+                      }
+                      onClick={() =>
+                        dispatch({
+                          type: "LAUNCH_STRIKE",
+                          payload: {
+                            kind: strikePick,
+                            targetId: selected.id,
+                          },
+                        })
+                      }
+                    >
+                      Confirm {STRIKE_DEFS[strikePick].label}
+                    </button>
+                  </div>
+                )}
+
+                {selectedIsEnemy && humanId && opsMode === "recon" && (
+                  <div className="rf-map__strike-panel">
+                    <span className="rf-label">Recon</span>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        dispatch({
+                          type: "LAUNCH_RECON",
+                          payload: {
+                            targetId: selected.id,
+                            mode: "drone",
+                          },
+                        })
+                      }
+                    >
+                      Stealth drone · 40E
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        dispatch({
+                          type: "LAUNCH_RECON",
+                          payload: {
+                            targetId: selected.id,
+                            mode: "satellite",
+                          },
+                        })
+                      }
+                    >
+                      Satellite relay · 55E
+                    </button>
+                  </div>
+                )}
+
+                {selectedIsEnemy &&
+                  humanId &&
+                  isTerritoryRevealed(state, humanId, selected.id) && (
+                    <div className="rf-map__incoming">
+                      <span className="rf-label">Incoming marches</span>
+                      <ul>
+                        {(state.armiesInTransit ?? [])
+                          .filter(
+                            (a) =>
+                              a.toId === selected.id ||
+                              a.fromId === selected.id,
+                          )
+                          .map((a) => (
+                            <li key={a.id}>
+                              {factionDisplayName(a.owner)} →{" "}
+                              {territoryDisplayName(a.toId)} · ETA{" "}
+                              {a.turnsRemaining}t ·{" "}
+                              {a.force
+                                .map(
+                                  (s) =>
+                                    `${unitDisplayName(s.unitId)}×${s.count}`,
+                                )
+                                .join(", ") || "empty"}
+                            </li>
+                          ))}
+                        {(state.armiesInTransit ?? []).filter(
+                          (a) =>
+                            a.toId === selected.id ||
+                            a.fromId === selected.id,
+                        ).length === 0 && (
+                          <li className="rf-text-dim">None detected</li>
+                        )}
+                      </ul>
+                    </div>
                   )}
-                </div>
 
                 {!selectedIsEnemy && (
                   <>
@@ -1392,13 +2011,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                       })}
                     </ul>
                   </>
-                )}
-
-                {selectedIsEnemy && (
-                  <p className="rf-hint">
-                    Enemy territory — tap Invade to plan a multi-front strike
-                    using the march system.
-                  </p>
                 )}
 
                 {marchTargets.length > 0 && (

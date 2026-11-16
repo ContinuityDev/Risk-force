@@ -26,6 +26,9 @@ import {
   forceHeadcount,
   terrainDamageDealtMult,
 } from "./combatMods";
+import { stackCommanderMult } from "./commanders";
+import { doctrineCombatMult } from "./doctrine";
+import { cullCommandersAfterWipe } from "./commanders";
 import {
   damageScaleFromHp,
   ensureTerritoryHp,
@@ -144,6 +147,8 @@ export function createBattle(
   const deployW = deploy.x1 - deploy.x0;
   const maxDepth = Math.max(1, Math.ceil(total / lanes) - 1);
   const depthStep = Math.min(0.55, (deployW - 0.7) / Math.max(1, maxDepth));
+  const atkPlayer = state.players[attacker];
+  const defPlayer = state.players[ts.owner];
   forceSlots.forEach((slot, i) => {
     const { unitId, udef, hp } = slot;
     const lane = i % lanes;
@@ -161,20 +166,32 @@ export function createBattle(
     // Keep every attacker strictly inside the deploy strip (never spill into NML/base).
     x = Math.min(x, deploy.x1 - 0.3);
     const pos = clampToZone(x, y, deploy);
+    const doc = doctrineCombatMult(atkPlayer, unitId);
+    const cmd = stackCommanderMult(
+      atkPlayer?.commanders,
+      fromId,
+      unitId,
+    );
+    const maxHp = Math.max(
+      1,
+      Math.round(udef.maxHp * doc.maxHp * cmd.maxHp),
+    );
+    const scaledHp = Math.min(maxHp, Math.round(hp * doc.maxHp * cmd.maxHp));
     units.push({
       id: uid("u", n++),
       unitId,
       side: "attacker",
       x: pos.x,
       y: pos.y,
-      hp,
-      maxHp: udef.maxHp,
+      hp: scaledHp,
+      maxHp,
       cooldown: 0.15 + (n % 7) * 0.1,
       anim: "move",
       animT: 0,
       alive: true,
       disabledT: 0,
       facing: 0,
+      dmgMult: doc.damage * cmd.damage,
     });
   });
 
@@ -208,20 +225,35 @@ export function createBattle(
       depth * (gW * 0.35) +
       (lane === 0 || lane === gLanes - 1 ? 0.2 : 0);
     const pos = clampToZone(x, y, garrisonZ);
+    const doc = doctrineCombatMult(defPlayer, slot.unitId);
+    const cmd = stackCommanderMult(
+      defPlayer?.commanders,
+      territoryId,
+      slot.unitId,
+    );
+    const maxHp = Math.max(
+      1,
+      Math.round(udef.maxHp * doc.maxHp * cmd.maxHp),
+    );
+    const scaledHp = Math.min(
+      maxHp,
+      Math.round(slot.hp * doc.maxHp * cmd.maxHp),
+    );
     units.push({
       id: uid("u", n++),
       unitId: slot.unitId,
       side: "defender",
       x: pos.x,
       y: pos.y,
-      hp: slot.hp,
-      maxHp: udef.maxHp,
+      hp: scaledHp,
+      maxHp,
       cooldown: 0.2 + (n % 5) * 0.08,
       anim: "idle",
       animT: 0,
       alive: true,
       disabledT: 0,
       facing: Math.PI,
+      dmgMult: doc.damage * cmd.damage,
     });
   });
 
@@ -488,7 +520,8 @@ export function tickBattle(battle: BattleState, dt: number): BattleState {
       };
       const sideFrontage =
         u.side === "attacker" ? mods.attackerFrontage : mods.defenderFrontage;
-      let scale = hpScale * mods.terrainDealt * sideFrontage;
+      let scale =
+        hpScale * mods.terrainDealt * sideFrontage * (u.dmgMult ?? 1);
       if (target.kind === "defense" || target.kind === "unit") {
         if (u.side === "attacker") scale *= mods.defenderIncoming;
       }
@@ -848,13 +881,23 @@ export function applyBattleResult(state: GameState): GameState {
       buildings,
       supplyStock: stock,
     };
-    const attacker = state.players[battle.attacker];
+    // Defending stack wiped — lose attached officers.
+    let players = state.players;
+    const defP = players[previousOwner];
+    if (defP) {
+      players = {
+        ...players,
+        [previousOwner]: cullCommandersAfterWipe(defP, tid, []),
+      };
+    }
+    const attacker = players[battle.attacker];
     // AI auto-occupies; humans get a capture screen
     if (attacker?.kind === "ai" || total === 0) {
       const disposition = aiCaptureDisposition(pending, buildings.length);
       const occupied = resolveCaptureDisposition(
         {
           ...state,
+          players,
           territories,
           battle: null,
           pendingCapture: pending,
@@ -866,6 +909,7 @@ export function applyBattleResult(state: GameState): GameState {
     }
     return {
       ...state,
+      players,
       territories,
       battle: null,
       pendingCapture: pending,
@@ -889,9 +933,23 @@ export function applyBattleResult(state: GameState): GameState {
   };
   message = `Defense of ${tid} holds.`;
 
+  let players = state.players;
+  const atkSurvivors = tallySurvivors(battle, "attacker");
+  if (originId && players[battle.attacker]) {
+    players = {
+      ...players,
+      [battle.attacker]: cullCommandersAfterWipe(
+        players[battle.attacker]!,
+        originId,
+        atkSurvivors,
+      ),
+    };
+  }
+
   return checkEliminationsAndVictory(
     {
       ...state,
+      players,
       territories,
       battle: null,
       phase: "play",

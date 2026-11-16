@@ -38,8 +38,18 @@ describe("persistent unit HP", () => {
       garrisonHp: { trooper: [20, 40] },
       buildings: [],
     });
+    const defOwner = ts.owner;
     state = {
       ...state,
+      // Neutralize doctrine HP scaling for this HP-preservation check.
+      players: {
+        ...state.players,
+        [defOwner]: {
+          ...state.players[defOwner]!,
+          doctrineId: "spectre",
+        },
+        player: { ...state.players.player!, doctrineId: "spectre" },
+      },
       territories: { ...state.territories, [enemy]: ts },
     };
     const battle = createBattle(

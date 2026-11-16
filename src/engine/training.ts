@@ -1,6 +1,7 @@
 import { GAME_LOOP } from "../data/gameLoop";
 import { getBuilding } from "../data/buildings";
 import { getUnit } from "../data/units";
+import { applyDoctrineUnitCost } from "./doctrine";
 import type { PlayerState, TerritoryState, TrainingJob } from "./state";
 import { canAfford, spend } from "./economy";
 import { syncHpArray } from "./garrisonHp";
@@ -60,6 +61,7 @@ export function hasProducerBuilding(
 export function unitTrainCost(
   unitId: string,
   count: number,
+  player?: PlayerState,
 ): {
   energy: number;
   alloy: number;
@@ -68,12 +70,13 @@ export function unitTrainCost(
 } {
   const cfg = GAME_LOOP.training.unit;
   const def = getUnit(unitId);
-  return {
+  const base = {
     energy: Math.ceil(def.cost.energy * cfg.energyMult) * count,
     alloy: Math.ceil((def.cost.alloy ?? 0) * cfg.alloyMult) * count,
     supply: Math.ceil((def.cost.supply ?? 0) * count),
     research: Math.ceil((def.cost.research ?? 0) * count),
   };
+  return player ? applyDoctrineUnitCost(player, unitId, base) : base;
 }
 
 export function canQueueUnit(
@@ -103,7 +106,7 @@ export function canQueueUnit(
     return { ok: false, reason: "Unknown unit." };
   }
   void def;
-  const cost = unitTrainCost(unitId, count);
+  const cost = unitTrainCost(unitId, count, player);
   if (!canAfford(player, cost)) return { ok: false, reason: "Insufficient resources." };
   return { ok: true };
 }
@@ -158,7 +161,7 @@ export function enqueueUnit(
   const check = canQueueUnit(player, ts, unitId, count);
   if (!check.ok) return null;
   const cfg = GAME_LOOP.training.unit;
-  const cost = unitTrainCost(unitId, count);
+  const cost = unitTrainCost(unitId, count, player);
   const spent = spend(player, cost);
   const job: TrainingJob = {
     id: `tru-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,

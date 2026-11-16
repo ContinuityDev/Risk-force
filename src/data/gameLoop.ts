@@ -253,4 +253,20 @@ export const HELP = {
     "Depots stock local supply within a radius. Armies far from supply suffer attrition and fight worse. Global supply is separate — depot output is not double-counted. Trade energy/alloy/supply on the Orbital Market.",
   stacking:
     "Battles have a frontage cap; excess units fight at reduced efficiency. Invade preview shows stacking, win odds, and strong/weak counters.",
+  doctrines:
+    "Pick a doctrine in the lobby (Vanguard, Ironclad, Skyborne, Spectre). It sets opening techs and unit cost/stat modifiers. Difficulty only scales AI budgets — no flat human tech dump.",
+  commanders:
+    "War College trains one officer per role (infantry, armor, air, cyber). Attach them to a garrison for stack buffs; they are lost if that stack is wiped.",
+  strikes:
+    "Orbital Strike Uplink, cruise launchers, and kinetic rods can hit a territory without invading — damage buildings, knock shields, cut supply. Cooldowns apply; AI uses them too.",
+  recon:
+    "Stealth recon drones and satellite relays reveal exact garrisons and research for a few turns. Without recon, enemy garrisons show as approximate ranges (not full fog of war).",
+  navalAir:
+    "Pure naval stacks move only on sea lanes/coasts. Pure air/dropship stacks can jump within range instead of hop-by-hop.",
+  theaterEvents:
+    "Random theater headlines (solar flare, refugee wave, debris field, black-market cache) apply real effects and appear in the Orbital Wire.",
+  templates:
+    "Save an invade composition as a template and apply it in one tap from the Army screen.",
+  hotseat:
+    "Hot-seat passes through a clean handoff screen between human commanders; the news feed is shared.",
 } as const;

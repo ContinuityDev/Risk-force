@@ -170,12 +170,18 @@ function tryPlaceCompact(
   occupied: Box[],
 ): PlacedMini | null {
   const box: Box = { x: baseX, y: baseY, w: size * 1.2, h: size * 1.2 };
+  // Prefer below / beside — never an above-label offset that covers glyphs.
   const offsets = [
     { x: 0, y: 0 },
     { x: 0, y: size + gap },
-    { x: 0, y: -(size + gap) },
     { x: size + gap, y: 0 },
     { x: -(size + gap), y: 0 },
+    { x: size + gap, y: size + gap },
+    { x: -(size + gap), y: size + gap },
+    { x: 0, y: (size + gap) * 2 },
+    { x: (size + gap) * 2, y: (size + gap) * 2 },
+    { x: -(size + gap) * 2, y: (size + gap) * 2 },
+    { x: 0, y: (size + gap) * 3.5 },
   ];
   for (const off of offsets) {
     const b: Box = { x: baseX + off.x, y: baseY + off.y, w: box.w, h: box.h };
@@ -202,7 +208,30 @@ function tryPlaceCompact(
       count: buildings.length,
     };
   }
-  return null;
+  // Last resort: far below the pole, ignore soft pad so a marker always shows.
+  const fy = baseY + (size + gap) * 4.5;
+  const last: Box = { x: baseX, y: fy, w: box.w, h: box.h };
+  occupied.push(last);
+  let spriteId = "building-nexus";
+  try {
+    spriteId = getBuilding(sortBuildings(buildings)[0]!.buildingId).sprite.id;
+  } catch {
+    /* */
+  }
+  return {
+    key: `${t.id}:compact`,
+    territoryId: t.id,
+    buildingId: "command_nexus",
+    spriteId,
+    spriteUrl: getSpriteUrl(spriteId),
+    x: last.x,
+    y: last.y,
+    size,
+    constructing: false,
+    progress: 1,
+    compact: true,
+    count: buildings.length,
+  };
 }
 
 /** Grid positions centered on (cx, cy), row-major. */
@@ -243,11 +272,12 @@ export function layoutBuildingMinis(
   const size = iconWorldSize(zoomScale, cam.w, tier);
   const gap = Math.max(0.8, size * 0.16);
   const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
+  // Inflate label boxes so building pads never cover name glyphs.
   const occupied: Box[] = labels.map((l) => ({
     x: l.x,
     y: l.y,
-    w: l.w,
-    h: l.h,
+    w: Math.max(l.w * 1.35, size * 2.4, 10),
+    h: Math.max(l.h * 1.55, size * 0.95, 4),
   }));
   const out: PlacedMini[] = [];
 
@@ -283,93 +313,105 @@ export function layoutBuildingMinis(
     }
 
     const sorted = sortBuildings(buildings);
-    // Mid on small Europe plots: one compact pad, not a 3-icon stack.
+    // Mid on small plots: one compact pad. Larger territories keep a short row.
     if (tier === "mid" && t.area < 0.012) {
       const compact = tryPlaceCompact(
         t,
         buildings,
         baseX,
-        belowY,
-        Math.max(size * 0.85, 1.6),
+        belowY + size * 0.35,
+        Math.max(size * 0.8, 1.5),
         gap,
         occupied,
       );
       if (compact) out.push(compact);
       continue;
     }
+    // Mid: ≤3 pads. Deep: up to full cluster — always below the label.
     const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
-
-    // Deep: 2–3 column grid/cluster. Mid: single row (or 2-col if many).
     const cols =
       tier === "deep"
-        ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(shown.length + (moreCount ? 1 : 0)))))
+        ? Math.min(
+            3,
+            Math.max(2, Math.ceil(Math.sqrt(shown.length + (moreCount ? 1 : 0)))),
+          )
         : shown.length + (moreCount ? 1 : 0) <= 3
           ? shown.length + (moreCount ? 1 : 0)
           : 3;
 
     const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
+    // Prefer further below / never sit on the label. Side lanes via baseX shift.
     const yAnchors = [
-      belowY + (tier === "deep" ? size * 0.35 : 0),
-      belowY + size * 1.2,
-      belowY + size * 2.2,
-      (lbl?.y ?? ay) - (lbl?.h ?? size) / 2 - gap - size,
+      belowY + size * 0.45,
+      belowY + size * 1.35,
+      belowY + size * 2.4,
     ];
+    const xShifts = [0, size * 1.4, -size * 1.4, size * 2.2, -size * 2.2];
 
     let placed: PlacedMini[] | null = null;
 
-    for (const cy of yAnchors) {
-      const slots = gridSlots(slotCount, cols, size, gap, baseX, cy);
-      const trial: PlacedMini[] = [];
-      const trialBoxes: Box[] = [];
-      let ok = true;
+    outer: for (const xShift of xShifts) {
+      for (const cy of yAnchors) {
+        const slots = gridSlots(
+          slotCount,
+          cols,
+          size,
+          gap,
+          baseX + xShift,
+          cy,
+        );
+        const trial: PlacedMini[] = [];
+        const trialBoxes: Box[] = [];
+        let ok = true;
 
-      for (let i = 0; i < shown.length; i++) {
-        const slot = slots[i]!;
-        const box: Box = { x: slot.x, y: slot.y, w: size, h: size };
-        if (
-          occupied.some((o) => overlaps(box, o, gap * 0.45)) ||
-          trialBoxes.some((o) => overlaps(box, o, gap * 0.3))
-        ) {
-          ok = false;
-          break;
-        }
-        const mini = toMini(t.id, shown[i]!, slot.x, slot.y, size);
-        if (!mini) continue;
-        trialBoxes.push(box);
-        trial.push(mini);
-      }
-      if (!ok || trial.length === 0) continue;
-
-      if (moreCount > 0 && slots[shown.length]) {
-        const slot = slots[shown.length]!;
-        const moreSize = size * 0.85;
-        const box: Box = { x: slot.x, y: slot.y, w: moreSize, h: moreSize };
-        if (
-          !occupied.some((o) => overlaps(box, o, gap * 0.45)) &&
-          !trialBoxes.some((o) => overlaps(box, o, gap * 0.3))
-        ) {
-          trial.push({
-            key: `${t.id}:more`,
-            territoryId: t.id,
-            buildingId: "_more",
-            spriteId: "",
-            spriteUrl: "",
-            x: slot.x,
-            y: slot.y,
-            size: moreSize,
-            constructing: false,
-            progress: 1,
-            more: moreCount,
-          });
+        for (let i = 0; i < shown.length; i++) {
+          const slot = slots[i]!;
+          const box: Box = { x: slot.x, y: slot.y, w: size, h: size };
+          if (
+            occupied.some((o) => overlaps(box, o, gap * 0.55)) ||
+            trialBoxes.some((o) => overlaps(box, o, gap * 0.3))
+          ) {
+            ok = false;
+            break;
+          }
+          const mini = toMini(t.id, shown[i]!, slot.x, slot.y, size);
+          if (!mini) continue;
           trialBoxes.push(box);
+          trial.push(mini);
         }
-      }
+        if (!ok || trial.length === 0) continue;
 
-      placed = trial;
-      for (const box of trialBoxes) occupied.push(box);
-      break;
+        if (moreCount > 0 && slots[shown.length]) {
+          const slot = slots[shown.length]!;
+          const moreSize = size * 0.85;
+          const box: Box = { x: slot.x, y: slot.y, w: moreSize, h: moreSize };
+          if (
+            !occupied.some((o) => overlaps(box, o, gap * 0.55)) &&
+            !trialBoxes.some((o) => overlaps(box, o, gap * 0.3))
+          ) {
+            trial.push({
+              key: `${t.id}:more`,
+              territoryId: t.id,
+              buildingId: "_more",
+              spriteId: "",
+              spriteUrl: "",
+              x: slot.x,
+              y: slot.y,
+              size: moreSize,
+              constructing: false,
+              progress: 1,
+              more: moreCount,
+            });
+            trialBoxes.push(box);
+          }
+        }
+
+        placed = trial;
+        for (const box of trialBoxes) occupied.push(box);
+        break outer;
+      }
     }
 
     if (placed) {

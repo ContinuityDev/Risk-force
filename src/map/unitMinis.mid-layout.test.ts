@@ -55,7 +55,7 @@ function greenlandState(): Record<string, TerritoryState> {
 }
 
 describe("unitMinis mid/deep dense cores", () => {
-  it("keeps a multi-type mid grid beside Greenland buildings without overlap", () => {
+  it("keeps a multi-type mid grid beside Greenland buildings without covering the label", () => {
     const greenland = TERRITORIES.find((t) => t.id === "greenland")!;
     const cam = {
       x: greenland.label.x - 160,
@@ -96,8 +96,12 @@ describe("unitMinis mid/deep dense cores", () => {
     expect(typed.length).toBeGreaterThanOrEqual(3);
     expect(units.some((u) => u.more && u.more > 0)).toBe(true);
 
+    const lbl = labels[0]!;
     for (const u of units) {
       const ub = { x: u.x, y: u.y, w: u.size, h: u.size };
+      expect(
+        overlaps(ub, { x: lbl.x, y: lbl.y, w: lbl.w, h: lbl.h }, 0.15),
+      ).toBe(false);
       for (const b of bldgs) {
         expect(
           overlaps(ub, { x: b.x, y: b.y, w: b.size, h: b.size }, 0.2),
@@ -197,6 +201,46 @@ describe("unitMinis mid/deep dense cores", () => {
     }
     for (const n of byTerritory.values()) {
       expect(n).toBe(1);
+    }
+  });
+
+  it("keeps mid-zoom chips off long Asia/USA label glyphs", () => {
+    const ids = ["china_west", "kazakhstan", "india_east", "usa_west"];
+    const territories = ids.map((id) => TERRITORIES.find((t) => t.id === id)!);
+    const state: Record<string, TerritoryState> = {};
+    for (const t of territories) {
+      state[t.id] = {
+        owner: "player",
+        population: 12,
+        workers: 4,
+        buildings: [],
+        supplyStock: 0,
+        trainingQueue: [],
+        garrisonHp: {},
+        control: "core",
+        occupiedTurns: 0,
+        garrison: { trooper: 5, hover_tank: 2 },
+      };
+    }
+    // Mid zoom over central Asia / USA west.
+    const cam = { x: 480, y: 90, w: 380, h: 190 };
+    const zoomScale = cam.w / 1000;
+    expect(miniZoomTier(zoomScale)).toBe("mid");
+    const labels = territories.map((t) => ({
+      id: t.id,
+      x: t.label.x,
+      y: t.label.y,
+      // Approximate full-name widths at mid zoom.
+      w: Math.max(22, t.name.length * 2.1),
+      h: 8,
+    }));
+    const units = layoutUnitMinis(territories, state, zoomScale, cam, labels, []);
+    for (const u of units) {
+      const ub = { x: u.x, y: u.y, w: u.size, h: u.size };
+      const lbl = labels.find((l) => l.id === u.territoryId)!;
+      expect(
+        overlaps(ub, { x: lbl.x, y: lbl.y, w: lbl.w, h: lbl.h }, 0.15),
+      ).toBe(false);
     }
   });
 });
