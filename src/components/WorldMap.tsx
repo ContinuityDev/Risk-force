@@ -51,12 +51,22 @@ import {
   type MapChromeFocus,
 } from "../map/mapChrome";
 import {
+  getTerritoryAnchors,
+  groundedOccupancyBox,
+  marchLandPoint,
+} from "../map/territoryAnchors";
+import {
   garrisonFingerprint,
   layoutTransitUnitMinis,
   layoutUnitMinis,
   transitFingerprint,
 } from "../map/unitMinis";
+import { getUnit } from "../data/units";
 import { Drawer } from "./Drawer";
+import {
+  GroundedBuildingMini,
+  GroundedUnitMini,
+} from "./GroundedMapMinis";
 import {
   InvadeFromPanel,
   type InvadeOriginPlan,
@@ -107,7 +117,9 @@ function hexToRgba(hex: string, a: number): string {
 }
 
 function approxTextWidth(text: string, size: number): number {
-  return text.length * size * 0.56 + 4;
+  // Slightly wider estimate so long names (Connecticut / New Hampshire)
+  // cull instead of colliding; tracking is 0 so factor stays modest.
+  return text.length * size * 0.58 + 3;
 }
 
 function overlaps(
@@ -196,9 +208,10 @@ function layoutLabels(
   for (const t of ranked) {
     const full = t.name;
     const short = territoryAbbrev(t.id, t.name);
+    // Floor screen px a bit higher so long names stay whole words on 844×390.
     const preferScreen = Math.min(
-      13,
-      Math.max(9, 9 + Math.sqrt(t.area) * 10),
+      14,
+      Math.max(10, 10 + Math.sqrt(t.area) * 10),
     );
     // World zoom: abbreviations only (TX / CA / Britain), so the full USA
     // frame stays readable without drowning in full state names.
@@ -441,12 +454,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     [state.armiesInTransit],
   );
   const unitMinis = useMemo(() => {
-    const occupied = buildingMinis.map((m) => ({
-      x: m.x,
-      y: m.y,
-      w: m.size,
-      h: m.size,
-    }));
+    const occupied = buildingMinis.map((m) =>
+      groundedOccupancyBox(m.x, m.y, m.size),
+    );
     return layoutUnitMinis(
       TERRITORIES,
       state.territories,
@@ -828,14 +838,52 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
-          <filter id="rf-label-halo" x="-40%" y="-50%" width="180%" height="200%">
+          <filter id="rf-label-halo" x="-30%" y="-40%" width="160%" height="180%">
             <feDropShadow
               dx="0"
               dy="0"
-              stdDeviation={Math.max(0.35, 0.9 * zoomScale)}
+              stdDeviation={Math.max(0.22, 0.55 * zoomScale)}
               floodColor="#040a10"
-              floodOpacity="0.92"
+              floodOpacity="0.75"
             />
+          </filter>
+          {/* Soft contact shadow under mini feet (drawn in underlay layer).
+              Blur is tiny in user units so it doesn't dwarf the ellipse. */}
+          <filter
+            id="rf-contact-shadow"
+            x="-80%"
+            y="-80%"
+            width="260%"
+            height="260%"
+            filterUnits="objectBoundingBox"
+            primitiveUnits="objectBoundingBox"
+            colorInterpolationFilters="sRGB"
+          >
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.18" />
+          </filter>
+          {/* Knock near-black sprite backplates to transparent (sprites are on #000). */}
+          <filter
+            id="rf-sprite-knockout"
+            colorInterpolationFilters="sRGB"
+            x="-8%"
+            y="-8%"
+            width="116%"
+            height="116%"
+          >
+            <feColorMatrix
+              in="SourceGraphic"
+              type="matrix"
+              values="
+                1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                5.5 5.5 5.5 0 -1.15"
+              result="knock"
+            />
+            <feComponentTransfer in="knock" result="soft">
+              <feFuncA type="discrete" tableValues="0 1" />
+            </feComponentTransfer>
+            <feComposite in="SourceGraphic" in2="soft" operator="in" />
           </filter>
           <marker
             id="rf-ai-arrow"
@@ -971,19 +1019,33 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               if (!from || !to) return null;
               const progress =
                 1 - army.turnsRemaining / Math.max(1, army.totalTurns);
-              const x1 = from.label.x;
-              const y1 = from.label.y;
-              const x2 = to.label.x;
-              const y2 = to.label.y;
-              const mx = x1 + (x2 - x1) * Math.min(0.85, 0.15 + progress * 0.7);
-              const my =
-                y1 + (y2 - y1) * Math.min(0.85, 0.15 + progress * 0.7) - 6;
+              const naval = army.force.every((f) => {
+                try {
+                  return getUnit(f.unitId).role === "naval";
+                } catch {
+                  return false;
+                }
+              });
+              const a0 = getTerritoryAnchors(from).pole;
+              const a1 = getTerritoryAnchors(to).pole;
+              const mid = marchLandPoint(
+                from,
+                to,
+                Math.min(0.85, 0.15 + progress * 0.7),
+                naval,
+              );
+              const x1 = a0.x;
+              const y1 = a0.y;
+              const x2 = a1.x;
+              const y2 = a1.y;
+              const mx = mid.x;
+              const my = mid.y;
               const col = factionColor(army.owner);
               const headCount = army.force.reduce((s, f) => s + f.count, 0);
               return (
                 <g key={army.id}>
                   <path
-                    d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${(y1 + y2) / 2 - 10} ${x2} ${y2}`}
+                    d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${(y1 + y2) / 2 - (naval ? 10 : 4)} ${x2} ${y2}`}
                     fill="none"
                     stroke={col}
                     strokeWidth={Math.max(1.1, 2 * zoomScale)}
@@ -991,14 +1053,31 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     opacity="0.85"
                     markerEnd="url(#rf-march-arrow)"
                   />
-                  <circle cx={mx} cy={my} r={Math.max(2.2, 4.2 * zoomScale)} fill={col} />
+                  {/* Grounded march marker — no disc badge */}
+                  <ellipse
+                    cx={mx}
+                    cy={my + 1.2 * zoomScale}
+                    rx={Math.max(1.6, 3.2 * zoomScale)}
+                    ry={Math.max(0.55, 1.1 * zoomScale)}
+                    fill="rgba(4,8,12,0.5)"
+                  />
+                  <line
+                    x1={mx - 2.4 * zoomScale}
+                    y1={my + 1.4 * zoomScale}
+                    x2={mx + 2.4 * zoomScale}
+                    y2={my + 1.4 * zoomScale}
+                    stroke={col}
+                    strokeWidth={Math.max(0.35, 0.7 * zoomScale)}
+                    strokeLinecap="round"
+                    opacity={0.85}
+                  />
                   <text
                     x={mx}
-                    y={my - 6 * zoomScale}
+                    y={my - 3.2 * zoomScale}
                     textAnchor="middle"
                     className="rf-map__eta"
-                    fontSize={8.5 * zoomScale}
-                    fill="#e8eef4"
+                    fontSize={7.2 * zoomScale}
+                    fill="rgba(232,238,244,0.92)"
                   >
                     ETA {army.turnsRemaining} · {headCount}
                   </text>
@@ -1439,123 +1518,82 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </g>
         )}
 
+        {/* Contact shadows underlay — every shadow below every sprite so
+            neighbouring minis never paint a shadow over another piece. */}
+        {(unitMinis.length > 0 ||
+          transitMinis.length > 0 ||
+          buildingMinis.length > 0) && (
+          <g className="rf-map__mini-shadows" pointerEvents="none">
+            {[...unitMinis, ...transitMinis].map((m) => {
+              const col = factionColor(
+                (m.owner ?? "neutral") as import("../data/types").FactionId,
+              );
+              return (
+                <g key={`sh-${m.key}`} transform={`translate(${m.x}, ${m.y})`}>
+                  <GroundedUnitMini
+                    territoryId={m.territoryId ?? m.armyId ?? ""}
+                    size={m.size}
+                    zoomScale={zoomScale}
+                    factionHex={col}
+                    count={m.count}
+                    compact={m.compact}
+                    transit={m.transit}
+                    more={m.more}
+                    shadowOnly
+                  />
+                </g>
+              );
+            })}
+            {buildingMinis.map((m) => {
+              if (m.compact && (m.count == null || m.count <= 0)) return null;
+              if (m.more != null && m.more <= 0) return null;
+              const owner =
+                state.territories[m.territoryId]?.owner ?? "neutral";
+              const col = factionColor(owner);
+              return (
+                <g
+                  key={`sh-${m.key}`}
+                  transform={`translate(${m.x}, ${m.y})`}
+                >
+                  <GroundedBuildingMini
+                    territoryId={m.territoryId}
+                    clipId={`rf-bldg-sh-${m.key}`}
+                    size={m.size}
+                    zoomScale={zoomScale}
+                    factionHex={col}
+                    count={m.count}
+                    compact={m.compact}
+                    constructing={m.constructing}
+                    progress={m.progress}
+                    more={m.more}
+                    shadowOnly
+                  />
+                </g>
+              );
+            })}
+          </g>
+        )}
+
         {(unitMinis.length > 0 || transitMinis.length > 0) && (
           <g className="rf-map__units">
             {[...unitMinis, ...transitMinis].map((m) => {
-              const col = factionColor((m.owner ?? "neutral") as import("../data/types").FactionId);
-              const half = m.size / 2;
-              const strokeW = Math.max(0.35, 0.85 * zoomScale);
-              if (m.more != null) {
-                if (m.more <= 0) return null;
-                return (
-                  <g
-                    key={m.key}
-                    className="rf-map__unit-more"
-                    transform={`translate(${m.x}, ${m.y})`}
-                  >
-                    <circle
-                      className="rf-map__unit-hit"
-                      data-territory-id={m.territoryId}
-                      r={half}
-                      fill="rgba(8,14,20,0.82)"
-                      stroke={col}
-                      strokeWidth={strokeW}
-                    />
-                    <text
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize={Math.max(3.5, m.size * 0.45)}
-                      fill="#e8eef4"
-                      pointerEvents="none"
-                    >
-                      +{m.more}
-                    </text>
-                  </g>
-                );
-              }
-              // Circular chrome so troop markers never read as empty building pads.
-              const r = half;
+              const col = factionColor(
+                (m.owner ?? "neutral") as import("../data/types").FactionId,
+              );
               return (
-                <g
-                  key={m.key}
-                  className={`rf-map__unit${m.compact ? " is-compact" : ""}${
-                    m.transit ? " is-transit" : ""
-                  }`}
-                  transform={`translate(${m.x}, ${m.y})`}
-                  opacity={m.transit ? 0.92 : 1}
-                >
-                  <circle
-                    className="rf-map__unit-hit"
-                    data-territory-id={m.territoryId}
-                    r={r + strokeW}
-                    fill="transparent"
+                <g key={m.key} transform={`translate(${m.x}, ${m.y})`}>
+                  <GroundedUnitMini
+                    territoryId={m.territoryId ?? m.armyId ?? ""}
+                    size={m.size}
+                    zoomScale={zoomScale}
+                    factionHex={col}
+                    spriteUrl={m.spriteUrl || undefined}
+                    count={m.count}
+                    compact={m.compact}
+                    transit={m.transit}
+                    more={m.more}
+                    omitShadow
                   />
-                  <circle
-                    r={r}
-                    fill={
-                      m.compact
-                        ? "rgba(10,16,24,0.94)"
-                        : "rgba(6,10,16,0.8)"
-                    }
-                    stroke={col}
-                    strokeWidth={
-                      m.compact
-                        ? Math.max(strokeW * 1.3, 1.25 * zoomScale)
-                        : Math.max(strokeW, 1.05 * zoomScale)
-                    }
-                    strokeDasharray={m.transit ? "2 1.5" : undefined}
-                    pointerEvents="none"
-                  />
-                  <circle
-                    r={Math.max(0.4, r * (m.compact ? 0.16 : 0.1))}
-                    cx={-r * 0.62}
-                    cy={-r * 0.62}
-                    fill={col}
-                    opacity={0.95}
-                    pointerEvents="none"
-                  />
-                  {m.spriteUrl ? (
-                    <image
-                      href={m.spriteUrl}
-                      x={-half * 0.82}
-                      y={-half * (m.compact ? 0.72 : 0.78)}
-                      width={m.size * 0.82}
-                      height={m.size * (m.compact ? 0.78 : 0.88)}
-                      preserveAspectRatio="xMidYMid meet"
-                      pointerEvents="none"
-                    />
-                  ) : null}
-                  {m.count > 0 && (
-                    <g className="rf-map__unit-badge" pointerEvents="none">
-                      <circle
-                        cx={half * 0.68}
-                        cy={half * 0.68}
-                        r={
-                          m.compact
-                            ? Math.max(0.95, m.size * 0.14)
-                            : Math.max(0.55, m.size * 0.085)
-                        }
-                        fill={col}
-                        stroke="#f2f7fa"
-                        strokeWidth={Math.max(0.15, 0.3 * zoomScale)}
-                      />
-                      <text
-                        x={half * 0.68}
-                        y={half * 0.68}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        fontSize={
-                          m.compact
-                            ? Math.max(1.9, m.size * 0.15)
-                            : Math.max(1.45, m.size * 0.1)
-                        }
-                        fill="#0a1218"
-                        fontWeight="700"
-                      >
-                        {m.count > 9 ? "9+" : m.count}
-                      </text>
-                    </g>
-                  )}
                 </g>
               );
             })}
@@ -1565,142 +1603,27 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         {buildingMinis.length > 0 && (
           <g className="rf-map__bldgs">
             {buildingMinis.map((m) => {
-              // Belt-and-suspenders: never paint empty compact / +0 leftovers.
               if (m.compact && (m.count == null || m.count <= 0)) return null;
               if (m.more != null && m.more <= 0) return null;
               const owner =
                 state.territories[m.territoryId]?.owner ?? "neutral";
               const col = factionColor(owner);
-              const half = m.size / 2;
-              const strokeW = Math.max(0.35, 0.9 * zoomScale);
-              if (m.more != null) {
-                return (
-                  <g
-                    key={m.key}
-                    className="rf-map__bldg-more"
-                    transform={`translate(${m.x}, ${m.y})`}
-                  >
-                    <rect
-                      className="rf-map__bldg-hit"
-                      data-territory-id={m.territoryId}
-                      x={-half}
-                      y={-half}
-                      width={m.size}
-                      height={m.size}
-                      rx={Math.max(0.4, 1.2 * zoomScale)}
-                      fill="rgba(8,14,20,0.82)"
-                      stroke={col}
-                      strokeWidth={strokeW}
-                    />
-                    <text
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      className="rf-map__bldg-more-txt"
-                      fontSize={Math.max(4, m.size * 0.48)}
-                      fill="#e8eef4"
-                      pointerEvents="none"
-                    >
-                      +{m.more}
-                    </text>
-                  </g>
-                );
-              }
-              const r = half + strokeW;
-              const circ = 2 * Math.PI * r;
-              const dash = Math.max(0.01, m.progress) * circ;
               return (
-                <g
-                  key={m.key}
-                  className={`rf-map__bldg${m.constructing ? " is-building" : ""}${
-                    m.compact ? " is-compact" : ""
-                  }`}
-                  transform={`translate(${m.x}, ${m.y})`}
-                  opacity={m.constructing ? 0.62 : 1}
-                >
-                  <rect
-                    className="rf-map__bldg-hit"
-                    data-territory-id={m.territoryId}
-                    x={-half - strokeW}
-                    y={-half - strokeW}
-                    width={m.size + strokeW * 2}
-                    height={m.size + strokeW * 2}
-                    fill="transparent"
+                <g key={m.key} transform={`translate(${m.x}, ${m.y})`}>
+                  <GroundedBuildingMini
+                    territoryId={m.territoryId}
+                    clipId={`rf-bldg-clip-${m.key}`}
+                    size={m.size}
+                    zoomScale={zoomScale}
+                    factionHex={col}
+                    spriteUrl={m.spriteUrl || undefined}
+                    count={m.count}
+                    compact={m.compact}
+                    constructing={m.constructing}
+                    progress={m.progress}
+                    more={m.more}
+                    omitShadow
                   />
-                  <rect
-                    x={-half}
-                    y={-half}
-                    width={m.size}
-                    height={m.size}
-                    rx={Math.max(0.35, 1.1 * zoomScale)}
-                    fill={
-                      m.compact ? "rgba(10,16,24,0.94)" : "rgba(6,10,16,0.82)"
-                    }
-                    stroke={col}
-                    strokeWidth={
-                      m.compact
-                        ? Math.max(strokeW * 1.35, 1.4 * zoomScale)
-                        : Math.max(strokeW, 1.15 * zoomScale)
-                    }
-                    pointerEvents="none"
-                  />
-                  <rect
-                    x={-half}
-                    y={-half}
-                    width={m.size}
-                    height={Math.max(0.55, m.size * (m.compact ? 0.2 : 0.12))}
-                    rx={Math.max(0.35, 1.1 * zoomScale)}
-                    fill={col}
-                    opacity={m.compact ? 1 : 0.9}
-                    pointerEvents="none"
-                  />
-                  {m.spriteUrl ? (
-                    <image
-                      href={m.spriteUrl}
-                      x={-half * 0.9}
-                      y={-half * (m.compact ? 0.72 : 0.78)}
-                      width={m.size * 0.9}
-                      height={m.size * (m.compact ? 0.72 : 0.82)}
-                      preserveAspectRatio="xMidYMid meet"
-                      pointerEvents="none"
-                    />
-                  ) : null}
-                  {m.constructing && (
-                    <circle
-                      className="rf-map__bldg-ring"
-                      r={r}
-                      fill="none"
-                      stroke={col}
-                      strokeWidth={Math.max(0.45, 1.2 * zoomScale)}
-                      strokeDasharray={`${dash} ${circ}`}
-                      strokeLinecap="round"
-                      transform="rotate(-90)"
-                      pointerEvents="none"
-                      opacity="0.95"
-                    />
-                  )}
-                  {m.compact && m.count != null && m.count > 0 && (
-                    <g pointerEvents="none">
-                      <circle
-                        cx={half * 0.78}
-                        cy={-half * 0.78}
-                        r={Math.max(2.6, m.size * 0.36)}
-                        fill={col}
-                        stroke="#f2f7fa"
-                        strokeWidth={Math.max(0.35, 0.7 * zoomScale)}
-                      />
-                      <text
-                        x={half * 0.78}
-                        y={-half * 0.78}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        fontSize={Math.max(4, m.size * 0.38)}
-                        fill="#0a1218"
-                        fontWeight="700"
-                      >
-                        {m.count > 9 ? "9+" : m.count}
-                      </text>
-                    </g>
-                  )}
                 </g>
               );
             })}
@@ -1806,6 +1729,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               textAnchor="middle"
               dominantBaseline="middle"
               filter="url(#rf-label-halo)"
+              xmlSpace="preserve"
             >
               {lbl.text}
             </text>
