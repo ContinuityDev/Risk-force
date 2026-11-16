@@ -33,7 +33,11 @@ import { createInitialState, createMenuState } from "./init";
 import { regenerateNeutralGarrisons } from "./neutrals";
 import { payInvasionSupply } from "./logistics";
 import { applyMarketTrade } from "./market";
-import { startArmyMove, tickArmiesForPlayer } from "./movement";
+import {
+  canOrderMove,
+  startArmyMove,
+  tickArmiesForPlayer,
+} from "./movement";
 import {
   resolveCaptureDisposition,
   stabilizeTerritory,
@@ -578,17 +582,14 @@ export function reduce(state: GameState, action: GameAction): GameState {
       if (!to || to.owner === pid) {
         return { ...state, message: "Pick an enemy territory." };
       }
-      const fromDef = getTerritory(fromId);
-      if (!fromDef.neighbors.includes(toId)) {
-        return { ...state, message: "Target must be adjacent." };
-      }
       if (!force.length || force.every((f) => f.count <= 0)) {
         return { ...state, message: "Assemble a strike force." };
       }
-      for (const slot of force) {
-        if ((from.garrison[slot.unitId] ?? 0) < slot.count) {
-          return { ...state, message: "Not enough units in local garrison." };
-        }
+      // Adjacency for ground, sea lanes for naval, jump range for air —
+      // same rules as army moves (multi-turn travel via startArmyMove).
+      const reach = canOrderMove(state, pid, fromId, toId, force);
+      if (!reach.ok) {
+        return { ...state, message: reach.reason };
       }
       const supplyNeed = forceSupplyCost(
         force,

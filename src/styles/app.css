@@ -757,6 +757,35 @@
   font-size: 0.72rem;
 }
 
+.rf-map__legend-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rf-map__legend-toggle .rf-label {
+  margin: 0;
+}
+
+.rf-map__legend-chevron {
+  opacity: 0.7;
+  font-size: 0.7rem;
+}
+
+.rf-map__legend.is-collapsed {
+  min-width: auto;
+  padding: 0.4rem 0.55rem;
+}
+
 .rf-map__legend ul {
   margin: 0.35rem 0 0;
   padding: 0;
@@ -939,11 +968,7 @@
 }
 
 .rf-map__territory.is-neutral {
-  fill-opacity: 0.9;
-}
-
-.rf-map__territory-hatch {
-  pointer-events: none;
+  fill-opacity: 0.62;
 }
 
 .rf-map__territory:hover {
@@ -953,7 +978,7 @@
 }
 
 .rf-map__sheet-owner.is-neutral {
-  color: #c9b896;
+  color: #a8b0ba;
   letter-spacing: 0.04em;
 }
 

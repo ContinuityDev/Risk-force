@@ -141,29 +141,33 @@ function camToViewBox(cam: Camera): string {
 }
 
 /**
- * Progressive labels: invisible at world zoom; as you zoom in, larger
- * territories unlock first. Collision → shrink / abbreviate; never hide
- * an unlocked label that fits. Hover/selection names live in the panel.
+ * Progressive labels:
+ * - World zoom: 2-letter / short abbreviations for every plot that fits.
+ * - Mid/deep: larger territories unlock first; prefer full names, fall back
+ *   to abbreviations. Collision → shrink / abbreviate; never hide an unlocked
+ *   label that fits. Hover/selection names live in the panel.
  */
 function layoutLabels(
   territories: TerritoryDef[],
   zoomScale: number,
   cam: Camera,
 ): PlacedLabel[] {
-  if (zoomScale >= 0.95) return [];
+  const worldZoom = zoomScale >= 0.85;
 
   const areas = territories.map((t) => t.area).sort((a, b) => a - b);
   const median = areas[Math.floor(areas.length / 2)] ?? 0.01;
-  let minRel = Infinity;
-  for (const t of LABEL_REL_THRESHOLDS) {
-    if (zoomScale <= t.maxScale) minRel = t.minRel;
+  let minRel = 0;
+  if (!worldZoom) {
+    minRel = Infinity;
+    for (const t of LABEL_REL_THRESHOLDS) {
+      if (zoomScale <= t.maxScale) minRel = t.minRel;
+    }
+    if (!Number.isFinite(minRel)) return [];
   }
-  if (!Number.isFinite(minRel)) return [];
   const minArea = median * minRel;
 
   const visible = territories.filter((t) => {
-    if (t.area < minArea) return false;
-    // Only label if anchor is roughly in the current camera
+    if (!worldZoom && t.area < minArea) return false;
     return (
       t.label.x >= cam.x - 20 &&
       t.label.x <= cam.x + cam.w + 20 &&
@@ -178,18 +182,25 @@ function layoutLabels(
   for (const t of ranked) {
     const full = t.name;
     const short = territoryAbbrev(t.id, t.name);
-    // Prefer short names that don't wrap / split mid-word
     const preferScreen = Math.min(
       13,
       Math.max(9, 9 + Math.sqrt(t.area) * 10),
     );
-    const candidates: Array<{ text: string; screenPx: number }> = [
-      { text: full, screenPx: preferScreen },
-      { text: full, screenPx: 10 },
-      { text: short, screenPx: preferScreen },
-      { text: short, screenPx: 9 },
-      { text: short, screenPx: 8 },
-    ];
+    // World zoom: abbreviations only (TX / CA / Britain), so the full USA
+    // frame stays readable without drowning in full state names.
+    const candidates: Array<{ text: string; screenPx: number }> = worldZoom
+      ? [
+          { text: short, screenPx: short.length <= 3 ? 9 : 8 },
+          { text: short, screenPx: 7.5 },
+          { text: short, screenPx: 6.5 },
+        ]
+      : [
+          { text: full, screenPx: preferScreen },
+          { text: full, screenPx: 10 },
+          { text: short, screenPx: preferScreen },
+          { text: short, screenPx: 9 },
+          { text: short, screenPx: 8 },
+        ];
 
     let chosen: PlacedLabel | null = null;
     for (const c of candidates) {
@@ -203,12 +214,12 @@ function layoutLabels(
         w: approxTextWidth(c.text, size),
         h: size + 2 * zoomScale,
       };
-      if (!placed.some((p) => overlaps(cand, p))) {
+      const pad = worldZoom ? 1.2 : 3;
+      if (!placed.some((p) => overlaps(cand, p, pad))) {
         chosen = cand;
         break;
       }
     }
-    // If nothing fits without collision, skip (zoom further will free space)
     if (chosen) placed.push(chosen);
   }
   return placed;
@@ -218,8 +229,11 @@ const PAN_SELECT_SLOP_PX = 10;
 
 export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  /** Continent bonuses drawer — collapsed by default on short landscape. */
-  const [legendOpen, setLegendOpen] = useState(false);
+  /** Continent bonuses — open on large desktops; collapsed elsewhere / toggle. */
+  const [legendOpen, setLegendOpen] = useState(() =>
+    typeof window !== "undefined" &&
+    window.matchMedia("(min-width: 1280px) and (min-height: 800px)").matches,
+  );
   /** Selected-territory right sheet (always used on short landscape). */
   const [detailOpen, setDetailOpen] = useState(false);
   const [shortLandscape, setShortLandscape] = useState(false);
@@ -667,21 +681,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               opacity="0.1"
             />
           </pattern>
-          <pattern
-            id="rf-neutral-hatch"
-            width="7"
-            height="7"
-            patternUnits="userSpaceOnUse"
-            patternTransform="rotate(38)"
-          >
-            <rect width="7" height="7" fill="transparent" />
-            <path
-              d="M0 0 L0 7"
-              stroke="#5c5346"
-              strokeWidth="1.15"
-              opacity="0.42"
-            />
-          </pattern>
           <filter id="rf-land-glow" x="-8%" y="-8%" width="116%" height="116%">
             <feGaussianBlur stdDeviation="1.2" result="blur" />
             <feMerge>
@@ -891,29 +890,16 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 className={`rf-map__territory${isSelected ? " is-selected" : ""}${isNeutral ? " is-neutral" : ""}`}
                 data-territory-id={t.id}
                 data-owner={owner}
-                fill={hexToRgba(
-                  base,
-                  isNeutral ? (isSelected ? 0.88 : 0.78) : isSelected ? 0.9 : 0.82,
-                )}
+                fill={hexToRgba(base, isNeutral ? (isSelected ? 0.72 : 0.55) : isSelected ? 0.9 : 0.82)}
                 stroke={
-                  isSelected ? "#e8f4f8" : isNeutral ? "#8a7a5c" : "#7eb6c9"
+                  isSelected ? "#e8f4f8" : isNeutral ? "#9aa3ad" : "#7eb6c9"
                 }
                 strokeDasharray={isNeutral ? `${2.2 * zoomScale} ${1.6 * zoomScale}` : undefined}
                 // Counter-scale: strokeWidth in user units × zoomScale ≈ constant screen px.
-                strokeWidth={(isSelected ? 1.4 : isNeutral ? 1.05 : 1.05) * zoomScale}
+                strokeWidth={(isSelected ? 1.4 : isNeutral ? 0.95 : 1.05) * zoomScale}
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
-              {isNeutral && (
-                <path
-                  d={t.path}
-                  className="rf-map__territory-hatch"
-                  fill="url(#rf-neutral-hatch)"
-                  stroke="none"
-                  pointerEvents="none"
-                  opacity={0.9}
-                />
-              )}
             </g>
           );
         })}
@@ -2110,22 +2096,39 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         )}
       </Drawer>
 
-      {/* Desktop-only static legend (short landscape uses Drawer) */}
-      <aside className="rf-map__legend rf-map__legend--desktop" title={HELP.continents}>
-        <span className="rf-label">Continent bonuses</span>
-        <ul>
-          {CONTINENT_LIST.map((c) => (
-            <li key={c.id}>
-              <i style={{ background: c.color }} />
-              <span>
-                {c.name}
-                <small>
-                  +E{c.energy} A{c.alloy} Pop{c.population}
-                </small>
-              </span>
-            </li>
-          ))}
-        </ul>
+      {/* Desktop collapsible legend (short landscape uses Drawer + Continents btn) */}
+      <aside
+        className={`rf-map__legend rf-map__legend--desktop${legendOpen ? " is-open" : " is-collapsed"}`}
+        title={HELP.continents}
+        data-testid="continent-legend"
+      >
+        <button
+          type="button"
+          className="rf-map__legend-toggle"
+          aria-expanded={legendOpen}
+          data-testid="continent-legend-toggle"
+          onClick={() => setLegendOpen((v) => !v)}
+        >
+          <span className="rf-label">Continent bonuses</span>
+          <span className="rf-map__legend-chevron" aria-hidden>
+            {legendOpen ? "▾" : "▸"}
+          </span>
+        </button>
+        {legendOpen && (
+          <ul>
+            {CONTINENT_LIST.map((c) => (
+              <li key={c.id}>
+                <i style={{ background: c.color }} />
+                <span>
+                  {c.name}
+                  <small>
+                    +E{c.energy} A{c.alloy} Pop{c.population}
+                  </small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </aside>
     </div>
   );

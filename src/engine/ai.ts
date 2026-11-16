@@ -14,6 +14,7 @@ import {
 import { playerDoctrineId } from "./doctrine";
 import { canAfford } from "./economy";
 import { isSupplied } from "./logistics";
+import { canOrderMove } from "./movement";
 import { canPlaceBuilding } from "./placement";
 import { canResearch, isUnlocked, researchTurns } from "./research";
 import { hasReconAsset } from "./recon";
@@ -531,6 +532,9 @@ export function planAttacks(
         const troop = force.find((f) => f.unitId === "trooper");
         if (troop && troop.count > 1) troop.count -= 1;
       }
+      // Only launch if the force can actually reach the target
+      // (adjacent ground / sea lane / air jump — never teleport).
+      if (!canOrderMove(state, pid, t.id, nid, force).ok) continue;
       cands.push({ fromId: t.id, toId: nid, score, force });
     }
   }

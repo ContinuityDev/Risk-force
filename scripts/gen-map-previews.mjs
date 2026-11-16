@@ -16,7 +16,8 @@ const OUT = join(__dir, "../public/maps");
 mkdirSync(OUT, { recursive: true });
 
 const FACTION = ["#5a9e82", "#b87070", "#6a8eb8"];
-const NEUTRAL = "#c9b896";
+/** Match in-game neutral slate (no parchment / hatch). */
+const NEUTRAL = "#7a8490";
 
 function pickHighlights(territories, count = 3) {
   const ranked = [...territories]
@@ -46,16 +47,15 @@ function renderPreview({
   landPath,
   highlights,
 }) {
-  const highlightIds = new Map(highlights.map((t, i) => [t.id, FACTION[i % FACTION.length]]));
+  const highlightIds = new Map(
+    highlights.map((t, i) => [t.id, FACTION[i % FACTION.length]]),
+  );
   const paths = territories
     .map((t) => {
       const fill = highlightIds.get(t.id) ?? NEUTRAL;
-      const opacity = highlightIds.has(t.id) ? 0.88 : 0.78;
-      const stroke = highlightIds.has(t.id) ? "#7eb6c9" : "#8a7a5c";
-      const hatch = highlightIds.has(t.id)
-        ? ""
-        : `<path d="${t.path}" fill="url(#nh)" stroke="none" opacity="0.85"/>`;
-      return `<path d="${t.path}" fill="${fill}" fill-opacity="${opacity}" stroke="${stroke}" stroke-width="0.55" stroke-linejoin="round"/>${hatch}`;
+      const opacity = highlightIds.has(t.id) ? 0.88 : 0.55;
+      const stroke = highlightIds.has(t.id) ? "#7eb6c9" : "#9aa3ad";
+      return `<path d="${t.path}" fill="${fill}" fill-opacity="${opacity}" stroke="${stroke}" stroke-width="0.55" stroke-linejoin="round"/>`;
     })
     .join("\n");
 
@@ -67,9 +67,6 @@ function renderPreview({
       <stop offset="45%" stop-color="#0f2438"/>
       <stop offset="100%" stop-color="#070e18"/>
     </radialGradient>
-    <pattern id="nh" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(38)">
-      <path d="M0 0 L0 7" stroke="#5c5346" stroke-width="1.15" opacity="0.42"/>
-    </pattern>
   </defs>
   <rect width="1000" height="500" fill="url(#ocean)"/>
   <path d="${landPath}" fill="#0c1824" fill-opacity="0.45" stroke="#3a5a6a" stroke-width="0.5" pointer-events="none"/>
