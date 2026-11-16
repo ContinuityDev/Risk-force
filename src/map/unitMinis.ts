@@ -292,14 +292,17 @@ export function layoutUnitMinis(
       if (zoomScale >= 0.9 && t.area < 0.006) continue;
 
       const chipSize = size;
-      const aboveY = labelTop - gap - chipSize / 2;
+      const aboveY = labelTop - gap * 1.4 - chipSize / 2;
       const belowY = labelBot + gap + chipSize / 2;
+      const sideY = lbl?.y ?? ay;
       const anchors = [
+        { x: baseX - chipSize * 1.2, y: sideY },
+        { x: baseX + chipSize * 1.2, y: sideY },
+        { x: baseX - chipSize * 1.35, y: sideY - chipSize * 0.4 },
+        { x: baseX + chipSize * 1.35, y: sideY - chipSize * 0.4 },
         { x: baseX, y: aboveY },
         { x: baseX - chipSize * 0.9, y: aboveY },
         { x: baseX + chipSize * 0.9, y: aboveY },
-        { x: baseX - chipSize * 1.1, y: lbl?.y ?? ay },
-        { x: baseX + chipSize * 1.1, y: lbl?.y ?? ay },
         { x: baseX, y: belowY },
       ];
       const top = sorted[0]!;
@@ -331,12 +334,17 @@ export function layoutUnitMinis(
       tier === "mid" && (t.area < 0.012 || sorted.length === 1);
     if (forceCompact) {
       const chipSize = size * (t.area < 0.005 ? 0.85 : 1);
-      const aboveY = labelTop - gap - chipSize / 2;
+      // Prefer sides so chips never cover "Greenland" / "Eastern Canada" glyphs.
+      const sideY = lbl?.y ?? ay;
+      const aboveY = labelTop - gap * 1.35 - chipSize / 2;
       const anchors = [
+        { x: baseX - chipSize * 1.25, y: sideY },
+        { x: baseX + chipSize * 1.25, y: sideY },
+        { x: baseX - chipSize * 1.45, y: sideY - chipSize * 0.35 },
+        { x: baseX + chipSize * 1.45, y: sideY - chipSize * 0.35 },
         { x: baseX, y: aboveY },
         { x: baseX - chipSize, y: aboveY },
         { x: baseX + chipSize, y: aboveY },
-        { x: baseX - chipSize * 1.15, y: lbl?.y ?? ay },
       ];
       const top = sorted[0]!;
       for (const a of anchors) {
@@ -380,12 +388,14 @@ export function layoutUnitMinis(
     const aboveCy = labelTop - clearGap - gridH / 2;
 
     const anchors = [
-      { cx: sideX, cy: sideCy },
-      { cx: sideX - size * 0.5, cy: sideCy },
-      { cx: rightX, cy: sideCy },
+      { cx: sideX - size * 0.25, cy: sideCy },
+      { cx: rightX + size * 0.25, cy: sideCy },
+      { cx: sideX - size * 0.7, cy: sideCy },
+      { cx: rightX + size * 0.7, cy: sideCy },
       { cx: sideX, cy: sideCy - size * 0.55 },
-      { cx: baseX, cy: aboveCy },
-      { cx: baseX - size * 0.5, cy: aboveCy },
+      { cx: rightX, cy: sideCy - size * 0.55 },
+      { cx: baseX, cy: aboveCy - size * 0.2 },
+      { cx: baseX - size * 0.5, cy: aboveCy - size * 0.2 },
     ];
 
     let placed = false;

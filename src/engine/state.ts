@@ -1,5 +1,54 @@
+import type { DoctrineId } from "../data/doctrines";
 import type { RelationsTable } from "../data/diplomacy";
 import type { FactionId, ResourceId } from "../data/types";
+
+export type CommanderRole = "infantry" | "armor" | "air" | "cyber";
+
+export interface Commander {
+  id: string;
+  role: CommanderRole;
+  name: string;
+  /** Territory garrison this officer is attached to (null = reserve at college). */
+  attachedTerritoryId: string | null;
+}
+
+export type StrikeKind = "orbital" | "cruise" | "kinetic";
+
+export interface StrikeFx {
+  id: string;
+  kind: StrikeKind;
+  territoryId: string;
+  turn: number;
+  createdAt: number;
+}
+
+export interface ReconLink {
+  targetTerritoryId: string;
+  targetFactionId: FactionId;
+  untilTurn: number;
+  mode: "drone" | "satellite";
+}
+
+export interface ArmyTemplate {
+  id: string;
+  name: string;
+  composition: Record<string, number>;
+}
+
+export interface TheaterEvent {
+  id: string;
+  kind: string;
+  turn: number;
+  territoryId: string;
+  headline: string;
+  body: string;
+}
+
+export interface HandoffState {
+  fromName: string;
+  toName: string;
+  toFactionId: FactionId;
+}
 
 /** Placed structure instance on a territory base grid. */
 export interface PlacedBuilding {
@@ -49,6 +98,10 @@ export interface TerritoryState {
   occupiedTurns: number;
   /** Units that moved out or arrived this turn — no fortified bonus next battle. */
   movedThisTurn?: boolean;
+  /** Turns remaining with supply cut (strikes / events). */
+  supplyCutTurns?: number;
+  /** Debris field — sea crossings cost extra turns. */
+  debrisTurns?: number;
 }
 
 /** Active multi-turn research job (1–N turns). */
@@ -77,6 +130,16 @@ export interface PlayerState {
   insolvent?: boolean;
   /** Soft-eliminated — no territories left. */
   eliminated?: boolean;
+  /** Lobby-picked (or AI-assigned) doctrine. */
+  doctrineId?: DoctrineId;
+  /** War College officers (max one per role). */
+  commanders?: Commander[];
+  /** Remaining cooldown turns per strike kind. */
+  strikeCooldowns?: Partial<Record<StrikeKind, number>>;
+  /** Active recon links. */
+  recon?: ReconLink[];
+  /** Saved invade/reinforce compositions. */
+  armyTemplates?: ArmyTemplate[];
 }
 
 /** Army marching between territories. */
@@ -137,6 +200,8 @@ export interface BattleUnit {
   disabledT: number;
   /** Smooth facing angle (radians); 0 = +X / east. */
   facing: number;
+  /** Doctrine + commander damage multiplier baked at spawn. */
+  dmgMult?: number;
 }
 
 export interface BattleDefense {
@@ -241,7 +306,9 @@ export interface NewsItem {
     | "build"
     | "movement"
     | "economy"
-    | "general";
+    | "general"
+    | "strike"
+    | "event";
   headline: string;
   body: string;
   factionId?: FactionId;
@@ -298,6 +365,14 @@ export interface GameState {
   economySummary: TurnEconomySummary | null;
   /** Planned multi-hop route polyline (territory ids) for map overlay. */
   plannedRoute: string[] | null;
+  /** Recent strike FX for map animation. */
+  strikeFx?: StrikeFx[];
+  /** Recent theater events. */
+  theaterEvents?: TheaterEvent[];
+  /** Hot-seat handoff gate between human players. */
+  handoff?: HandoffState | null;
+  /** Map strike targeting mode (UI). */
+  strikeTargeting?: StrikeKind | null;
 }
 
 export function emptyResources(): Record<ResourceId, number> {

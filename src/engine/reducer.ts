@@ -5,10 +5,21 @@ import type { FactionId } from "../data/types";
 import { getUnit } from "../data/units";
 import type { GameAction } from "./actions";
 import {
+  deleteArmyTemplate,
+  saveArmyTemplate,
+} from "./armyTemplates";
+import {
   applyBattleResult,
   retreatBattle,
   tickBattle,
 } from "./combat";
+import {
+  attachCommander,
+  COMMANDER_TRAIN_COST,
+  detachCommander,
+  hasCommanderRole,
+  pickCommanderName,
+} from "./commanders";
 import {
   applyEconomyTick,
   canAfford,
@@ -31,8 +42,11 @@ import {
   applyPopulationGrowth,
   spendCampaignBudget,
 } from "./population";
+import { launchRecon, tickRecon } from "./recon";
 import { applyResearch, tickResearchForPlayer } from "./research";
-import type { GameState, TurnEconomySummary } from "./state";
+import type { Commander, GameState, TurnEconomySummary } from "./state";
+import { applyStrike, tickStrikeState } from "./strikes";
+import { rollTheaterEvent, tickDebris } from "./theaterEvents";
 import {
   assignBuildingWorkers,
   enqueueUnit,
@@ -68,7 +82,15 @@ export function reduce(state: GameState, action: GameAction): GameState {
       }
       const players: typeof s.players = {};
       for (const [id, p] of Object.entries(s.players ?? {})) {
-        players[id] = { ...p, researchJob: p.researchJob ?? null };
+        players[id] = {
+          ...p,
+          researchJob: p.researchJob ?? null,
+          doctrineId: p.doctrineId ?? "vanguard",
+          commanders: p.commanders ?? [],
+          strikeCooldowns: p.strikeCooldowns ?? {},
+          recon: p.recon ?? [],
+          armyTemplates: p.armyTemplates ?? [],
+        };
       }
       return {
         ...s,
@@ -78,6 +100,10 @@ export function reduce(state: GameState, action: GameAction): GameState {
         newsUnread: s.newsUnread ?? 0,
         newsDigest: s.newsDigest ?? null,
         turnLog: s.turnLog ?? [],
+        strikeFx: s.strikeFx ?? [],
+        theaterEvents: s.theaterEvents ?? [],
+        handoff: s.handoff ?? null,
+        strikeTargeting: s.strikeTargeting ?? null,
         battle: s.battle
           ? {
               ...s.battle,
@@ -137,6 +163,141 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "SET_PLANNED_ROUTE":
       return { ...state, plannedRoute: action.payload.path };
+
+    case "SET_STRIKE_TARGETING":
+      return { ...state, strikeTargeting: action.payload.kind };
+
+    case "CLEAR_STRIKE_FX":
+      return { ...state, strikeFx: [] };
+
+    case "DISMISS_HANDOFF":
+      return { ...state, handoff: null };
+
+    case "LAUNCH_STRIKE": {
+      if (state.phase !== "play") return state;
+      const pid = activePlayerId(state) as FactionId;
+      return {
+        ...applyStrike(
+          state,
+          pid,
+          action.payload.kind,
+          action.payload.targetId,
+        ),
+        strikeTargeting: null,
+      };
+    }
+
+    case "LAUNCH_RECON": {
+      if (state.phase !== "play") return state;
+      const pid = activePlayerId(state) as FactionId;
+      return launchRecon(
+        state,
+        pid,
+        action.payload.targetId,
+        action.payload.mode,
+      );
+    }
+
+    case "TRAIN_COMMANDER": {
+      if (state.phase !== "play") return state;
+      const pid = activePlayerId(state);
+      const player = state.players[pid]!;
+      const { territoryId, role } = action.payload;
+      const ts = state.territories[territoryId];
+      if (!ts || ts.owner !== pid) {
+        return { ...state, message: "Need a friendly War College site." };
+      }
+      const hasCollege = ts.buildings.some(
+        (b) =>
+          b.buildingId === "war_college" &&
+          b.buildRemaining <= 0 &&
+          b.hp > 0,
+      );
+      if (!hasCollege) {
+        return { ...state, message: "Build a War College first." };
+      }
+      if (hasCommanderRole(player, role)) {
+        return { ...state, message: `Already have a ${role} officer.` };
+      }
+      if (!canAfford(player, COMMANDER_TRAIN_COST)) {
+        return { ...state, message: "Insufficient resources." };
+      }
+      const cmd: Commander = {
+        id: `cmd-${state.nextInstanceId}`,
+        role,
+        name: pickCommanderName(role, player.commanders ?? []),
+        attachedTerritoryId: territoryId,
+      };
+      return {
+        ...state,
+        nextInstanceId: state.nextInstanceId + 1,
+        players: {
+          ...state.players,
+          [pid]: {
+            ...spend(player, COMMANDER_TRAIN_COST),
+            commanders: [...(player.commanders ?? []), cmd],
+          },
+        },
+        message: `${cmd.name} commissioned (${role}).`,
+      };
+    }
+
+    case "ATTACH_COMMANDER": {
+      const pid = activePlayerId(state);
+      const player = state.players[pid]!;
+      const { commanderId, territoryId } = action.payload;
+      if (territoryId) {
+        const ts = state.territories[territoryId];
+        if (!ts || ts.owner !== pid) {
+          return { ...state, message: "Attach to a friendly garrison." };
+        }
+        return {
+          ...state,
+          players: {
+            ...state.players,
+            [pid]: attachCommander(player, commanderId, territoryId),
+          },
+          message: "Officer attached to stack.",
+        };
+      }
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [pid]: detachCommander(player, commanderId),
+        },
+        message: "Officer detached.",
+      };
+    }
+
+    case "SAVE_ARMY_TEMPLATE": {
+      const pid = activePlayerId(state);
+      const player = state.players[pid]!;
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [pid]: saveArmyTemplate(
+            player,
+            action.payload.name,
+            action.payload.force,
+          ),
+        },
+        message: "Army template saved.",
+      };
+    }
+
+    case "DELETE_ARMY_TEMPLATE": {
+      const pid = activePlayerId(state);
+      const player = state.players[pid]!;
+      return {
+        ...state,
+        players: {
+          ...state.players,
+          [pid]: deleteArmyTemplate(player, action.payload.templateId),
+        },
+      };
+    }
 
     case "SET_CAMPAIGN_BUDGET": {
       const pid = activePlayerId(state);
@@ -502,15 +663,22 @@ export function reduce(state: GameState, action: GameAction): GameState {
           territories: trained,
         };
         cur = tickResearchForPlayer(cur, pid);
+        cur = tickStrikeState(cur, pid);
+        cur = tickRecon(cur, pid);
+        cur = tickDebris(cur, pid);
       }
 
       // Advance to next non-eliminated player (humans first in playerOrder)
       let idx = cur.activePlayerIndex;
       let turn = cur.turn;
       let guard = 0;
+      let wrapped = false;
       do {
         idx = (idx + 1) % cur.playerOrder.length;
-        if (idx === 0) turn += 1;
+        if (idx === 0) {
+          turn += 1;
+          wrapped = true;
+        }
         guard += 1;
       } while (
         guard < cur.playerOrder.length + 1 &&
@@ -529,8 +697,29 @@ export function reduce(state: GameState, action: GameAction): GameState {
             ? cur.turnLog
             : [],
         economySummary: null,
+        strikeTargeting: null,
       };
+      if (wrapped) {
+        next = rollTheaterEvent(next);
+      }
       const nextPid = next.playerOrder[idx]!;
+      const endingP = cur.players[pid];
+      const nextP = next.players[nextPid];
+      if (
+        endingP?.kind === "human" &&
+        nextP?.kind === "human" &&
+        next.multiplayerMode === "hotseat" &&
+        endingP.id !== nextP.id
+      ) {
+        next = {
+          ...next,
+          handoff: {
+            fromName: endingP.displayName,
+            toName: nextP.displayName,
+            toFactionId: nextP.id,
+          },
+        };
+      }
 
       // Track buildings that will complete this economy tick
       const finishedBuildings: string[] = [];

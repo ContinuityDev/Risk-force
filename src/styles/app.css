@@ -4861,3 +4861,124 @@ button.is-unaffordable {
     font-size: 0.65rem;
   }
 }
+
+/* ── Doctrines / handoff / strikes / invade polish ───────── */
+
+.rf-lobby__doctrine {
+  margin: 1rem 0 0.5rem;
+}
+
+.rf-lobby__doctrine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+}
+
+.rf-lobby__doctrine-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+  min-height: 4.2rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--rf-doc-accent, var(--rf-accent)) 45%, var(--rf-border));
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--rf-doc-accent, var(--rf-accent)) 14%, #121820) 0%,
+    #0e141c 100%
+  );
+}
+
+.rf-lobby__doctrine-card strong {
+  color: var(--rf-doc-accent, var(--rf-accent));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.rf-lobby__doctrine-card span {
+  font-size: 0.72rem;
+  color: var(--rf-text-dim);
+  line-height: 1.35;
+}
+
+.rf-lobby__doctrine-card.is-selected {
+  border-color: var(--rf-doc-accent, var(--rf-accent));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--rf-doc-accent, var(--rf-accent)) 35%, transparent);
+}
+
+.rf-lobby__doctrine-hotseat {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.rf-hud__doctrine {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.92;
+  margin-left: 0.35rem;
+}
+
+.rf-handoff {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(6, 10, 14, 0.82);
+  backdrop-filter: blur(4px);
+}
+
+.rf-handoff__panel {
+  width: min(92vw, 26rem);
+  padding: 1.25rem 1.35rem 1.4rem;
+  border: var(--rf-hairline);
+  background: linear-gradient(180deg, #1a2430 0%, #121820 100%);
+  display: grid;
+  gap: 0.55rem;
+}
+
+.rf-handoff__panel h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.rf-invade__cmd-chip {
+  display: inline-flex;
+  margin: 0.25rem 0.35rem 0.25rem 0;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--rf-accent-dim);
+  color: var(--rf-accent);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.rf-invade__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 0.35rem 0;
+}
+
+.rf-map__sheet-actions--stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rf-map__sheet-garrison,
+.rf-map__sheet-cmd,
+.rf-map__sheet-owner {
+  font-size: 0.78rem;
+  margin: 0.2rem 0;
+}
+
+.rf-strike-fx circle {
+  transform-origin: center;
+}

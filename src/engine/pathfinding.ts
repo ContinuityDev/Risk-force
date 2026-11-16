@@ -4,7 +4,12 @@
 
 import { getTerritory, TERRITORIES } from "../data/map/territories";
 import type { StrikeForceSlot } from "./state";
-import { travelTurns } from "./movement";
+import {
+  canAirJump,
+  forceMoveLayer,
+  isSeaLink,
+  travelTurns,
+} from "./movement";
 
 export interface RouteHop {
   fromId: string;
@@ -46,9 +51,20 @@ export function findRoute(
     if (depth >= maxHops) continue;
     let neighbors: string[] = [];
     try {
-      neighbors = getTerritory(cur).neighbors;
+      neighbors = [...getTerritory(cur).neighbors];
     } catch {
       continue;
+    }
+    const layer = forceMoveLayer(force);
+    if (layer === "naval") {
+      neighbors = neighbors.filter((n) => isSeaLink(cur, n));
+    } else if (layer === "air") {
+      // Air can also jump to non-adjacent territories in range.
+      for (const t of TERRITORIES) {
+        if (t.id === cur) continue;
+        if (neighbors.includes(t.id)) continue;
+        if (canAirJump(cur, t.id, force)) neighbors.push(t.id);
+      }
     }
     for (const n of neighbors) {
       if (prev.has(n)) continue;

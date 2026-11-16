@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getDoctrine } from "../data/doctrines";
 import { factionColor } from "../data/factions";
 import { GAME_LOOP, HELP } from "../data/gameLoop";
 import { RESOURCE_META } from "../data/resources";
@@ -97,6 +98,15 @@ export function Hud({
         <strong className="rf-hud__commander" style={{ color }}>
           {activePlayer.displayName}
         </strong>
+        <span
+          className="rf-hud__doctrine"
+          style={{
+            color: getDoctrine(activePlayer.doctrineId).accent,
+          }}
+          title={getDoctrine(activePlayer.doctrineId).tagline}
+        >
+          {getDoctrine(activePlayer.doctrineId).name}
+        </span>
         {!isHumanTurn && <span className="rf-hud__ai">AI…</span>}
         {activePlayer.insolvent && (
           <span className="rf-hud__warn" title={HELP.upkeep}>
@@ -432,6 +442,14 @@ export function Hud({
           <p>{HELP.terrain}</p>
           <p>{HELP.logistics}</p>
           <p>{HELP.stacking}</p>
+          <p>{HELP.doctrines}</p>
+          <p>{HELP.commanders}</p>
+          <p>{HELP.strikes}</p>
+          <p>{HELP.recon}</p>
+          <p>{HELP.navalAir}</p>
+          <p>{HELP.theaterEvents}</p>
+          <p>{HELP.templates}</p>
+          <p>{HELP.hotseat}</p>
           <p>{HELP.continents}</p>
           <p>{HELP.victory}</p>
           <p>{HELP.ai}</p>

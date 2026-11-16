@@ -43,11 +43,13 @@ export function makeNewsItem(
 const CATEGORY_RANK: Record<NewsItem["category"], number> = {
   territory: 0,
   battle: 1,
-  research: 2,
-  movement: 3,
-  build: 4,
-  economy: 5,
-  general: 6,
+  strike: 1,
+  event: 2,
+  research: 3,
+  movement: 4,
+  build: 5,
+  economy: 6,
+  general: 7,
 };
 
 /** Convert a dispatched AI action into a news item (or null if mundane). */
@@ -96,6 +98,30 @@ export function newsFromAiAction(
     case "TRAIN_UNIT":
       // Training is routine — omit from headline wire
       return null;
+    case "LAUNCH_STRIKE":
+      return makeNewsItem({
+        turn,
+        category: "strike",
+        factionId,
+        headline: `${displayName} authorizes ${action.payload.kind} strike`,
+        body: `Target ${territoryLabel(action.payload.targetId)} painted for strategic fires.`,
+      });
+    case "LAUNCH_RECON":
+      return makeNewsItem({
+        turn,
+        category: "movement",
+        factionId,
+        headline: `${displayName} deploys ${action.payload.mode} recon`,
+        body: `Intel window opening on ${territoryLabel(action.payload.targetId)}.`,
+      });
+    case "TRAIN_COMMANDER":
+      return makeNewsItem({
+        turn,
+        category: "build",
+        factionId,
+        headline: `${displayName} commissions ${action.payload.role} officer`,
+        body: `War College graduates a new ${action.payload.role} commander.`,
+      });
     case "ORDER_MOVE":
     case "MOVE_GARRISON": {
       const to = action.payload.toId;
@@ -217,6 +243,8 @@ export function digestHeadline(items: NewsItem[]): string {
 export const NEWS_ICON: Record<NewsItem["category"], string> = {
   territory: "⚑",
   battle: "⚔",
+  strike: "☄",
+  event: "✧",
   research: "◈",
   movement: "⇢",
   build: "⌂",

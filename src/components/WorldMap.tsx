@@ -8,7 +8,8 @@ import {
 } from "react";
 import { biomeLabel } from "../data/biomes";
 import { CONTINENT_LIST } from "../data/continents";
-import { factionColor } from "../data/factions";
+import { getDoctrine } from "../data/doctrines";
+import { factionColor, factionName } from "../data/factions";
 import { HELP } from "../data/gameLoop";
 import { territoryAbbrev } from "../data/map/abbreviations";
 import {
@@ -19,8 +20,15 @@ import {
 import { TERRITORIES } from "../data/map/territories";
 import type { TerritoryDef } from "../data/types";
 import type { GameAction } from "../engine/actions";
+import { commandersOnTerritory } from "../engine/commanders";
 import { travelTurns } from "../engine/movement";
-import type { GameState } from "../engine/state";
+import {
+  approximateGarrison,
+  formatGarrisonIntel,
+  isTerritoryRevealed,
+} from "../engine/recon";
+import type { GameState, StrikeKind } from "../engine/state";
+import { playerHasStrikeAsset, strikeCooldownLeft } from "../engine/strikes";
 import {
   buildingsFingerprint,
   layoutBuildingMinis,
@@ -877,6 +885,54 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           pointerEvents="none"
         />
 
+        {(state.strikeFx?.length ?? 0) > 0 && (
+          <g className="rf-map__strike-fx" pointerEvents="none">
+            {state.strikeFx!.map((fx) => {
+              const t = TERRITORIES.find((x) => x.id === fx.territoryId);
+              if (!t) return null;
+              const hue =
+                fx.kind === "kinetic"
+                  ? "#e8c070"
+                  : fx.kind === "orbital"
+                    ? "#7ec8e8"
+                    : "#d08060";
+              return (
+                <g key={fx.id} className={`rf-strike-fx rf-strike-fx--${fx.kind}`}>
+                  <circle
+                    cx={t.label.x}
+                    cy={t.label.y}
+                    r={14}
+                    fill="none"
+                    stroke={hue}
+                    strokeWidth={2.2}
+                    opacity={0.85}
+                  >
+                    <animate
+                      attributeName="r"
+                      values="4;18;22"
+                      dur="1.1s"
+                      repeatCount="2"
+                    />
+                    <animate
+                      attributeName="opacity"
+                      values="1;0.4;0"
+                      dur="1.1s"
+                      repeatCount="2"
+                    />
+                  </circle>
+                  <circle
+                    cx={t.label.x}
+                    cy={t.label.y}
+                    r={3}
+                    fill={hue}
+                    opacity={0.9}
+                  />
+                </g>
+              );
+            })}
+          </g>
+        )}
+
         {(unitMinis.length > 0 || transitMinis.length > 0) && (
           <g className="rf-map__units">
             {[...unitMinis, ...transitMinis].map((m) => {
@@ -1280,9 +1336,64 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 <p className="rf-text-dim">
                   {selected.continent} · {biomeLabel(selected.id)}
                   {selectedTs
-                    ? ` · ${selectedTs.control} · Pop ${selectedTs.population} · Garrison ${Object.values(selectedTs.garrison).reduce((a, b) => a + b, 0)}`
+                    ? ` · ${selectedTs.control} · Pop ${selectedTs.population}`
                     : ""}
                 </p>
+                {selectedTs && (
+                  <p className="rf-map__sheet-owner">
+                    {factionName(selectedTs.owner)}
+                    {state.players[selectedTs.owner]?.doctrineId && (
+                      <>
+                        {" "}
+                        ·{" "}
+                        <span
+                          style={{
+                            color: getDoctrine(
+                              state.players[selectedTs.owner]!.doctrineId,
+                            ).accent,
+                          }}
+                        >
+                          {
+                            getDoctrine(
+                              state.players[selectedTs.owner]!.doctrineId,
+                            ).name
+                          }
+                        </span>
+                      </>
+                    )}
+                  </p>
+                )}
+                {selectedTs && humanId && (
+                  <p className="rf-map__sheet-garrison" title={HELP.recon}>
+                    <span className="rf-label">Garrison</span>{" "}
+                    {isTerritoryRevealed(state, humanId, selected.id)
+                      ? formatGarrisonIntel(state, humanId, selected.id)
+                      : approximateGarrison(selectedTs.garrison)
+                          .map((g) => `${g.unitId}×${g.lo}–${g.hi}`)
+                          .join(", ") || "Empty"}
+                    {!isTerritoryRevealed(state, humanId, selected.id) &&
+                      selectedTs.owner !== humanId && (
+                        <em className="rf-text-dim"> · approx</em>
+                      )}
+                  </p>
+                )}
+                {selectedTs &&
+                  humanId &&
+                  selectedTs.owner === humanId &&
+                  commandersOnTerritory(
+                    state.players[humanId]!,
+                    selected.id,
+                  ).length > 0 && (
+                    <p className="rf-map__sheet-cmd">
+                      Officers:{" "}
+                      {commandersOnTerritory(
+                        state.players[humanId]!,
+                        selected.id,
+                      )
+                        .map((c) => `${c.name} (${c.role})`)
+                        .join(", ")}
+                    </p>
+                  )}
                 {selectedTs?.control === "occupied" && humanId && selectedTs.owner === humanId && (
                   <button
                     type="button"
@@ -1394,11 +1505,79 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   </>
                 )}
 
-                {selectedIsEnemy && (
-                  <p className="rf-hint">
-                    Enemy territory — tap Invade to plan a multi-front strike
-                    using the march system.
-                  </p>
+                {selectedIsEnemy && humanId && (
+                  <>
+                    <p className="rf-hint">
+                      Enemy territory — Invade, Strike, or Recon without fog of
+                      war (garrisons approximate until revealed).
+                    </p>
+                    <div className="rf-map__sheet-actions rf-map__sheet-actions--stack">
+                      {(
+                        [
+                          ["cruise", "Cruise"],
+                          ["orbital", "Orbital"],
+                          ["kinetic", "Kinetic"],
+                        ] as [StrikeKind, string][]
+                      ).map(([kind, label]) => {
+                        const cd = strikeCooldownLeft(state, humanId, kind);
+                        const has = playerHasStrikeAsset(state, humanId, kind);
+                        return (
+                          <button
+                            key={kind}
+                            type="button"
+                            className={
+                              state.strikeTargeting === kind
+                                ? "primary"
+                                : "ghost"
+                            }
+                            disabled={!has || cd > 0}
+                            onClick={() =>
+                              dispatch({
+                                type: "LAUNCH_STRIKE",
+                                payload: {
+                                  kind,
+                                  targetId: selected.id,
+                                },
+                              })
+                            }
+                          >
+                            {label}
+                            {cd > 0 ? ` (${cd}t)` : ""}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() =>
+                          dispatch({
+                            type: "LAUNCH_RECON",
+                            payload: {
+                              targetId: selected.id,
+                              mode: "drone",
+                            },
+                          })
+                        }
+                      >
+                        Recon drone
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() =>
+                          dispatch({
+                            type: "LAUNCH_RECON",
+                            payload: {
+                              targetId: selected.id,
+                              mode: "satellite",
+                            },
+                          })
+                        }
+                      >
+                        Sat relay
+                      </button>
+                    </div>
+                  </>
                 )}
 
                 {marchTargets.length > 0 && (
