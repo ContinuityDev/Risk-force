@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { DOCTRINE_LIST, type DoctrineId } from "../data/doctrines";
+import { listMaps } from "../data/maps/registry";
+import type { MapId } from "../data/maps/types";
 import type { DifficultyId, NewGamePayload } from "../engine/actions";
 
 interface LobbyScreenProps {
@@ -8,6 +10,11 @@ interface LobbyScreenProps {
   onConnect?: (address: string) => void;
   onBack: () => void;
   lanStatus?: string | null;
+}
+
+function mapPreviewSrc(preview: string): string {
+  const base = import.meta.env.BASE_URL || "/";
+  return `${base}${preview.replace(/^\//, "")}`;
 }
 
 const DIFFICULTY_OPTIONS: { id: DifficultyId; label: string; hint: string }[] = [
@@ -42,6 +49,8 @@ export function LobbyScreen({
     "skyborne",
     "spectre",
   ]);
+  const [mapId, setMapId] = useState<MapId>("world_war");
+  const maps = listMaps();
 
   const title =
     mode === "solo"
@@ -125,6 +134,36 @@ export function LobbyScreen({
                 +
               </button>
             </div>
+          </div>
+        </div>
+
+        <div className="rf-lobby__maps" data-testid="map-picker">
+          <span className="rf-label">Theater</span>
+          <p className="rf-lobby__tag rf-lobby__tag--compact">
+            One start each — the rest begins Neutral until invaded.
+          </p>
+          <div className="rf-lobby__map-grid" role="radiogroup" aria-label="Map">
+            {maps.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                role="radio"
+                aria-checked={mapId === m.id}
+                className={`rf-lobby__map-card${mapId === m.id ? " is-selected" : ""}`}
+                data-testid={`map-${m.id}`}
+                onClick={() => setMapId(m.id)}
+              >
+                <img
+                  src={mapPreviewSrc(m.preview)}
+                  alt=""
+                  className="rf-lobby__map-thumb"
+                  width={160}
+                  height={80}
+                />
+                <strong>{m.name}</strong>
+                <span>{m.tagline}</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -314,6 +353,7 @@ export function LobbyScreen({
               turnLimit: vpEnabled ? turnLimit : 0,
               doctrineId,
               humanDoctrines: humanDoctrines.slice(0, humanCount),
+              mapId,
             })
           }
         >

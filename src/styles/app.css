@@ -938,10 +938,74 @@
   transition: fill-opacity 0.15s ease, stroke 0.15s ease, filter 0.15s ease;
 }
 
+.rf-map__territory.is-neutral {
+  fill-opacity: 0.62;
+}
+
 .rf-map__territory:hover {
   fill-opacity: 0.88 !important;
   filter: brightness(1.08);
   stroke: var(--rf-accent);
+}
+
+.rf-map__sheet-owner.is-neutral {
+  color: #a8b0ba;
+  letter-spacing: 0.04em;
+}
+
+.rf-lobby__maps {
+  margin-bottom: 0.85rem;
+}
+
+.rf-lobby__map-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 0.45rem;
+}
+
+.rf-lobby__map-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.45rem;
+  border: 1px solid rgba(126, 182, 201, 0.28);
+  background: rgba(12, 24, 36, 0.55);
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.rf-lobby__map-card.is-selected {
+  border-color: var(--rf-accent);
+  box-shadow: 0 0 0 1px rgba(126, 182, 201, 0.35);
+}
+
+.rf-lobby__map-thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+  border-radius: 3px;
+  background: #0a1520;
+}
+
+.rf-lobby__map-card strong {
+  font-size: 0.92rem;
+}
+
+.rf-lobby__map-card span {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  line-height: 1.3;
+}
+
+@media (max-width: 520px) {
+  .rf-lobby__map-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .rf-map__units {

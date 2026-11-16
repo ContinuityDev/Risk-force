@@ -68,4 +68,5 @@ export const CONTINENT_BONUSES: Record<string, ContinentBonus> = {
   },
 };
 
-export const CONTINENT_LIST = Object.values(CONTINENT_BONUSES);
+/** Live list — rebuilt when `activateMap` swaps continent tables. */
+export const CONTINENT_LIST: ContinentBonus[] = Object.values(CONTINENT_BONUSES);

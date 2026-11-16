@@ -1,5 +1,5 @@
 /** Short labels for dense map zoom. */
-const OVERRIDES: Record<string, string> = {
+const EARTH_OVERRIDES: Record<string, string> = {
   united_kingdom: "Britain",
   usa_west: "W.USA",
   usa_central: "C.USA",
@@ -23,8 +23,15 @@ const OVERRIDES: Record<string, string> = {
   saudi_arabia: "Saudi",
 };
 
+let MAP_OVERRIDES: Record<string, string> | null = null;
+
+export function setAbbrevOverrides(next: Record<string, string> | null): void {
+  MAP_OVERRIDES = next;
+}
+
 export function territoryAbbrev(id: string, name: string): string {
-  if (OVERRIDES[id]) return OVERRIDES[id];
+  if (MAP_OVERRIDES?.[id]) return MAP_OVERRIDES[id]!;
+  if (EARTH_OVERRIDES[id]) return EARTH_OVERRIDES[id]!;
   if (name.length <= 11) return name;
   const parts = name.replace(/\./g, "").split(/\s+/);
   if (parts.length >= 2) return parts.map((p) => p[0]).join(".") + ".";

@@ -22,7 +22,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: "select",
     title: "Select a territory",
-    body: "Tap a green territory you own on the map. The country sheet opens on the right with Open Base and March actions.",
+    body: "You start with one homeland. Grey territories are Neutral — static defenders until invaded. Tap your colored land; the country sheet opens with Open Base and March.",
     target: "map-svg",
     screen: "map",
   },
@@ -96,7 +96,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: "capture",
     title: "After capture",
-    body: "Choose Raze (energy bump, wipe buildings) or Keep (damaged structures need repair), then occupation strength. Captured land is occupied until stabilized.",
+    body: "Neutral and enemy captures use the same flow: choose Raze (energy bump, wipe buildings) or Keep (damaged structures need repair), then occupation strength. Captured land is occupied until stabilized.",
     screen: "map",
   },
   {
@@ -119,22 +119,22 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: "continents",
-    title: "Continent bonuses",
-    body: "Own every territory on a continent for bonus Energy, Alloy, and Population each turn. Open Continents on the map for the list.",
+    title: "Region bonuses",
+    body: "Own every territory in a continent or USA region — including former Neutrals — for bonus Energy, Alloy, and Population. Open Continents on the map for the list.",
     target: "map-continents",
     screen: "map",
   },
   {
     id: "endturn",
     title: "End Turn",
-    body: "Tap End Turn when ready. Enemy factions resolve instantly — they build economies, research, train, and fight without free spawns.",
+    body: "Tap End Turn when ready. Enemy factions resolve instantly — they expand into Neutrals, build economies, research, train, and fight. Neutrals never act.",
     target: "dock-end",
     screen: "map",
   },
   {
     id: "news",
     title: "Orbital Wire",
-    body: "After the AI phase, a theater brief summarizes battles, captures, research, and builds. Reopen anytime via the News button (badge shows unread). History is filed by turn.",
+    body: "After the AI phase, a theater brief summarizes battles, Neutral claims, research, and builds. Reopen anytime via the News button (badge shows unread). History is filed by turn.",
     target: "hud-news",
     screen: "map",
   },

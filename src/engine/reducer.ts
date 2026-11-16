@@ -28,7 +28,9 @@ import {
   forceSupplyCost,
   spend,
 } from "./economy";
+import { activateMap } from "../data/maps/activate";
 import { createInitialState, createMenuState } from "./init";
+import { regenerateNeutralGarrisons } from "./neutrals";
 import { payInvasionSupply } from "./logistics";
 import { applyMarketTrade } from "./market";
 import { startArmyMove, tickArmiesForPlayer } from "./movement";
@@ -70,6 +72,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
 
     case "LOAD_STATE": {
       const s = action.payload.state;
+      activateMap(s.mapId ?? "world_war");
       const territories: typeof s.territories = {};
       for (const [id, ts] of Object.entries(s.territories ?? {})) {
         territories[id] = {
@@ -94,6 +97,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
       }
       return {
         ...s,
+        mapId: s.mapId ?? "world_war",
         territories,
         players,
         newsFeed: s.newsFeed ?? [],
@@ -700,6 +704,7 @@ export function reduce(state: GameState, action: GameAction): GameState {
         strikeTargeting: null,
       };
       if (wrapped) {
+        next = regenerateNeutralGarrisons(next);
         next = rollTheaterEvent(next);
       }
       const nextPid = next.playerOrder[idx]!;

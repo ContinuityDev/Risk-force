@@ -329,6 +329,8 @@ export interface TurnEconomySummary {
 export interface GameState {
   version: 1;
   seed: number;
+  /** Active theater pack id (world_war | civil_war). */
+  mapId?: import("../data/maps/types").MapId;
   turn: number;
   phase: "play" | "battle" | "capture" | "ended";
   activePlayerIndex: number;

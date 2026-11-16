@@ -474,6 +474,7 @@ export function planAttacks(
   persona = getAiPersonality(pid as never),
 ): AiAttackPlan[] {
   const owned = TERRITORIES.filter((t) => state.territories[t.id]?.owner === pid);
+  const ownedCount = owned.length;
   type Cand = {
     fromId: string;
     toId: string;
@@ -485,35 +486,51 @@ export function planAttacks(
   for (const t of owned) {
     const ts = state.territories[t.id]!;
     const strength = garrisonStrength(ts.garrison);
-    if (strength < 3) continue;
+    // Early one-start: allow leaner launches into adjacent neutrals.
+    const minStr = ownedCount <= 2 ? 2 : 3;
+    if (strength < minStr) continue;
     for (const nid of t.neighbors) {
       const nts = state.territories[nid];
       if (!nts || nts.owner === pid) continue;
+      const isNeutral = nts.owner === "neutral";
       const def = defenseScore(state, nid);
       const val = territoryValue(nid);
       let score =
         (val * 1.2) / (1 + def) +
         persona.opportunism * 2 -
         persona.defense * 0.5;
+      // Expand into neutrals first: weakest, valuable, adjacent.
+      if (isNeutral) {
+        score += 5 + persona.opportunism * 4;
+        score += val * 0.8;
+        score -= def * 0.35;
+        if (ownedCount <= 3) score += 6;
+      }
       // Flank bonus: multiple owned neighbors on the target
       const ownedNeighbors = TERRITORIES.find((x) => x.id === nid)!.neighbors.filter(
         (n) => state.territories[n]?.owner === pid,
       ).length;
       if (ownedNeighbors >= 2) score += persona.flanking * 3;
 
+      const commitFrac = isNeutral
+        ? 0.55 + persona.opportunism * 0.2
+        : 0.45 + persona.opportunism * 0.25;
       const force: StrikeForceSlot[] = Object.entries(ts.garrison)
         .filter(([, c]) => c > 0)
         .map(([unitId, count]) => ({
           unitId,
-          count: Math.max(
-            1,
-            Math.floor(count * (0.45 + persona.opportunism * 0.25)),
-          ),
+          count: Math.max(1, Math.floor(count * commitFrac)),
         }))
         .filter((s) => s.count > 0);
       if (!force.length) continue;
       const committed = force.reduce((s, x) => s + x.count, 0);
-      if (committed < 2) continue;
+      if (committed < (isNeutral ? 1 : 2)) continue;
+      // Leave at least one trooper home when possible
+      const homeLeft = strength - committed;
+      if (homeLeft < 1 && strength > 2) {
+        const troop = force.find((f) => f.unitId === "trooper");
+        if (troop && troop.count > 1) troop.count -= 1;
+      }
       cands.push({ fromId: t.id, toId: nid, score, force });
     }
   }
@@ -522,8 +539,10 @@ export function planAttacks(
   const picked: AiAttackPlan[] = [];
   const usedFrom = new Set<string>();
   const usedTo = new Set<string>();
+  const maxPlans =
+    persona.flanking > 0.6 && ownedCount >= 2 ? 2 : 1;
   for (const c of cands) {
-    if (picked.length >= (persona.flanking > 0.6 ? 2 : 1)) break;
+    if (picked.length >= maxPlans) break;
     if (usedFrom.has(c.fromId) || usedTo.has(c.toId)) continue;
     usedFrom.add(c.fromId);
     usedTo.add(c.toId);

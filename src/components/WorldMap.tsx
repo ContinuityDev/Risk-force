@@ -79,8 +79,6 @@ interface Camera {
   h: number;
 }
 
-const WORLD_W = OCEAN_VIEW.w;
-const WORLD_H = OCEAN_VIEW.h;
 const MIN_VIEW_W = 80;
 /** At world framing (scale≈1) no labels. As scale drops (zoom in), larger territories unlock first. */
 const LABEL_AREA_THRESHOLDS = [
@@ -122,17 +120,17 @@ function parseViewBox(vb: string): Camera {
   return {
     x: x || 0,
     y: y || 0,
-    w: w || WORLD_W,
-    h: h || WORLD_H,
+    w: w || OCEAN_VIEW.w,
+    h: h || OCEAN_VIEW.h,
   };
 }
 
 function clampCamera(cam: Camera): Camera {
   let { x, y, w, h } = cam;
-  w = Math.min(WORLD_W, Math.max(MIN_VIEW_W, w));
-  h = w * (WORLD_H / WORLD_W);
-  x = Math.min(WORLD_W - w, Math.max(0, x));
-  y = Math.min(WORLD_H - h, Math.max(0, y));
+  w = Math.min(OCEAN_VIEW.w, Math.max(MIN_VIEW_W, w));
+  h = w * (OCEAN_VIEW.h / OCEAN_VIEW.w);
+  x = Math.min(OCEAN_VIEW.w - w, Math.max(0, x));
+  y = Math.min(OCEAN_VIEW.h - h, Math.max(0, y));
   return { x, y, w, h };
 }
 
@@ -256,19 +254,19 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     pendingTerritoryId: string | null;
   }>({
     mode: "none",
-    origin: { x: 0, y: 0, w: WORLD_W, h: WORLD_H },
+    origin: { x: 0, y: 0, w: OCEAN_VIEW.w, h: OCEAN_VIEW.h },
     startDist: 0,
     startMid: { x: 0, y: 0 },
     moved: false,
     pendingTerritoryId: null,
   });
-  const cameraRef = useRef<Camera>({ x: 0, y: 0, w: WORLD_W, h: WORLD_H });
+  const cameraRef = useRef<Camera>({ x: 0, y: 0, w: OCEAN_VIEW.w, h: OCEAN_VIEW.h });
   const rafRef = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
 
   const initialCam = useMemo(() => {
     if (focusViewBox) return parseViewBox(focusViewBox);
-    return { x: 0, y: 0, w: WORLD_W, h: WORLD_H };
+    return { x: 0, y: 0, w: OCEAN_VIEW.w, h: OCEAN_VIEW.h };
   }, [focusViewBox]);
 
   const [camera, setCamera] = useState<Camera>(initialCam);
@@ -277,6 +275,14 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     cameraRef.current = initialCam;
   }, [initialCam]);
 
+  // Theater swap (World War ↔ Civil War) resets framing to the live viewBox.
+  useEffect(() => {
+    if (focusViewBox) return;
+    const next = { x: 0, y: 0, w: OCEAN_VIEW.w, h: OCEAN_VIEW.h };
+    setCamera(next);
+    cameraRef.current = next;
+  }, [state.mapId, focusViewBox]);
+
   useEffect(() => {
     const id = state.selectedTerritoryId;
     if (!id) return;
@@ -284,8 +290,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     const t = TERRITORIES.find((x) => x.id === id);
     if (!t) return;
     // Frame selection in the left ~58% so the right drawer does not cover it.
-    const focusW = Math.min(WORLD_W, Math.max(MIN_VIEW_W * 1.6, WORLD_W * 0.32));
-    const focusH = focusW * (WORLD_H / WORLD_W);
+    const focusW = Math.min(OCEAN_VIEW.w, Math.max(MIN_VIEW_W * 1.6, OCEAN_VIEW.w * 0.32));
+    const focusH = focusW * (OCEAN_VIEW.h / OCEAN_VIEW.w);
     const cx = t.label.x + focusW * 0.14;
     const cy = t.label.y;
     const next = clampCamera({
@@ -310,7 +316,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     [state.territories, humanId],
   );
 
-  const zoomScale = camera.w / WORLD_W;
+  const zoomScale = camera.w / OCEAN_VIEW.w;
   const viewBox = camToViewBox(camera);
 
   // Defer label layout during continuous gestures for mid-range phones.
@@ -319,7 +325,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     () =>
       layoutLabels(
         TERRITORIES,
-        deferredCam.w / WORLD_W,
+        deferredCam.w / OCEAN_VIEW.w,
         deferredCam,
       ),
     [deferredCam],
@@ -334,7 +340,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       layoutBuildingMinis(
         TERRITORIES,
         state.territories,
-        deferredCam.w / WORLD_W,
+        deferredCam.w / OCEAN_VIEW.w,
         deferredCam,
         labels,
       ),
@@ -361,7 +367,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     return layoutUnitMinis(
       TERRITORIES,
       state.territories,
-      deferredCam.w / WORLD_W,
+      deferredCam.w / OCEAN_VIEW.w,
       deferredCam,
       labels,
       occupied,
@@ -373,7 +379,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       layoutTransitUnitMinis(
         state.armiesInTransit ?? [],
         TERRITORIES,
-        deferredCam.w / WORLD_W,
+        deferredCam.w / OCEAN_VIEW.w,
         deferredCam,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -410,8 +416,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       const factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
       const prev = cameraRef.current;
       const pivot = clientToWorldAt(e.clientX, e.clientY, prev);
-      const nw = Math.min(WORLD_W, Math.max(MIN_VIEW_W, prev.w * factor));
-      const nh = nw * (WORLD_H / WORLD_W);
+      const nw = Math.min(OCEAN_VIEW.w, Math.max(MIN_VIEW_W, prev.w * factor));
+      const nh = nw * (OCEAN_VIEW.h / OCEAN_VIEW.w);
       const nx = pivot.x - ((pivot.x - prev.x) / prev.w) * nw;
       const ny = pivot.y - ((pivot.y - prev.y) / prev.h) * nh;
       scheduleCamera(clampCamera({ x: nx, y: ny, w: nw, h: nh }));
@@ -508,10 +514,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         const mid = pointerMid();
         const factor = g.startDist / dist;
         const nw = Math.min(
-          WORLD_W,
+          OCEAN_VIEW.w,
           Math.max(MIN_VIEW_W, g.origin.w * factor),
         );
-        const nh = nw * (WORLD_H / WORLD_W);
+        const nh = nw * (OCEAN_VIEW.h / OCEAN_VIEW.w);
         const pivot = clientToWorldAt(mid.x, mid.y, g.origin);
         const nx = pivot.x - ((pivot.x - g.origin.x) / g.origin.w) * nw;
         const ny = pivot.y - ((pivot.y - g.origin.y) / g.origin.h) * nh;
@@ -715,10 +721,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </marker>
         </defs>
 
-        <rect width={WORLD_W} height={WORLD_H} fill="url(#rf-ocean)" />
+        <rect width={OCEAN_VIEW.w} height={OCEAN_VIEW.h} fill="url(#rf-ocean)" />
         <rect
-          width={WORLD_W}
-          height={WORLD_H}
+          width={OCEAN_VIEW.w}
+          height={OCEAN_VIEW.h}
           fill="url(#rf-holo-sheen)"
           pointerEvents="none"
         />
@@ -851,6 +857,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         {TERRITORIES.map((t) => {
           const ts = state.territories[t.id];
           const owner = ts?.owner ?? t.startingOwner;
+          const isNeutral = owner === "neutral";
           const base = factionColor(owner);
           const isSelected = state.selectedTerritoryId === t.id;
           return (
@@ -862,12 +869,16 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             >
               <path
                 d={t.path}
-                className={`rf-map__territory${isSelected ? " is-selected" : ""}`}
+                className={`rf-map__territory${isSelected ? " is-selected" : ""}${isNeutral ? " is-neutral" : ""}`}
                 data-territory-id={t.id}
-                fill={hexToRgba(base, isSelected ? 0.9 : 0.82)}
-                stroke={isSelected ? "#e8f4f8" : "#7eb6c9"}
+                data-owner={owner}
+                fill={hexToRgba(base, isNeutral ? (isSelected ? 0.72 : 0.55) : isSelected ? 0.9 : 0.82)}
+                stroke={
+                  isSelected ? "#e8f4f8" : isNeutral ? "#9aa3ad" : "#7eb6c9"
+                }
+                strokeDasharray={isNeutral ? `${2.2 * zoomScale} ${1.6 * zoomScale}` : undefined}
                 // Counter-scale: strokeWidth in user units × zoomScale ≈ constant screen px.
-                strokeWidth={(isSelected ? 1.4 : 1.05) * zoomScale}
+                strokeWidth={(isSelected ? 1.4 : isNeutral ? 0.95 : 1.05) * zoomScale}
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
@@ -876,8 +887,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         })}
 
         <rect
-          width={WORLD_W}
-          height={WORLD_H}
+          width={OCEAN_VIEW.w}
+          height={OCEAN_VIEW.h}
           fill="url(#rf-holo-grid)"
           opacity="0.22"
           pointerEvents="none"
@@ -1735,8 +1746,16 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     : ""}
                 </p>
                 {selectedTs && (
-                  <p className="rf-map__sheet-owner">
-                    {factionName(selectedTs.owner)}
+                  <p
+                    className={`rf-map__sheet-owner${selectedTs.owner === "neutral" ? " is-neutral" : ""}`}
+                    data-testid="territory-owner-label"
+                  >
+                    {selectedTs.owner === "neutral"
+                      ? "Neutral"
+                      : factionName(selectedTs.owner)}
+                    {selectedTs.owner === "neutral" && (
+                      <span className="rf-text-dim"> · static garrison</span>
+                    )}
                     {state.players[selectedTs.owner]?.doctrineId && (
                       <>
                         {" "}

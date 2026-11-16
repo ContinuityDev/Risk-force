@@ -21,14 +21,14 @@ describe("population / campaigning", () => {
 });
 
 describe("starting assignment", () => {
-  it("deals balanced seeded territories", () => {
+  it("assigns one start each (seeded, distinct)", () => {
     const a = assignTerritoriesBalanced(["player", "faction_a", "faction_b"], 42);
     const b = assignTerritoriesBalanced(["player", "faction_a", "faction_b"], 42);
     expect(a).toEqual(b);
     const counts = Object.values(a).map((bag) => bag.length);
-    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+    expect(counts.every((n) => n === 1)).toBe(true);
     const all = Object.values(a).flat();
-    expect(new Set(all).size).toBe(TERRITORIES.length);
+    expect(new Set(all).size).toBe(3);
   });
 
   it("createInitialState uses seed for reproducible owners", () => {

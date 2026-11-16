@@ -156,13 +156,15 @@ export interface NewGamePayload {
   humanNames?: string[];
   multiplayerMode: "solo" | "hotseat" | "lan";
   seed?: number;
+  /** Theater map — World War (Earth) or Civil War (USA). */
+  mapId?: import("../data/maps/types").MapId;
   /** Optional explicit faction assignment for humans (defaults to player, faction_a...). */
   humanFactions?: FactionId[];
   /** AI budget / starting tech / aggression. Default normal. */
   difficulty?: DifficultyId;
   /**
    * Optional turn limit for VP race (0 = off). Default win remains total domination
-   * unless turnLimit > 0, in which case highest VP at limit also wins.
+   * (all territories including neutrals). With turnLimit > 0, highest VP also wins.
    */
   turnLimit?: number;
   /** When true (and turnLimit > 0), VP race is active alongside domination. */

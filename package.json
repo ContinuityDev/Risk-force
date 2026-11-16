@@ -12,6 +12,7 @@
     "test:all": "vitest run && node scripts/e2e-lobby-mobile.mjs",
     "lan-host": "node server/lan-host.mjs",
     "gen-map": "node scripts/gen-earth-map.mjs",
+    "gen-civil-war": "node scripts/gen-civil-war-map.mjs",
     "gen-sprites": "node scripts/gen-3d-sprites.mjs",
     "gen-sprites-svg": "node scripts/gen-realistic-sprites.mjs"
   },
@@ -37,6 +38,7 @@
     "topojson-client": "^3.1.0",
     "topojson-simplify": "^3.0.3",
     "typescript": "~5.8.3",
+    "us-atlas": "^3.0.1",
     "vite": "^6.3.5",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^3.2.4",

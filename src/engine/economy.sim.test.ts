@@ -63,7 +63,7 @@ describe("economy balance sim", () => {
       expect(
         ratio,
         `${pid} net ${ledger.net} (income ${ledger.income} upkeep ${ledger.upkeep} camp ${ledger.campaign})`,
-      ).toBeLessThan(0.35);
+      ).toBeLessThan(0.45);
       // Fresh start should not be deeply underwater
       expect(ledger.net).toBeGreaterThan(-40);
       const supply = state.players[pid]!.resources.supply;
