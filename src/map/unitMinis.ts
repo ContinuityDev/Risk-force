@@ -249,12 +249,12 @@ export function layoutUnitMinis(
   const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
   const gap = Math.max(0.55, size * 0.18);
   const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
-  // Inflate label boxes so chips cannot sit on "Greenland" / "Eastern Canada" glyphs.
+  // Inflate label boxes so chips clear territory name glyphs at mid zoom.
   const labelBoxes: Box[] = labels.map((l) => ({
     x: l.x,
     y: l.y,
-    w: Math.max(l.w * 1.15, size * 2.2, 10),
-    h: Math.max(l.h * 1.35, size * 0.85, 4),
+    w: Math.max(l.w * 1.08, size * 1.8, 9),
+    h: Math.max(l.h * 1.25, size * 0.7, 3.5),
   }));
   const occupied: Box[] = [...labelBoxes, ...occupiedExtra];
   const out: PlacedUnitMini[] = [];
@@ -296,10 +296,10 @@ export function layoutUnitMinis(
       const belowY = labelBot + gap + chipSize / 2;
       const sideY = lbl?.y ?? ay;
       const anchors = [
-        { x: baseX - chipSize * 1.2, y: sideY },
-        { x: baseX + chipSize * 1.2, y: sideY },
-        { x: baseX - chipSize * 1.35, y: sideY - chipSize * 0.4 },
-        { x: baseX + chipSize * 1.35, y: sideY - chipSize * 0.4 },
+        { x: baseX - chipSize * 1.55, y: sideY },
+        { x: baseX + chipSize * 1.55, y: sideY },
+        { x: baseX - chipSize * 1.75, y: sideY - chipSize * 0.45 },
+        { x: baseX + chipSize * 1.75, y: sideY - chipSize * 0.45 },
         { x: baseX, y: aboveY },
         { x: baseX - chipSize * 0.9, y: aboveY },
         { x: baseX + chipSize * 0.9, y: aboveY },
