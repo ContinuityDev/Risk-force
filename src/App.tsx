@@ -33,7 +33,7 @@ import { CaptureView } from "./components/CaptureView";
 import { EconomySummary } from "./components/EconomySummary";
 import { HandoffScreen } from "./components/HandoffScreen";
 import { Hud } from "./components/Hud";
-import { InvadeView } from "./components/InvadeView";
+import { SquadsView } from "./components/SquadsView";
 import { LobbyScreen } from "./components/LobbyScreen";
 import { MarketView } from "./components/MarketView";
 import { MenuScreen } from "./components/MenuScreen";
@@ -596,8 +596,8 @@ export default function App() {
               canAct={isHumanTurn && state.phase === "play"}
             />
           )}
-          {state.screen === "invade" && (
-            <InvadeView
+          {(state.screen === "squads" || state.screen === "invade") && (
+            <SquadsView
               state={state}
               activePlayer={activePlayer}
               dispatch={dispatch}

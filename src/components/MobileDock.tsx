@@ -14,7 +14,7 @@ const DOCK: { screen: Screen; label: string }[] = [
   { screen: "map", label: "Map" },
   { screen: "base", label: "Base" },
   { screen: "research", label: "Research" },
-  { screen: "invade", label: "Army" },
+  { screen: "squads", label: "Squads" },
 ];
 
 /**
@@ -35,7 +35,15 @@ export function MobileDock({
         <button
           key={screen}
           type="button"
-          className={state.screen === screen ? "is-active" : undefined}
+          className={
+            screen === "squads"
+              ? state.screen === "squads" || state.screen === "invade"
+                ? "is-active"
+                : undefined
+              : state.screen === screen
+                ? "is-active"
+                : undefined
+          }
           disabled={!isHumanTurn && screen !== "map"}
           data-tutorial={`dock-${screen}`}
           onClick={() =>

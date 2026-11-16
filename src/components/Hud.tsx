@@ -26,7 +26,7 @@ const NAV: { screen: Screen; label: string }[] = [
   { screen: "map", label: "Map" },
   { screen: "base", label: "Base" },
   { screen: "research", label: "Research" },
-  { screen: "invade", label: "Army" },
+  { screen: "squads", label: "Squads" },
   { screen: "save", label: "Save" },
 ];
 
@@ -321,7 +321,15 @@ export function Hud({
             <button
               key={screen}
               type="button"
-              className={state.screen === screen ? "primary" : "ghost"}
+              className={
+                screen === "squads"
+                  ? state.screen === "squads" || state.screen === "invade"
+                    ? "primary"
+                    : "ghost"
+                  : state.screen === screen
+                    ? "primary"
+                    : "ghost"
+              }
               disabled={!isHumanTurn && screen !== "map"}
               onClick={() =>
                 dispatch({ type: "SET_SCREEN", payload: { screen } })

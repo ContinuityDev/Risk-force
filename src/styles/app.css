@@ -1761,6 +1761,188 @@
   color: var(--rf-text-faint);
 }
 
+/* ── Squads ─────────────────────────────────────────────── */
+
+.rf-squads__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.rf-squads__joiners {
+  margin-bottom: 1rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.65rem 0.75rem;
+}
+
+.rf-squads__joiners ul {
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-squads__joiners small {
+  display: block;
+  color: var(--rf-text-faint);
+  font-size: 0.72rem;
+}
+
+.rf-squads__list ul,
+.rf-squads__list > .rf-hint {
+  margin-top: 0.45rem;
+}
+
+.rf-squads__list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-squads__list li > button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.rf-squads__list small {
+  color: var(--rf-text-faint);
+  font-size: 0.72rem;
+  font-weight: normal;
+}
+
+.rf-squads__detail {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.75rem;
+  min-height: 12rem;
+}
+
+.rf-squads__detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.rf-squads__detail-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.rf-squads__comp {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+}
+
+.rf-squads__comp li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+}
+
+.rf-squads__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.rf-squads__tabs button {
+  font-size: 0.78rem;
+}
+
+.rf-squads__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rf-squads__rename input {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.rf-squads__rename-row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.rf-squads__rename-row input {
+  flex: 1;
+  margin: 0;
+}
+
+.rf-squads__modes {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.rf-squads__add-group + .rf-squads__add-group {
+  margin-top: 0.65rem;
+}
+
+.rf-squads__force {
+  margin-top: 0.35rem;
+}
+
+.rf-squads__danger {
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rf-border-soft);
+}
+
+.rf-squads__create-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+}
+
+.rf-squads__create-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.rf-squads__create-head h3 {
+  margin: 0.15rem 0 0;
+}
+
+.rf-squads__create-footer {
+  margin-top: 0.35rem;
+}
+
+.rf-squads__create-footer .primary {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .rf-squads__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Invade ─────────────────────────────────────────────── */
 
 .rf-invade__row {
