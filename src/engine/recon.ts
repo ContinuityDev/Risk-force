@@ -4,10 +4,14 @@
  */
 
 import type { FactionId } from "../data/types";
+import {
+  formatUnitCount,
+  formatUnitRange,
+  territoryDisplayName,
+} from "../ui/displayNames";
 import type { GameState, ReconLink } from "./state";
 import { canAfford, spend } from "./economy";
 import { makeNewsItem } from "./news";
-import { TERRITORIES } from "../data/map/territories";
 
 export const RECON_DURATION = 3;
 
@@ -19,7 +23,7 @@ export const RECON_COST = {
 export type ReconMode = "drone" | "satellite";
 
 function territoryLabel(id: string): string {
-  return TERRITORIES.find((t) => t.id === id)?.name ?? id;
+  return territoryDisplayName(id);
 }
 
 export function hasReconAsset(
@@ -98,10 +102,10 @@ export function formatGarrisonIntel(
   const entries = Object.entries(ts.garrison).filter(([, n]) => n > 0);
   if (!entries.length) return "Empty";
   if (isTerritoryRevealed(state, viewerId, territoryId)) {
-    return entries.map(([id, n]) => `${id}×${n}`).join(", ");
+    return entries.map(([id, n]) => formatUnitCount(id, n)).join(", ");
   }
   return approximateGarrison(ts.garrison)
-    .map((g) => `${g.unitId}×${g.lo}–${g.hi}`)
+    .map((g) => formatUnitRange(g.unitId, g.lo, g.hi))
     .join(", ");
 }
 

@@ -33,7 +33,12 @@ import {
   STRIKE_DEFS,
   strikeCooldownLeft,
 } from "../engine/strikes";
-import { getUnit } from "../data/units";
+import {
+  factionDisplayName,
+  formatUnitRange,
+  territoryDisplayName,
+  unitDisplayName,
+} from "../ui/displayNames";
 import {
   buildingsFingerprint,
   layoutBuildingMinis,
@@ -883,43 +888,386 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             {state.strikeFx!.map((fx) => {
               const t = TERRITORIES.find((x) => x.id === fx.territoryId);
               if (!t) return null;
-              const hue =
-                fx.kind === "kinetic"
-                  ? "#e8c070"
-                  : fx.kind === "orbital"
-                    ? "#7ec8e8"
-                    : "#d08060";
+              const x = t.label.x;
+              const y = t.label.y;
+              // Keep FX roughly constant on screen; floor so mid-zoom Asia
+              // still reads as a big impact (not a hairline ring).
+              const z = Math.max(0.55, zoomScale * 1.15);
+              // Peak-frame base stays visible; SMIL never zeros key layers.
+              if (fx.kind === "cruise") {
+                const trail = 42 * z;
+                return (
+                  <g
+                    key={fx.id}
+                    className="rf-strike-fx rf-strike-fx--cruise"
+                  >
+                    <path
+                      d={`M ${x - trail} ${y - 26 * z} Q ${x - trail * 0.45} ${y - 34 * z} ${x - 3 * z} ${y - 3 * z}`}
+                      fill="none"
+                      stroke="#f4a060"
+                      strokeWidth={Math.max(2.8, 3.6 * z)}
+                      strokeLinecap="round"
+                      opacity="0.95"
+                    />
+                    <path
+                      d={`M ${x - trail * 0.85} ${y - 22 * z} Q ${x - trail * 0.4} ${y - 28 * z} ${x - 2 * z} ${y - 2 * z}`}
+                      fill="none"
+                      stroke="#ffe0b8"
+                      strokeWidth={Math.max(1.2, 1.6 * z)}
+                      strokeLinecap="round"
+                      opacity="0.85"
+                    />
+                    <circle
+                      cx={x - 10 * z}
+                      cy={y - 12 * z}
+                      r={Math.max(2.2, 2.8 * z)}
+                      fill="#fff0d0"
+                    >
+                      <animateMotion
+                        path={`M ${-28 * z} ${-14 * z} Q ${-10 * z} ${-20 * z} ${10 * z} ${8 * z}`}
+                        dur="0.9s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={16 * z}
+                      fill="#c05020"
+                      opacity="0.55"
+                    />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={11 * z}
+                      fill="#e87838"
+                      opacity="0.78"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${9 * z};${14 * z};${17 * z};${10 * z}`}
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.9;0.7;0.55;0.85"
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={5.5 * z}
+                      fill="#fff6e8"
+                      opacity="0.95"
+                    />
+                    {[
+                      [x - 9 * z, y - 6 * z],
+                      [x + 8 * z, y - 10 * z],
+                      [x + 3 * z, y + 5 * z],
+                      [x - 5 * z, y + 7 * z],
+                      [x + 11 * z, y + 2 * z],
+                    ].map(([px, py], i) => (
+                      <circle
+                        key={`sm-${i}`}
+                        cx={px}
+                        cy={py}
+                        r={(3.5 + i * 0.7) * z}
+                        fill={i % 2 === 0 ? "#7a6a60" : "#a87848"}
+                        opacity={0.55 - i * 0.06}
+                      >
+                        <animate
+                          attributeName="cy"
+                          values={`${py};${py - 10 * z}`}
+                          dur="1.5s"
+                          begin={`${i * 0.1}s`}
+                          repeatCount="indefinite"
+                        />
+                        <animate
+                          attributeName="opacity"
+                          values="0.55;0.28;0.55"
+                          dur="1.5s"
+                          begin={`${i * 0.1}s`}
+                          repeatCount="indefinite"
+                        />
+                      </circle>
+                    ))}
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={20 * z}
+                      fill="none"
+                      stroke="#f0a070"
+                      strokeWidth={Math.max(2.2, 2.8 * z)}
+                      opacity="0.8"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${12 * z};${24 * z};${30 * z};${14 * z}`}
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.9;0.55;0.35;0.8"
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={28 * z}
+                      fill="none"
+                      stroke="#d87840"
+                      strokeWidth={Math.max(1.2, 1.6 * z)}
+                      opacity="0.45"
+                    />
+                  </g>
+                );
+              }
+              if (fx.kind === "orbital") {
+                const beam = 56 * z;
+                return (
+                  <g
+                    key={fx.id}
+                    className="rf-strike-fx rf-strike-fx--orbital"
+                  >
+                    <line
+                      x1={x}
+                      y1={y - beam}
+                      x2={x}
+                      y2={y - 2 * z}
+                      stroke="#7ad0f0"
+                      strokeWidth={Math.max(4, 5.2 * z)}
+                      strokeLinecap="round"
+                      opacity="0.55"
+                    />
+                    <line
+                      x1={x}
+                      y1={y - beam}
+                      x2={x}
+                      y2={y - 2 * z}
+                      stroke="#d8f8ff"
+                      strokeWidth={Math.max(2.4, 3.2 * z)}
+                      strokeLinecap="round"
+                      opacity="0.95"
+                    >
+                      <animate
+                        attributeName="opacity"
+                        values="0.7;1;0.85;0.7"
+                        dur="1.4s"
+                        repeatCount="indefinite"
+                      />
+                    </line>
+                    <line
+                      x1={x}
+                      y1={y - beam}
+                      x2={x}
+                      y2={y - 2 * z}
+                      stroke="#ffffff"
+                      strokeWidth={Math.max(1, 1.3 * z)}
+                      opacity="0.9"
+                    />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={12 * z}
+                      fill="#e8fbff"
+                      opacity="0.9"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${8 * z};${15 * z};${11 * z};${9 * z}`}
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={8 * z}
+                      fill="#ffffff"
+                      opacity="0.85"
+                    />
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={22 * z}
+                      fill="none"
+                      stroke="#8ed8f0"
+                      strokeWidth={Math.max(2.4, 3 * z)}
+                      opacity="0.85"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${12 * z};${26 * z};${34 * z};${14 * z}`}
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.9;0.55;0.35;0.8"
+                        dur="1.5s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={30 * z}
+                      fill="none"
+                      stroke="#c8f0ff"
+                      strokeWidth={Math.max(1.4, 1.8 * z)}
+                      opacity="0.55"
+                    >
+                      <animate
+                        attributeName="r"
+                        values={`${16 * z};${32 * z};${40 * z};${18 * z}`}
+                        dur="1.5s"
+                        begin="0.12s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    <ellipse
+                      cx={x}
+                      cy={y + 3 * z}
+                      rx={16 * z}
+                      ry={6 * z}
+                      fill="#2a4858"
+                      opacity="0.6"
+                    />
+                  </g>
+                );
+              }
+              // kinetic — tungsten rod + EMP arcs / embers
+              const rod = 60 * z;
               return (
-                <g key={fx.id} className={`rf-strike-fx rf-strike-fx--${fx.kind}`}>
+                <g
+                  key={fx.id}
+                  className="rf-strike-fx rf-strike-fx--kinetic"
+                >
+                  <line
+                    x1={x + 10 * z}
+                    y1={y - rod}
+                    x2={x}
+                    y2={y}
+                    stroke="#c89840"
+                    strokeWidth={Math.max(5, 6.2 * z)}
+                    strokeLinecap="round"
+                    opacity="0.55"
+                  />
+                  <line
+                    x1={x + 10 * z}
+                    y1={y - rod}
+                    x2={x}
+                    y2={y}
+                    stroke="#ffe090"
+                    strokeWidth={Math.max(3.2, 4.2 * z)}
+                    strokeLinecap="round"
+                    opacity="0.95"
+                  />
                   <circle
-                    cx={t.label.x}
-                    cy={t.label.y}
-                    r={14}
-                    fill="none"
-                    stroke={hue}
-                    strokeWidth={2.2}
-                    opacity={0.85}
+                    cx={x}
+                    cy={y}
+                    r={16 * z}
+                    fill="#fff2c0"
+                    opacity="0.8"
                   >
                     <animate
                       attributeName="r"
-                      values="4;18;22"
-                      dur="1.1s"
-                      repeatCount="2"
-                    />
-                    <animate
-                      attributeName="opacity"
-                      values="1;0.4;0"
-                      dur="1.1s"
-                      repeatCount="2"
+                      values={`${10 * z};${18 * z};${22 * z};${12 * z}`}
+                      dur="1.5s"
+                      repeatCount="indefinite"
                     />
                   </circle>
                   <circle
-                    cx={t.label.x}
-                    cy={t.label.y}
-                    r={3}
-                    fill={hue}
-                    opacity={0.9}
+                    cx={x}
+                    cy={y}
+                    r={7 * z}
+                    fill="#ffffff"
+                    opacity="0.9"
                   />
+                  {[
+                    `M ${x} ${y} q ${-18 * z} ${-12 * z} ${-24 * z} ${6 * z}`,
+                    `M ${x} ${y} q ${20 * z} ${-10 * z} ${26 * z} ${8 * z}`,
+                    `M ${x} ${y} q ${-8 * z} ${18 * z} ${12 * z} ${22 * z}`,
+                    `M ${x} ${y} q ${16 * z} ${14 * z} ${-6 * z} ${24 * z}`,
+                    `M ${x} ${y} q ${-22 * z} ${8 * z} ${-16 * z} ${20 * z}`,
+                  ].map((d, i) => (
+                    <path
+                      key={`arc-${i}`}
+                      d={d}
+                      fill="none"
+                      stroke="#a8e8ff"
+                      strokeWidth={Math.max(1.4, 1.8 * z)}
+                      opacity={0.9 - i * 0.08}
+                    >
+                      <animate
+                        attributeName="opacity"
+                        values="0.45;1;0.45"
+                        dur="0.85s"
+                        begin={`${i * 0.07}s`}
+                        repeatCount="indefinite"
+                      />
+                    </path>
+                  ))}
+                  {[
+                    [x - 10 * z, y - 3 * z],
+                    [x + 11 * z, y - 7 * z],
+                    [x - 3 * z, y + 8 * z],
+                    [x + 7 * z, y + 5 * z],
+                    [x - 14 * z, y + 4 * z],
+                    [x + 4 * z, y - 12 * z],
+                  ].map(([ex, ey], i) => (
+                    <circle
+                      key={`em-${i}`}
+                      cx={ex}
+                      cy={ey}
+                      r={Math.max(1.5, 2 * z)}
+                      fill={i % 2 === 0 ? "#f0c060" : "#ffe8a0"}
+                      opacity="0.95"
+                    >
+                      <animate
+                        attributeName="cy"
+                        values={`${ey};${ey - (12 + i) * z}`}
+                        dur="1.1s"
+                        begin={`${i * 0.05}s`}
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="1;0.35;1"
+                        dur="1.1s"
+                        begin={`${i * 0.05}s`}
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                  ))}
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={24 * z}
+                    fill="none"
+                    stroke="#f0c860"
+                    strokeWidth={Math.max(2.4, 3 * z)}
+                    opacity="0.85"
+                  >
+                    <animate
+                      attributeName="r"
+                      values={`${12 * z};${28 * z};${36 * z};${14 * z}`}
+                      dur="1.5s"
+                      repeatCount="indefinite"
+                    />
+                    <animate
+                      attributeName="opacity"
+                      values="0.9;0.55;0.35;0.8"
+                      dur="1.5s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
                 </g>
               );
             })}
@@ -1416,7 +1764,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     {isTerritoryRevealed(state, humanId, selected.id)
                       ? formatGarrisonIntel(state, humanId, selected.id)
                       : approximateGarrison(selectedTs.garrison)
-                          .map((g) => `${g.unitId}×${g.lo}–${g.hi}`)
+                          .map((g) => formatUnitRange(g.unitId, g.lo, g.hi))
                           .join(", ") || "Empty"}
                     {!isTerritoryRevealed(state, humanId, selected.id) &&
                       selectedTs.owner !== humanId && (
@@ -1607,15 +1955,14 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                           )
                           .map((a) => (
                             <li key={a.id}>
-                              {a.owner} → {a.toId} · ETA {a.turnsRemaining}t ·{" "}
+                              {factionDisplayName(a.owner)} →{" "}
+                              {territoryDisplayName(a.toId)} · ETA{" "}
+                              {a.turnsRemaining}t ·{" "}
                               {a.force
-                                .map((s) => {
-                                  try {
-                                    return `${getUnit(s.unitId).name}×${s.count}`;
-                                  } catch {
-                                    return `${s.unitId}×${s.count}`;
-                                  }
-                                })
+                                .map(
+                                  (s) =>
+                                    `${unitDisplayName(s.unitId)}×${s.count}`,
+                                )
                                 .join(", ") || "empty"}
                             </li>
                           ))}

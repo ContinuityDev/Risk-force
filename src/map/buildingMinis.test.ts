@@ -115,9 +115,10 @@ describe("buildingMinis", () => {
       h: 225,
     };
     const mid = layoutBuildingMinis([tdef], state, 0.45, midCam, []);
-    // Mid zoom: one compact pad so territory names stay readable.
-    expect(mid.length).toBeGreaterThanOrEqual(1);
-    expect(mid.every((m) => m.compact)).toBe(true);
+    const midIcons = mid.filter((m) => !m.more && !m.compact);
+    expect(midIcons.length).toBe(3);
+    expect(mid.some((m) => m.more === 1)).toBe(true);
+    expect(midIcons.some((m) => m.constructing)).toBe(true);
 
     const deep = layoutBuildingMinis(
       [tdef],

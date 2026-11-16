@@ -328,33 +328,51 @@ async function runViewport(browser, viewport, tag) {
   await clickOps(page, "Strike");
   await shot(page, `${tag}-strike-targeting`);
 
-  // ── (b) Strike FX mid-animation on the map ──────────────────
-  await page.evaluate(({ enemy }) => {
-    const s = window.__RF__.getState();
-    window.__RF__.dispatch({
-      type: "LOAD_STATE",
-      payload: {
-        state: {
-          ...s,
-          selectedTerritoryId: enemy,
-          strikeFx: [
-            {
-              id: "sfx-live",
-              kind: "orbital",
-              territoryId: enemy,
-              turn: s.turn,
-              createdAt: Date.now(),
+  // ── (b) Strike FX mid-impact — cruise / orbital / kinetic ───
+  // Close any open strike panel so FX sits clear on the map.
+  const strikeBtn = page.getByRole("button", { name: /^Strike$/i });
+  if (await strikeBtn.count()) {
+    const pressed = await strikeBtn.first().evaluate(
+      (el) => el.classList.contains("primary"),
+    );
+    if (pressed) await strikeBtn.first().click({ force: true });
+  }
+  for (const kind of ["cruise", "orbital", "kinetic"]) {
+    await page.evaluate(
+      ({ enemy, kind }) => {
+        const s = window.__RF__.getState();
+        window.__RF__.dispatch({
+          type: "LOAD_STATE",
+          payload: {
+            state: {
+              ...s,
+              selectedTerritoryId: enemy,
+              opsMode: null,
+              strikeFx: [
+                {
+                  id: `sfx-${kind}`,
+                  kind,
+                  territoryId: enemy,
+                  turn: s.turn,
+                  createdAt: Date.now(),
+                },
+              ],
             },
-          ],
-        },
+          },
+        });
       },
-    });
-  }, ids);
-  await page.waitForTimeout(200);
-  // Collapse strike panel so FX is visible on the map.
-  await clickOps(page, "Strike");
-  await page.waitForTimeout(180);
-  await shot(page, `${tag}-strike-fx`);
+      { enemy: ids.enemy, kind },
+    );
+    // Catch mid-impact (~0.45s into a ~1.6s loop).
+    await page.waitForTimeout(480);
+    await shot(page, `${tag}-strike-fx-${kind}`);
+    if (kind === "orbital") {
+      // Legacy alias (same pixels as orbital mid-impact).
+      const src = join(TMP, `${tag}-strike-fx-orbital.png`);
+      copyFileSync(src, join(OUT, `${tag}-strike-fx.png`));
+      copyFileSync(src, join(OUT, `followup_${tag}-strike-fx.png`));
+    }
+  }
 
   // ── (c) Aftermath: damaged buildings / shields down ─────────
   await page.evaluate(({ enemy }) => {
@@ -460,20 +478,72 @@ async function runViewport(browser, viewport, tag) {
   await dismissToast(page);
   await shot(page, `${tag}-recon-reveal`);
 
-  // ── Labels / chips at mid zoom over Asia (must be readable) ─
+  // ── Labels / multi minis at mid zoom over Asia ──────────────
   await page.evaluate(() => {
     const s = window.__RF__.getState();
-    const focus = ["china_west", "kazakhstan", "india_east", "usa_west"];
+    const focus = [
+      "china_west",
+      "china_east",
+      "kazakhstan",
+      "india_east",
+      "india_west",
+      "mongolia",
+      "siberia",
+    ];
     const territories = { ...s.territories };
     for (const id of focus) {
       if (!territories[id]) continue;
+      const prev = territories[id];
       territories[id] = {
-        ...territories[id],
+        ...prev,
+        owner: id === "china_west" || id === "mongolia" || id === "siberia"
+          ? "player"
+          : prev.owner,
         garrison: {
-          ...(territories[id].garrison ?? {}),
-          trooper: Math.max(territories[id].garrison?.trooper ?? 0, 4),
-          hover_tank: Math.max(territories[id].garrison?.hover_tank ?? 0, 1),
+          trooper: 6,
+          hover_tank: 2,
+          assault_mech: 1,
+          drone: 2,
+          aa_tank: 1,
         },
+        buildings: [
+          {
+            instanceId: `${id}-cmd`,
+            buildingId: "command_nexus",
+            x: 1,
+            y: 1,
+            hp: 600,
+            buildRemaining: 0,
+            workers: 0,
+          },
+          {
+            instanceId: `${id}-bar`,
+            buildingId: "barracks",
+            x: 0,
+            y: 2,
+            hp: 200,
+            buildRemaining: 0,
+            workers: 0,
+          },
+          {
+            instanceId: `${id}-vf`,
+            buildingId: "vehicle_factory",
+            x: 2,
+            y: 0,
+            hp: 240,
+            buildRemaining: 0,
+            workers: 0,
+          },
+          {
+            instanceId: `${id}-af`,
+            buildingId: "airfield",
+            x: 2,
+            y: 2,
+            hp: 220,
+            buildRemaining: 0,
+            workers: 0,
+          },
+        ],
       };
     }
     window.__RF__.dispatch({
@@ -490,9 +560,10 @@ async function runViewport(browser, viewport, tag) {
       },
     });
   });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(550);
   await dismissToast(page);
   await shot(page, `${tag}-labels-chips`);
+  await shot(page, `${tag}-asia-mid-minis`);
 
   // ── News / theater event ────────────────────────────────────
   await page.evaluate(() => window.__RF__?.openNews?.());

@@ -55,7 +55,7 @@ function greenlandState(): Record<string, TerritoryState> {
 }
 
 describe("unitMinis mid/deep dense cores", () => {
-  it("keeps a compact mid chip clear of Greenland buildings and label", () => {
+  it("keeps a multi-type mid grid beside Greenland buildings without covering the label", () => {
     const greenland = TERRITORIES.find((t) => t.id === "greenland")!;
     const cam = {
       x: greenland.label.x - 160,
@@ -92,17 +92,21 @@ describe("unitMinis mid/deep dense cores", () => {
       labels,
       occupied,
     );
-    // Mid zoom is compact-only so long names stay readable.
-    expect(units.length).toBeGreaterThanOrEqual(1);
-    expect(units.every((u) => u.compact)).toBe(true);
+    const typed = units.filter((u) => !u.compact && u.unitId !== "_more");
+    expect(typed.length).toBeGreaterThanOrEqual(3);
+    expect(units.some((u) => u.more && u.more > 0)).toBe(true);
 
     const lbl = labels[0]!;
     for (const u of units) {
       const ub = { x: u.x, y: u.y, w: u.size, h: u.size };
-      // Priority: never cover the territory name (buildings may share a pole).
       expect(
         overlaps(ub, { x: lbl.x, y: lbl.y, w: lbl.w, h: lbl.h }, 0.15),
       ).toBe(false);
+      for (const b of bldgs) {
+        expect(
+          overlaps(ub, { x: b.x, y: b.y, w: b.size, h: b.size }, 0.2),
+        ).toBe(false);
+      }
     }
   });
 

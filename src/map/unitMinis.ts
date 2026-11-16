@@ -352,9 +352,10 @@ export function layoutUnitMinis(
       continue;
     }
 
-    // Mid: always one compact chip below/above — multi-type rows were clipping
-    // long names (Western China / Kazakhstan / Eastern India).
-    const forceCompact = tier === "mid";
+    // Mid: compact for small plots / single-type; larger territories keep a
+    // multi-type row below the label (labels paint above minis in WorldMap).
+    const forceCompact =
+      tier === "mid" && (t.area < 0.012 || sorted.length === 1);
     if (forceCompact) {
       const chipSize = size * (t.area < 0.005 ? 0.75 : 0.85);
       // Below / above only — side-at-label-Y was clipping "Western China" etc.
@@ -412,12 +413,16 @@ export function layoutUnitMinis(
       continue;
     }
 
-    // Deep: up to 6 types beside/below the label.
-    const maxShow = Math.min(6, sorted.length);
+    // Mid: ≤3 types + optional +N. Deep: up to 6 types below the label.
+    const maxShow =
+      tier === "mid" ? Math.min(3, sorted.length) : Math.min(6, sorted.length);
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
     const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
-    const cols = Math.min(3, Math.max(2, Math.ceil(Math.sqrt(slotCount))));
+    const cols =
+      tier === "deep"
+        ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(slotCount))))
+        : Math.min(3, slotCount);
     const rows = Math.ceil(slotCount / cols);
     const gridH = rows * size + (rows - 1) * gap;
     const gridW = cols * size + (cols - 1) * gap;

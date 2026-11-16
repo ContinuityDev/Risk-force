@@ -59,9 +59,11 @@ describe("unitMinis", () => {
       { x: 0, y: 0, w: 400, h: 200 },
       labels,
     );
-    // Mid zoom stays compact so long territory names remain readable.
+    // Mid zoom: multi-type for larger plots; still emits typed hover tanks.
     expect(mid.length).toBeGreaterThan(0);
-    expect(mid.every((m) => m.compact)).toBe(true);
+    expect(mid.some((m) => !m.compact && m.unitId === "hover_tank")).toBe(
+      true,
+    );
 
     const deep = layoutUnitMinis(
       territories,

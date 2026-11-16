@@ -3600,15 +3600,30 @@
     max-height: 2.8rem;
   }
 
+  .rf-invade__ops {
+    margin: 0.2rem 0 0.25rem;
+    padding: 0.3rem 0.15rem 0.2rem;
+    gap: 0.25rem 0.35rem;
+    border-top: var(--rf-hairline);
+    background: rgba(8, 14, 20, 0.55);
+    z-index: 2;
+    position: relative;
+  }
+
   .rf-invade__templates {
-    margin: 0.1rem 0;
+    margin: 0;
     gap: 0.25rem;
   }
 
   .rf-invade__cmd-chip {
     font-size: 0.65rem;
-    padding: 0.1rem 0.35rem;
-    margin: 0.1rem 0.25rem 0.1rem 0;
+    padding: 0.15rem 0.4rem;
+  }
+
+  .rf-invade__tpl-chip {
+    min-height: 1.7rem;
+    font-size: 0.72rem;
+    padding: 0.15rem 0.55rem;
   }
 
   .rf-invade__force {
@@ -3616,7 +3631,7 @@
     min-height: 5.5rem;
     overflow: auto;
     overscroll-behavior: contain;
-    padding: 0.15rem 0.35rem;
+    padding: 0.2rem 0.35rem 0.15rem;
     margin: 0;
     display: flex;
     flex-direction: column;
@@ -3626,8 +3641,7 @@
     font-size: 0.58rem;
   }
 
-  .rf-invade__force > .rf-hint,
-  .rf-invade__force > button.ghost {
+  .rf-invade__force > .rf-hint {
     display: none;
   }
 
@@ -5053,22 +5067,63 @@ button.is-unaffordable {
   font-size: 1.25rem;
 }
 
+.rf-invade__ops {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  margin: 0.25rem 0 0.35rem;
+  padding: 0.25rem 0.1rem;
+}
+
 .rf-invade__cmd-chip {
   display: inline-flex;
-  margin: 0.25rem 0.35rem 0.25rem 0;
-  padding: 0.15rem 0.45rem;
+  margin: 0;
+  padding: 0.2rem 0.5rem;
   border: 1px solid var(--rf-accent-dim);
   color: var(--rf-accent);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #1a2834 0%, #121a22 100%);
 }
 
 .rf-invade__templates {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.3rem;
   align-items: center;
-  margin: 0.35rem 0;
+  margin: 0;
+}
+
+.rf-invade__tpl-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.85rem;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--rf-accent);
+  border-radius: 2px;
+  background: linear-gradient(180deg, #243848 0%, #162028 100%);
+  color: var(--rf-accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.rf-invade__tpl-chip:hover:not(:disabled) {
+  background: linear-gradient(180deg, #2e4a5c 0%, #1a303c 100%);
+}
+
+.rf-invade__tpl-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rf-invade__save-tpl {
+  font-size: 0.72rem;
+  min-height: 1.7rem;
+  padding: 0.15rem 0.45rem;
 }
 
 .rf-map__sheet-actions--stack {
@@ -5141,8 +5196,12 @@ button.is-unaffordable {
   margin: 0.2rem 0;
 }
 
-.rf-strike-fx circle {
+.rf-strike-fx circle,
+.rf-strike-fx ellipse,
+.rf-strike-fx path,
+.rf-strike-fx line {
   transform-origin: center;
+  /* Scale with zoom via JS (z); keep strokes painting at authored width. */
 }
 
 @media (orientation: landscape) and (max-height: 500px) {

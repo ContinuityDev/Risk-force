@@ -313,9 +313,8 @@ export function layoutBuildingMinis(
     }
 
     const sorted = sortBuildings(buildings);
-    // Mid: always one compact pad below the name — multi-icon rows were
-    // covering "Western China" / Kazakhstan glyphs even with label paint-over.
-    if (tier === "mid") {
+    // Mid on small plots: one compact pad. Larger territories keep a short row.
+    if (tier === "mid" && t.area < 0.012) {
       const compact = tryPlaceCompact(
         t,
         buildings,
@@ -328,14 +327,19 @@ export function layoutBuildingMinis(
       if (compact) out.push(compact);
       continue;
     }
-    // Deep: 2–3 column grid/cluster below the label.
-    const maxShow = sorted.length;
+    // Mid: ≤3 pads. Deep: up to full cluster — always below the label.
+    const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
-    const cols = Math.min(
-      3,
-      Math.max(2, Math.ceil(Math.sqrt(shown.length + (moreCount ? 1 : 0)))),
-    );
+    const cols =
+      tier === "deep"
+        ? Math.min(
+            3,
+            Math.max(2, Math.ceil(Math.sqrt(shown.length + (moreCount ? 1 : 0)))),
+          )
+        : shown.length + (moreCount ? 1 : 0) <= 3
+          ? shown.length + (moreCount ? 1 : 0)
+          : 3;
 
     const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
     // Prefer further below / never sit on the label. Side lanes via baseX shift.

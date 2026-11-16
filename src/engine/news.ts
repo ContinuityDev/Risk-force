@@ -1,27 +1,26 @@
 import { factionName } from "../data/factions";
 import { getBuilding } from "../data/buildings";
 import { TERRITORIES } from "../data/map/territories";
-import { getUnit } from "../data/units";
 import type { FactionId } from "../data/types";
 import type { GameAction } from "./actions";
 import type { BattleState, GameState, NewsItem } from "./state";
+import {
+  formatUnitCount,
+  reconModeDisplayName,
+  researchDisplayName,
+  roleDisplayName,
+  strikeDisplayName,
+  territoryDisplayName,
+} from "../ui/displayNames";
 
 function territoryLabel(id: string): string {
-  return TERRITORIES.find((t) => t.id === id)?.name ?? id;
+  return territoryDisplayName(id);
 }
 
 function forceSummary(
   force: { unitId: string; count: number }[],
 ): string {
-  return force
-    .map((s) => {
-      try {
-        return `${getUnit(s.unitId).name}×${s.count}`;
-      } catch {
-        return `${s.unitId}×${s.count}`;
-      }
-    })
-    .join(", ");
+  return force.map((s) => formatUnitCount(s.unitId, s.count)).join(", ");
 }
 
 let newsSeq = 1;
@@ -86,7 +85,7 @@ export function newsFromAiAction(
       });
     }
     case "RESEARCH": {
-      const node = action.payload.nodeId.replace(/_/g, " ");
+      const node = researchDisplayName(action.payload.nodeId);
       return makeNewsItem({
         turn,
         category: "research",
@@ -103,7 +102,7 @@ export function newsFromAiAction(
         turn,
         category: "strike",
         factionId,
-        headline: `${displayName} authorizes ${action.payload.kind} strike`,
+        headline: `${displayName} authorizes ${strikeDisplayName(action.payload.kind)}`,
         body: `Target ${territoryLabel(action.payload.targetId)} painted for strategic fires.`,
       });
     case "LAUNCH_RECON":
@@ -111,7 +110,7 @@ export function newsFromAiAction(
         turn,
         category: "movement",
         factionId,
-        headline: `${displayName} deploys ${action.payload.mode} recon`,
+        headline: `${displayName} deploys ${reconModeDisplayName(action.payload.mode)} recon`,
         body: `Intel window opening on ${territoryLabel(action.payload.targetId)}.`,
       });
     case "TRAIN_COMMANDER":
@@ -119,8 +118,8 @@ export function newsFromAiAction(
         turn,
         category: "build",
         factionId,
-        headline: `${displayName} commissions ${action.payload.role} officer`,
-        body: `War College graduates a new ${action.payload.role} commander.`,
+        headline: `${displayName} commissions ${roleDisplayName(action.payload.role)} officer`,
+        body: `War College graduates a new ${roleDisplayName(action.payload.role)} commander.`,
       });
     case "ORDER_MOVE":
     case "MOVE_GARRISON": {
