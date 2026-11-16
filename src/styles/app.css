@@ -1158,16 +1158,21 @@
   cursor: pointer;
 }
 
-.rf-map__unit image {
+.rf-map__unit image,
+.rf-map__unit.is-grounded image {
   image-rendering: -webkit-optimize-contrast;
 }
 
 .rf-map__unit.is-compact {
-  filter: drop-shadow(0 0 0.55px rgba(242, 247, 250, 0.3));
+  filter: none;
 }
 
 .rf-map__unit.is-transit {
-  filter: drop-shadow(0 0 0.8px rgba(224, 176, 96, 0.45));
+  opacity: 0.92;
+}
+
+.rf-map__unit.is-grounded .rf-map__contact-shadow {
+  opacity: 0.85;
 }
 
 .rf-map__bldgs {
@@ -1180,25 +1185,35 @@
   cursor: pointer;
 }
 
-.rf-map__bldg image {
+.rf-map__bldg image,
+.rf-map__bldg.is-grounded image {
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
 }
 
 .rf-map__bldg.is-compact {
-  filter: drop-shadow(0 0 0.6px rgba(242, 247, 250, 0.35));
+  filter: none;
 }
 
 .rf-map__bldg-more-txt {
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.rf-map__count-tag text {
+  font-family: var(--rf-font-body);
+  letter-spacing: 0;
 }
 
 .rf-map__label {
   fill: rgba(248, 252, 255, 0.96);
   font-family: var(--rf-font-body);
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  /* Zero tracking — mid-word letter-spacing looked like "Connecti cut" on mobile. */
+  letter-spacing: 0;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
   /* font-size set per-territory via attribute; no stroke outline (avoids ghosting) */
   stroke: none;
   paint-order: normal;
