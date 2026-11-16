@@ -44,15 +44,20 @@ describe("buildingMinis", () => {
   });
 
   it("grows on-screen size with zoom-in and clamps", () => {
-    // world compact stays small; mid/deep jump into the readable band
+    // world compact stays small; deep zoom reads larger (deep world-unit cap
+    // keeps clusters fitting beside labels, so mid may still floor at 10px).
     expect(targetScreenPx(1)).toBeLessThanOrEqual(14);
-    expect(targetScreenPx(0.35)).toBeGreaterThan(targetScreenPx(1));
+    expect(targetScreenPx(0.1)).toBeGreaterThan(targetScreenPx(1));
     expect(targetScreenPx(0.1)).toBeGreaterThanOrEqual(22);
     expect(targetScreenPx(0.08)).toBeLessThanOrEqual(40);
   });
 
   it("places compact markers at world zoom and clusters when zoomed in", () => {
-    const tid = TERRITORIES.find((t) => t.area > 0.01)?.id ?? TERRITORIES[0]!.id;
+    // Prefer a large continental plot so a mid-zoom cluster of 3 fits inland.
+    const tid =
+      TERRITORIES.find((t) => t.id === "china_east")?.id ??
+      TERRITORIES.find((t) => t.area > 0.05)?.id ??
+      TERRITORIES[0]!.id;
     const tdef = TERRITORIES.find((t) => t.id === tid)!;
     const state: Record<string, TerritoryState> = {
       [tid]: stubTerritory({
@@ -134,7 +139,10 @@ describe("buildingMinis", () => {
   });
 
   it("falls back to a compact marker when the cluster cannot fit", () => {
-    const tid = TERRITORIES.find((t) => t.area > 0.01)?.id ?? TERRITORIES[0]!.id;
+    const tid =
+      TERRITORIES.find((t) => t.id === "china_east")?.id ??
+      TERRITORIES.find((t) => t.area > 0.05)?.id ??
+      TERRITORIES[0]!.id;
     const tdef = TERRITORIES.find((t) => t.id === tid)!;
     const state: Record<string, TerritoryState> = {
       [tid]: stubTerritory({
@@ -161,13 +169,14 @@ describe("buildingMinis", () => {
         ],
       }),
     };
-    // Giant label covering the pole forces cluster failure → compact fallback
+    // Label over the pole blocks a full cluster but leaves land beside/below
+    // for a single compact chip (hard keep-out — never cover the name).
     const blockingLabel = {
       id: tid,
       x: tdef.label.x,
       y: tdef.label.y,
-      w: 80,
-      h: 60,
+      w: 28,
+      h: 6,
     };
     const mid = layoutBuildingMinis(
       [tdef],
@@ -180,6 +189,24 @@ describe("buildingMinis", () => {
     expect(mid.some((m) => m.compact || m.buildingId === "command_nexus")).toBe(
       true,
     );
+
+    // Territory-filling label → emit nothing rather than overlapping the name.
+    const giantLabel = {
+      id: tid,
+      x: tdef.label.x,
+      y: tdef.label.y,
+      w: 80,
+      h: 60,
+    };
+    expect(
+      layoutBuildingMinis(
+        [tdef],
+        state,
+        0.5,
+        { x: tdef.label.x - 200, y: tdef.label.y - 100, w: 400, h: 200 },
+        [giantLabel],
+      ),
+    ).toEqual([]);
   });
 
   it("emits nothing for empty or razed buildings (seed-77 Maghreb outposts)", async () => {

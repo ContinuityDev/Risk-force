@@ -191,28 +191,51 @@ function poleOfRing(ring: Ring): Pt {
 /**
  * Sample interior slots on the largest ring: pole first, then a spiral/grid
  * of candidates that keep a mini footprint inland.
+ * When `label` is set, also seeds candidates beside/below the name so minis
+ * can clear the glyph keep-out without leaving the polygon.
  */
 export function buildInteriorSlots(
   ring: Ring,
   pole: Pt,
   count = 12,
   footprint = 2.2,
+  label?: Pt,
 ): Pt[] {
   const slots: Pt[] = [];
+  const minSep = footprint * 1.45;
   const push = (p: Pt) => {
     if (!footprintInsideRing(p.x, p.y, footprint, footprint, ring, 0.4)) return;
-    if (slots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < footprint * 1.15))
-      return;
+    if (slots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < minSep)) return;
     slots.push(p);
   };
   push(pole);
 
   const bbox = ringBBox(ring);
   const span = Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY, 4);
-  const step = Math.max(footprint * 1.35, span * 0.08);
+  const step = Math.max(footprint * 1.55, span * 0.09);
+
+  // Beside / below the country name (label is often the pole).
+  if (label) {
+    const d = Math.max(step * 1.05, footprint * 1.55);
+    const offsets: Pt[] = [
+      { x: 0, y: d }, // south / below
+      { x: d * 0.85, y: d * 0.55 },
+      { x: -d * 0.85, y: d * 0.55 },
+      { x: d, y: 0 },
+      { x: -d, y: 0 },
+      { x: d * 0.7, y: -d * 0.35 },
+      { x: -d * 0.7, y: -d * 0.35 },
+      { x: 0, y: d * 1.7 },
+      { x: d * 1.35, y: d * 0.9 },
+      { x: -d * 1.35, y: d * 0.9 },
+    ];
+    for (const o of offsets) {
+      push({ x: label.x + o.x, y: label.y + o.y });
+    }
+  }
 
   // Spiral around the pole
-  for (let ringN = 1; ringN <= 8 && slots.length < count; ringN++) {
+  for (let ringN = 1; ringN <= 10 && slots.length < count; ringN++) {
     const r = step * ringN;
     const n = Math.max(6, ringN * 6);
     for (let i = 0; i < n && slots.length < count; i++) {
@@ -222,7 +245,7 @@ export function buildInteriorSlots(
   }
 
   // Fallback grid over bbox if still short
-  if (slots.length < Math.min(4, count)) {
+  if (slots.length < Math.min(6, count)) {
     const gx = Math.max(3, Math.floor((bbox.maxX - bbox.minX) / step));
     const gy = Math.max(3, Math.floor((bbox.maxY - bbox.minY) / step));
     for (let iy = 1; iy < gy && slots.length < count; iy++) {
@@ -236,6 +259,37 @@ export function buildInteriorSlots(
   }
 
   return slots;
+}
+
+/** Axis-aligned overlap for center-based boxes (x/y = center). */
+export function boxesOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+  pad = 0,
+): boolean {
+  return !(
+    a.x + a.w / 2 + pad < b.x - b.w / 2 ||
+    a.x - a.w / 2 - pad > b.x + b.w / 2 ||
+    a.y + a.h / 2 + pad < b.y - b.h / 2 ||
+    a.y - a.h / 2 - pad > b.y + b.h / 2
+  );
+}
+
+/**
+ * Keep-out box around a territory name glyph so minis never cover the label.
+ * `w`/`h` are the laid-out text extents; padded generously vs mini size.
+ */
+export function labelKeepOutBox(
+  label: { x: number; y: number; w: number; h: number },
+  miniSize: number,
+): { x: number; y: number; w: number; h: number } {
+  return {
+    x: label.x,
+    y: label.y,
+    // Wide enough to clear the full glyph; height covers the text + halo.
+    w: Math.max(label.w * 1.35, miniSize * 2.1, 9),
+    h: Math.max(label.h * 1.85, miniSize * 0.95, 4.5),
+  };
 }
 
 export function getTerritoryAnchors(t: TerritoryDef): TerritoryAnchorSet {
@@ -289,17 +343,33 @@ export function getTerritoryAnchors(t: TerritoryDef): TerritoryAnchorSet {
   }
   // Footprint scale for slot spacing — keep modest so we stay inland.
   const fp = Math.max(1.8, Math.min(2.8, Math.sqrt(Math.max(t.area, 0.001)) * 6));
+  const labelPt = { x: t.label.x, y: t.label.y };
   let slots = rings.length
-    ? buildInteriorSlots(ring, pole, 16, fp)
+    ? buildInteriorSlots(ring, pole, 24, fp, labelPt)
     : [pole];
-  // Prefer deepest inland slots first (avoids coastal labels like southern Finland).
+  // Prefer deepest inland slots, then ones offset from the name glyph
+  // (beside/below) so claimInteriorSlot can clear label keep-outs.
   if (rings.length && slots.length) {
-    slots = [...slots].sort(
+    slots = [...slots].sort((a, b) => {
+      const edge =
+        distanceToRingEdge(b.x, b.y, ring) -
+        distanceToRingEdge(a.x, a.y, ring);
+      if (Math.abs(edge) > 0.35) return edge;
+      // Prefer south/east of the label so pieces sit under/beside the name.
+      const score = (p: Pt) => {
+        const dx = p.x - labelPt.x;
+        const dy = p.y - labelPt.y;
+        const away = Math.hypot(dx, dy);
+        return away * 2 + Math.max(0, dy) * 3 + Math.abs(dx);
+      };
+      return score(b) - score(a);
+    });
+    // Keep pole as the deepest inland point (not necessarily the label).
+    pole = [...slots].sort(
       (a, b) =>
         distanceToRingEdge(b.x, b.y, ring) -
         distanceToRingEdge(a.x, a.y, ring),
-    );
-    pole = slots[0] ?? pole;
+    )[0] ?? pole;
   }
   const set: TerritoryAnchorSet = {
     territoryId: t.id,
@@ -326,40 +396,27 @@ export function claimInteriorSlot(
 ): Pt | null {
   const anchors = getTerritoryAnchors(t);
   const ring = anchors.rings[anchors.largestRingIndex];
-  if (!ring) return anchors.pole;
+  if (!ring) return null;
   const half = size / 2;
-  for (const s of anchors.slots) {
-    if (!footprintInsideRing(s.x, s.y, half, half, ring, 0.35)) continue;
-    const box = { x: s.x, y: s.y, w: size, h: size };
-    if (
-      occupied.some(
-        (o) =>
-          !(
-            box.x + box.w / 2 + pad < o.x - o.w / 2 ||
-            box.x - box.w / 2 - pad > o.x + o.w / 2 ||
-            box.y + box.h / 2 + pad < o.y - o.h / 2 ||
-            box.y - box.h / 2 - pad > o.y + o.h / 2
-          ),
-      )
-    ) {
-      continue;
+  const tryPoint = (s: Pt, landHalf: number, softPad: number): Pt | null => {
+    if (!footprintInsideRing(s.x, s.y, landHalf, landHalf, ring, 0.35)) {
+      return null;
     }
+    const box = { x: s.x, y: s.y, w: size, h: size };
+    if (occupied.some((o) => boxesOverlap(box, o, softPad))) return null;
     return s;
+  };
+  for (const s of anchors.slots) {
+    const hit = tryPoint(s, half, pad);
+    if (hit) return hit;
   }
-  // Soften: pole with reduced footprint — still require coastal clearance.
-  if (
-    footprintInsideRing(
-      anchors.pole.x,
-      anchors.pole.y,
-      Math.max(0.7, half * 0.55),
-      Math.max(0.7, half * 0.55),
-      ring,
-      0.25,
-    )
-  ) {
-    return anchors.pole;
+  // Soften keep-out pad only — keep land clearance so minis stay inland.
+  const softPad = pad * 0.55;
+  for (const s of anchors.slots) {
+    const hit = tryPoint(s, half, softPad);
+    if (hit) return hit;
   }
-  return null;
+  return tryPoint(anchors.pole, Math.max(0.85, half * 0.85), softPad);
 }
 
 /**

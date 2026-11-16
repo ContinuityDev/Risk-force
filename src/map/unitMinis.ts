@@ -22,6 +22,7 @@ import {
   claimInteriorCluster,
   claimInteriorSlot,
   getTerritoryAnchors,
+  labelKeepOutBox,
   marchLandPoint,
 } from "./territoryAnchors";
 
@@ -151,12 +152,8 @@ export function layoutUnitMinis(
   const sizeScale = tier === "world" ? 0.62 : tier === "mid" ? 0.62 : 0.74;
   const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
   const gap = Math.max(0.55, size * 0.2);
-  const labelBoxes: Box[] = labels.map((l) => ({
-    x: l.x,
-    y: l.y,
-    w: Math.max(l.w * 1.15, size * 1.6, 8),
-    h: Math.max(l.h * 1.25, size * 0.75, 3.5),
-  }));
+  // Hard label keep-out — garrison chips clear the country name.
+  const labelBoxes: Box[] = labels.map((l) => labelKeepOutBox(l, size));
   const occupied: Box[] = [...labelBoxes, ...occupiedExtra];
   const out: PlacedUnitMini[] = [];
 

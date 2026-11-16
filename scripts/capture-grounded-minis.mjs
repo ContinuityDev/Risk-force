@@ -347,6 +347,24 @@ async function main() {
     },
   );
 
+  // Further zoom — all player buildings grounded inland beside the label.
+  await captureViewport(
+    browser,
+    { ...desktop, mapId: "world_war", seed: 7 },
+    "ww-sweden-deep-1440",
+    async (page) => {
+      const home = await stockPlayerHome(page);
+      await selectTerritory(page, home);
+      await zoomOntoTerritory(page, home, 14);
+      const counts = await page.evaluate(() => {
+        const bldgs = [...document.querySelectorAll(".rf-map__bldgs > g")].length;
+        const units = [...document.querySelectorAll(".rf-map__units > g")].length;
+        return { bldgs, units };
+      });
+      console.log("sweden-deep-chrome", counts);
+    },
+  );
+
   await captureViewport(
     browser,
     { ...desktop, mapId: "world_war", seed: 7 },

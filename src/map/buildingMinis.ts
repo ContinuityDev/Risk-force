@@ -8,6 +8,7 @@ import {
   claimInteriorCluster,
   claimInteriorSlot,
   getTerritoryAnchors,
+  labelKeepOutBox,
 } from "./territoryAnchors";
 
 /** Median territory area for the active map — used to scale plot-size gates. */
@@ -127,11 +128,12 @@ export function iconWorldSize(
 ): number {
   // Fraction of the visible camera width → roughly constant*growing screen px
   const frac =
-    tier === "deep" ? 0.058 : tier === "mid" ? 0.034 : 0.013;
+    tier === "deep" ? 0.048 : tier === "mid" ? 0.034 : 0.013;
   const raw = camW * frac;
-  // Hard clamps in world units — slightly tighter so dense regions stay readable.
-  const min = tier === "deep" ? 3.6 : tier === "mid" ? 1.8 : 1.2;
-  const max = tier === "deep" ? 7.5 : tier === "mid" ? 5.0 : 2.6;
+  // Hard clamps — deep zoom stays small enough to fit a full building cluster
+  // inland beside the country label (e.g. 4 on Sweden).
+  const min = tier === "deep" ? 3.0 : tier === "mid" ? 1.8 : 1.2;
+  const max = tier === "deep" ? 5.2 : tier === "mid" ? 5.0 : 2.6;
   void zoomScale;
   return Math.min(max, Math.max(min, raw));
 }
@@ -225,13 +227,8 @@ export function layoutBuildingMinis(
   const tier = miniZoomTier(zoomScale);
   const size = iconWorldSize(zoomScale, cam.w, tier);
   const gap = Math.max(0.8, size * 0.16);
-  // Soft label avoid — prefer inland slots that don't cover glyphs.
-  const occupied: Box[] = labels.map((l) => ({
-    x: l.x,
-    y: l.y,
-    w: Math.max(l.w * 1.15, size * 1.8, 8),
-    h: Math.max(l.h * 1.25, size * 0.8, 3.5),
-  }));
+  // Hard label keep-out — minis must sit beside/below the country name.
+  const occupied: Box[] = labels.map((l) => labelKeepOutBox(l, size));
   const out: PlacedMini[] = [];
 
   const ranked = [...territories].sort((a, b) => b.area - a.area);
@@ -272,27 +269,27 @@ export function layoutBuildingMinis(
 
     const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
     const shown = sorted.slice(0, maxShow);
-    const moreCount = sorted.length - shown.length;
-    const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
     const centers = claimInteriorCluster(
       t,
-      slotCount,
+      shown.length + 1,
       size,
       occupied,
-      gap * 0.5,
+      gap * 0.28,
     );
 
-    if (centers.length >= shown.length) {
+    if (centers.length > 0) {
+      const placeN = Math.min(shown.length, centers.length);
       const trial: PlacedMini[] = [];
-      for (let i = 0; i < shown.length; i++) {
+      for (let i = 0; i < placeN; i++) {
         const c = centers[i]!;
         const mini = toMini(t.id, shown[i]!, c.x, c.y, size);
         if (!mini) continue;
         occupied.push({ x: c.x, y: c.y, w: size, h: size });
         trial.push(mini);
       }
-      if (moreCount > 0 && centers[shown.length]) {
-        const c = centers[shown.length]!;
+      const leftover = sorted.length - placeN;
+      if (leftover > 0 && centers[placeN]) {
+        const c = centers[placeN]!;
         const moreSize = size * 0.85;
         occupied.push({ x: c.x, y: c.y, w: moreSize, h: moreSize });
         trial.push({
@@ -306,8 +303,11 @@ export function layoutBuildingMinis(
           size: moreSize,
           constructing: false,
           progress: 1,
-          more: moreCount,
+          more: leftover,
         });
+      } else if (leftover > 0 && trial.length === 1) {
+        // Single inland slot — show count on that chip rather than dropping peers.
+        trial[0] = { ...trial[0]!, compact: true, count: sorted.length };
       }
       if (trial.length) {
         out.push(...trial);
