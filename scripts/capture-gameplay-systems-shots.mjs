@@ -97,6 +97,61 @@ async function runViewport(browser, viewport, tag) {
   await shot(page, `${tag}-fresh-hud-turn1`);
   await shot(page, `${tag}-dock`);
 
+  // 3) Market open with trade preview
+  await page.evaluate(() => {
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...window.__RF__.getState(),
+          message: null,
+          screen: "map",
+          phase: "play",
+        },
+      },
+    });
+  });
+  await page.waitForTimeout(200);
+  await dismissToast(page);
+
+  const marketDock = page.locator('[data-tutorial="dock-market"]');
+  const marketHud = page.getByRole("button", { name: /^Market$/i });
+  const dockVisible = await marketDock.first().isVisible().catch(() => false);
+  const hudVisible = await marketHud.first().isVisible().catch(() => false);
+  if (dockVisible) {
+    await marketDock.first().click();
+  } else if (hudVisible) {
+    await marketHud.first().click();
+  } else {
+    const more = page.getByRole("button", { name: /^More$/i });
+    if (await more.first().isVisible().catch(() => false)) {
+      await more.first().click();
+      await page.waitForTimeout(200);
+      const orbital = page.getByRole("button", { name: /Orbital Market/i });
+      if (await orbital.first().isVisible().catch(() => false)) {
+        await orbital.first().click();
+      } else {
+        await page.evaluate(() => window.__RF__.openMarket?.());
+      }
+    } else {
+      await page.evaluate(() => window.__RF__.openMarket?.());
+    }
+  }
+  await page.waitForTimeout(400);
+  // Ensure preview visible — set amount
+  const amount = page.locator(".rf-market input[type='number']");
+  if (await amount.count()) {
+    await amount.fill("25");
+  }
+  await page.waitForTimeout(200);
+  await shot(page, `${tag}-market`);
+  const close = page
+    .locator(".rf-market button")
+    .filter({ hasText: /Close/i });
+  if (await close.count()) await close.first().click().catch(() => {});
+  await page.waitForTimeout(200);
+
+
   // 1) Territory panel — occupied + terrain
   await page.evaluate(() => {
     const s = window.__RF__.getState();
@@ -249,60 +304,6 @@ async function runViewport(browser, viewport, tag) {
   await page.waitForTimeout(200);
   console.log("invade setup", invadeSetup);
   await shot(page, `${tag}-invade-preview-odds-stacking`);
-
-  // 3) Market open with trade preview
-  await page.evaluate(() => {
-    window.__RF__.dispatch({
-      type: "LOAD_STATE",
-      payload: {
-        state: {
-          ...window.__RF__.getState(),
-          message: null,
-          screen: "map",
-          phase: "play",
-        },
-      },
-    });
-  });
-  await page.waitForTimeout(200);
-  await dismissToast(page);
-
-  const marketDock = page.locator('[data-tutorial="dock-market"]');
-  const marketHud = page.getByRole("button", { name: /^Market$/i });
-  const dockVisible = await marketDock.first().isVisible().catch(() => false);
-  const hudVisible = await marketHud.first().isVisible().catch(() => false);
-  if (dockVisible) {
-    await marketDock.first().click();
-  } else if (hudVisible) {
-    await marketHud.first().click();
-  } else {
-    const more = page.getByRole("button", { name: /^More$/i });
-    if (await more.first().isVisible().catch(() => false)) {
-      await more.first().click();
-      await page.waitForTimeout(200);
-      const orbital = page.getByRole("button", { name: /Orbital Market/i });
-      if (await orbital.first().isVisible().catch(() => false)) {
-        await orbital.first().click();
-      } else {
-        await page.evaluate(() => window.__RF__.openMarket?.());
-      }
-    } else {
-      await page.evaluate(() => window.__RF__.openMarket?.());
-    }
-  }
-  await page.waitForTimeout(400);
-  // Ensure preview visible — set amount
-  const amount = page.locator(".rf-market input[type='number']");
-  if (await amount.count()) {
-    await amount.fill("25");
-  }
-  await page.waitForTimeout(200);
-  await shot(page, `${tag}-market`);
-  const close = page
-    .locator(".rf-market button")
-    .filter({ hasText: /Close/i });
-  if (await close.count()) await close.first().click().catch(() => {});
-  await page.waitForTimeout(200);
 
   // 4) Capture raze/keep with structures + reachable confirm
   await page.evaluate(() => {
