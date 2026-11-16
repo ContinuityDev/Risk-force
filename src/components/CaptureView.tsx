@@ -85,9 +85,9 @@ export function CaptureView({ state, dispatch }: CaptureViewProps) {
           >
             Keep
             <small>
-              {buildingCount} structures at{" "}
-              {Math.round(GAME_LOOP.occupation.keepBuildingHpMult * 100)}% HP
-              (repair needed)
+              {buildingCount === 0
+                ? "No structures left — occupy the empty site"
+                : `${buildingCount} structure${buildingCount === 1 ? "" : "s"} retained at ${Math.round(GAME_LOOP.occupation.keepBuildingHpMult * 100)}% HP`}
             </small>
           </button>
         </div>
@@ -109,7 +109,10 @@ export function CaptureView({ state, dispatch }: CaptureViewProps) {
         </ul>
 
         <label className="rf-capture__slider">
-          Occupy with <strong>{occupy}</strong> / {total}
+          <span className="rf-capture__slider-label">
+            Occupy with <strong>{occupy}</strong>
+            <span className="rf-text-dim"> / {total}</span>
+          </span>
           <input
             type="range"
             min={0}

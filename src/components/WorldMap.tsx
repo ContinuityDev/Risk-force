@@ -19,6 +19,7 @@ import {
 import { TERRITORIES } from "../data/map/territories";
 import type { TerritoryDef } from "../data/types";
 import type { GameAction } from "../engine/actions";
+import { travelTurns } from "../engine/movement";
 import type { GameState } from "../engine/state";
 import {
   buildingsFingerprint,
@@ -724,29 +725,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           ))}
         </g>
 
-        {(state.plannedRoute?.length ?? 0) > 1 && (
-          <g className="rf-map__planned-route" pointerEvents="none">
-            {state.plannedRoute!.slice(0, -1).map((id, i) => {
-              const from = TERRITORIES.find((t) => t.id === id);
-              const to = TERRITORIES.find(
-                (t) => t.id === state.plannedRoute![i + 1],
-              );
-              if (!from || !to) return null;
-              return (
-                <path
-                  key={`route-${id}-${to.id}`}
-                  d={`M ${from.label.x} ${from.label.y} L ${to.label.x} ${to.label.y}`}
-                  fill="none"
-                  stroke="#7ec8e8"
-                  strokeWidth={Math.max(1.3, 2.2 * zoomScale)}
-                  strokeDasharray="5 4"
-                  opacity="0.9"
-                />
-              );
-            })}
-          </g>
-        )}
-
         {state.aiAttackPlans.length > 0 && (
           <g className="rf-map__ai-plans" pointerEvents="none">
             {state.aiAttackPlans.map((plan, i) => {
@@ -1164,6 +1142,69 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 </g>
               );
             })}
+          </g>
+        )}
+
+        {/* Planned multi-hop route — paint above territory fills/minis */}
+        {(state.plannedRoute?.length ?? 0) > 1 && (
+          <g className="rf-map__planned-route" pointerEvents="none">
+            {state.plannedRoute!.slice(0, -1).map((id, i) => {
+              const from = TERRITORIES.find((t) => t.id === id);
+              const to = TERRITORIES.find(
+                (t) => t.id === state.plannedRoute![i + 1],
+              );
+              if (!from || !to) return null;
+              return (
+                <path
+                  key={`route-${id}-${to.id}`}
+                  d={`M ${from.label.x} ${from.label.y} L ${to.label.x} ${to.label.y}`}
+                  fill="none"
+                  stroke="#b8f0ff"
+                  strokeWidth={Math.max(4, 6.5 * zoomScale)}
+                  strokeDasharray="8 4"
+                  strokeLinecap="round"
+                  opacity="1"
+                  className="rf-map__planned-seg"
+                />
+              );
+            })}
+            {(() => {
+              const path = state.plannedRoute!;
+              const mid = path[Math.floor(path.length / 2)]!;
+              const midT = TERRITORIES.find((t) => t.id === mid);
+              if (!midT) return null;
+              let total = 0;
+              for (let i = 0; i < path.length - 1; i++) {
+                total += travelTurns(path[i]!, path[i + 1]!, [
+                  { unitId: "trooper", count: 1 },
+                ]);
+              }
+              const hops = path.length - 1;
+              return (
+                <g transform={`translate(${midT.label.x}, ${midT.label.y - 12})`}>
+                  <rect
+                    x={-38}
+                    y={-12}
+                    width={76}
+                    height={18}
+                    rx={2}
+                    fill="rgba(8,16,24,0.94)"
+                    stroke="#9fdfff"
+                    strokeWidth={0.9}
+                  />
+                  <text
+                    textAnchor="middle"
+                    y={2}
+                    className="rf-map__route-eta"
+                    fill="#e8f7ff"
+                    fontSize={8}
+                    fontWeight={700}
+                  >
+                    {hops} hop{hops === 1 ? "" : "s"} · {total}t
+                  </text>
+                </g>
+              );
+            })()}
           </g>
         )}
       </svg>

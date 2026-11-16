@@ -291,7 +291,7 @@ export function createInitialState(payload: NewGamePayload): GameState {
     screen: "map",
     multiplayerMode: payload.multiplayerMode,
     winner: null,
-    message: `Theater seeded (${seed}). Campaigning drives recruitment — land alone is not enough.`,
+    message: "Campaigning drives recruitment — land alone is not enough.",
     nextInstanceId: nextId.n,
     aiAttackPlans: [],
     armiesInTransit: [],

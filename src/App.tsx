@@ -178,6 +178,8 @@ export default function App() {
         dispatch: Transport["dispatch"];
         neighbors: Record<string, string[]>;
         createBattle?: typeof import("./engine/combat").createBattle;
+        openMarket?: () => void;
+        dismissMessage?: () => void;
       };
     };
     // Sync core ASAP so capture scripts don't race the dynamic import.
@@ -186,6 +188,8 @@ export default function App() {
       dispatch: (a) => transport.dispatch(a),
       neighbors: w.__RF__?.neighbors ?? {},
       createBattle: w.__RF__?.createBattle,
+      openMarket: () => setMarketOpen(true),
+      dismissMessage: () => transport.dispatch({ type: "DISMISS_MESSAGE" }),
     };
     let cancelled = false;
     void Promise.all([
@@ -623,6 +627,8 @@ export default function App() {
           state={state}
           isHumanTurn={isHumanTurn}
           dispatch={dispatch}
+          onOpenMarket={() => setMarketOpen(true)}
+          marketOpen={marketOpen}
         />
         {tutorialActive && (
           <TutorialOverlay

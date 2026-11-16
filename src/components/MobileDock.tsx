@@ -6,6 +6,8 @@ interface MobileDockProps {
   isHumanTurn: boolean;
   dispatch: (action: GameAction) => void;
   onMore?: () => void;
+  onOpenMarket?: () => void;
+  marketOpen?: boolean;
 }
 
 const DOCK: { screen: Screen; label: string }[] = [
@@ -24,6 +26,8 @@ export function MobileDock({
   isHumanTurn,
   dispatch,
   onMore,
+  onOpenMarket,
+  marketOpen = false,
 }: MobileDockProps) {
   return (
     <nav className="rf-dock" aria-label="Primary navigation" data-tutorial="dock">
@@ -41,6 +45,17 @@ export function MobileDock({
           {label}
         </button>
       ))}
+      {onOpenMarket && (
+        <button
+          type="button"
+          className={marketOpen ? "is-active" : undefined}
+          disabled={!isHumanTurn}
+          data-tutorial="dock-market"
+          onClick={onOpenMarket}
+        >
+          Market
+        </button>
+      )}
       <button
         type="button"
         className="rf-dock__end primary"
@@ -51,7 +66,7 @@ export function MobileDock({
         End Turn
       </button>
       {onMore && (
-        <button type="button" className="ghost" onClick={onMore}>
+        <button type="button" onClick={onMore}>
           More
         </button>
       )}
