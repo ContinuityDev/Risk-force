@@ -24,6 +24,8 @@ interface UnitMiniProps {
   shadowOnly?: boolean;
   /** When true, omit the contact shadow (sprite/chrome pass). */
   omitShadow?: boolean;
+  /** When true, skip the transparent tap target (caller supplies its own). */
+  omitHit?: boolean;
 }
 
 interface BuildingMiniProps {
@@ -115,6 +117,7 @@ export function GroundedUnitMini({
   more,
   shadowOnly,
   omitShadow,
+  omitHit,
 }: UnitMiniProps) {
   const col = muteFactionColor(factionHex, transit ? 0.22 : 0.38);
   if (more != null) {
@@ -167,15 +170,17 @@ export function GroundedUnitMini({
       opacity={transit ? 0.9 : 1}
     >
       {!omitShadow && <GroundedContactShadow fp={fp} kind="unit" />}
-      <rect
-        className="rf-map__unit-hit"
-        data-territory-id={territoryId}
-        x={fp.hit.x}
-        y={fp.hit.y}
-        width={fp.hit.w}
-        height={fp.hit.h}
-        fill="transparent"
-      />
+      {!omitHit && (
+        <rect
+          className="rf-map__unit-hit"
+          data-territory-id={territoryId}
+          x={fp.hit.x}
+          y={fp.hit.y}
+          width={fp.hit.w}
+          height={fp.hit.h}
+          fill="transparent"
+        />
+      )}
       <g
         className="rf-map__unit-sprite"
         transform={`skewX(${fp.skewX}) scale(1 ${fp.scaleY})`}
