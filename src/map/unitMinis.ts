@@ -249,12 +249,16 @@ export function layoutUnitMinis(
   const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
   const gap = Math.max(0.55, size * 0.18);
   const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
-  // Inflate label boxes so chips clear territory name glyphs at mid zoom.
+  // Mid/deep: inflate label boxes so chips clear name glyphs.
+  // World: keep tight boxes so sparse strength chips still place.
+  const labelPadW = tier === "world" ? 1 : 1.12;
+  const labelPadH = tier === "world" ? 1 : 1.3;
+  const labelMinW = tier === "world" ? size * 1.4 : size * 1.9;
   const labelBoxes: Box[] = labels.map((l) => ({
     x: l.x,
     y: l.y,
-    w: Math.max(l.w * 1.08, size * 1.8, 9),
-    h: Math.max(l.h * 1.25, size * 0.7, 3.5),
+    w: Math.max(l.w * labelPadW, labelMinW, 8),
+    h: Math.max(l.h * labelPadH, size * (tier === "world" ? 0.55 : 0.75), 3.5),
   }));
   const occupied: Box[] = [...labelBoxes, ...occupiedExtra];
   const out: PlacedUnitMini[] = [];
