@@ -17,6 +17,7 @@ export default defineConfig({
         "sprites/**/*.{png,svg}",
       ],
       manifest: {
+        id: BASE,
         name: "Risk Force",
         short_name: "Risk Force",
         description:
@@ -28,22 +29,23 @@ export default defineConfig({
         orientation: "landscape",
         start_url: BASE,
         scope: BASE,
+        lang: "en",
         categories: ["games"],
         icons: [
           {
-            src: "icons/icon-192.png",
+            src: `${BASE}icons/icon-192.png`,
             sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "icons/icon-512.png",
+            src: `${BASE}icons/icon-512.png`,
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "icons/icon-512.png",
+            src: `${BASE}icons/icon-512.png`,
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
