@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 interface RotateOverlayProps {
   /** Called when the user taps “Enter landscape / fullscreen”. */
   onRequestLandscape: () => void;
@@ -7,8 +9,12 @@ interface RotateOverlayProps {
  * Full-screen gate for touch devices in portrait. The game UI stays
  * unusable until the device is landscape (CSS) or the user enters a
  * fullscreen session that can lock orientation (where supported).
+ * iOS Safari cannot force orientation in-browser — keep this overlay
+ * and nudge Add to Home Screen for a real fullscreen PWA.
  */
 export function RotateOverlay({ onRequestLandscape }: RotateOverlayProps) {
+  const [hintDismissed, setHintDismissed] = useState(false);
+
   return (
     <div
       className="rf-rotate"
@@ -18,7 +24,6 @@ export function RotateOverlay({ onRequestLandscape }: RotateOverlayProps) {
     >
       <div className="rf-rotate__card">
         <div className="rf-rotate__icon" aria-hidden>
-          {/* Portrait phone outline + curved rotate arrow */}
           <svg viewBox="0 0 96 96" width="88" height="88">
             <rect
               x="30"
@@ -64,9 +69,24 @@ export function RotateOverlay({ onRequestLandscape }: RotateOverlayProps) {
           Enter landscape
         </button>
         <p className="rf-rotate__note">
-          iOS Safari cannot force orientation in the browser — rotate manually,
-          or install the app to the home screen for a landscape PWA.
+          iOS Safari cannot force orientation in the browser — rotate manually.
         </p>
+        {!hintDismissed && (
+          <div className="rf-rotate__a2hs" role="note">
+            <p>
+              Tip: <strong>Add to Home Screen</strong> for true fullscreen
+              landscape (best on iPhone).
+            </p>
+            <button
+              type="button"
+              className="ghost rf-rotate__a2hs-dismiss"
+              onClick={() => setHintDismissed(true)}
+              aria-label="Dismiss Add to Home Screen tip"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
