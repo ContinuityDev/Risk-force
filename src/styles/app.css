@@ -2407,28 +2407,39 @@
   -webkit-appearance: none;
   width: 100%;
   min-height: 2.4rem;
-  background: var(--rf-panel);
-  border: var(--rf-hairline);
+  background: linear-gradient(180deg, #1a2330 0%, #151c27 100%);
+  border: 1px solid var(--rf-border);
   border-radius: var(--rf-radius);
   padding: 0.45rem 0.65rem;
   color: var(--rf-text);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .rf-market .rf-field select {
-  background-image: linear-gradient(45deg, transparent 50%, var(--rf-accent-dim) 50%),
-    linear-gradient(135deg, var(--rf-accent-dim) 50%, transparent 50%);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--rf-accent) 50%),
+    linear-gradient(135deg, var(--rf-accent) 50%, transparent 50%),
+    linear-gradient(180deg, #1a2330 0%, #151c27 100%);
   background-position:
     calc(100% - 14px) 55%,
-    calc(100% - 9px) 55%;
-  background-size: 5px 5px, 5px 5px;
+    calc(100% - 9px) 55%,
+    0 0;
+  background-size: 5px 5px, 5px 5px, 100% 100%;
   background-repeat: no-repeat;
   padding-right: 1.6rem;
+}
+.rf-market .rf-field input[type="number"] {
+  -moz-appearance: textfield;
+}
+.rf-market .rf-field input[type="number"]::-webkit-outer-spin-button,
+.rf-market .rf-field input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .rf-control:focus,
 .rf-market .rf-field select:focus,
 .rf-market .rf-field input:focus {
   outline: none;
-  border-color: var(--rf-accent-dim);
+  border-color: var(--rf-accent);
 }
 .rf-market__preview {
   margin: 0.75rem 0 0;
@@ -3337,7 +3348,8 @@
     display: none !important;
   }
 
-  .rf-hud__more {
+  .rf-hud__more,
+  .rf-hud__news {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3345,35 +3357,43 @@
     min-width: 44px;
     height: 44px;
     padding: 0 0.55rem;
-    background: transparent;
-    border: var(--rf-hairline);
-    border-color: var(--rf-border-soft);
+    background: transparent !important;
+    border: 1px solid transparent;
     color: var(--rf-text-dim);
     font-size: 0.68rem;
+    box-shadow: none;
   }
 
-  .rf-hud__more:hover:not(:disabled) {
+  .rf-hud__more:hover:not(:disabled),
+  .rf-hud__news:hover:not(:disabled) {
     color: var(--rf-text);
-    border-color: var(--rf-accent-dim);
-    background: transparent;
+    border-color: var(--rf-border);
+    background: transparent !important;
   }
 
   .rf-hud__more.is-open {
     color: var(--rf-accent);
     border-color: var(--rf-accent-dim);
-    background: color-mix(in srgb, var(--rf-accent) 10%, transparent);
+    background: color-mix(in srgb, var(--rf-accent) 12%, transparent) !important;
   }
 
-  .rf-dock button[data-tutorial="dock-market"] {
-    /* Match Map/Base/Army chrome — not ghost */
+  .rf-dock button {
     background: var(--rf-elevated);
     border: var(--rf-hairline);
     color: var(--rf-text);
   }
 
-  .rf-dock button[data-tutorial="dock-market"].is-active {
+  .rf-dock button.primary,
+  .rf-dock .rf-dock__end {
+    background: linear-gradient(180deg, #2a4554 0%, #1e3340 100%);
     border-color: var(--rf-accent-dim);
     color: var(--rf-accent);
+  }
+
+  .rf-dock button.is-active {
+    border-color: var(--rf-accent);
+    color: var(--rf-accent);
+    background: color-mix(in srgb, var(--rf-accent) 12%, var(--rf-elevated));
   }
 
   .rf-map__continents-btn {
@@ -4563,11 +4583,6 @@
 
   .rf-hud__news {
     order: 3;
-    min-height: 44px;
-    height: 44px;
-    padding: 0 0.55rem;
-    background: var(--rf-elevated);
-    border: var(--rf-hairline);
   }
 
   .rf-hud__more {
