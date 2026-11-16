@@ -180,6 +180,8 @@ export default function App() {
         neighbors: Record<string, string[]>;
         createBattle?: typeof import("./engine/combat").createBattle;
         openMarket?: () => void;
+        openNews?: () => void;
+        closeNews?: () => void;
         dismissMessage?: () => void;
       };
     };
@@ -190,6 +192,8 @@ export default function App() {
       neighbors: w.__RF__?.neighbors ?? {},
       createBattle: w.__RF__?.createBattle,
       openMarket: () => setMarketOpen(true),
+      openNews: () => setNewsOpen(true),
+      closeNews: () => setNewsOpen(false),
       dismissMessage: () => transport.dispatch({ type: "DISMISS_MESSAGE" }),
     };
     let cancelled = false;

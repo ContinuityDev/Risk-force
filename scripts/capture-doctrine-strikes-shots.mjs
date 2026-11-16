@@ -1,66 +1,63 @@
+#!/usr/bin/env node
 /**
- * Capture doctrine / strikes / recon / movement / events / templates / handoff.
+ * Screenshots for doctrines / strikes / recon / naval-air / events / templates / handoff.
  * Mobile 844×390 + desktop.
  */
+import { mkdirSync, copyFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "playwright";
-import { createServer } from "http";
-import { readFileSync, existsSync } from "fs";
-import { join, extname } from "path";
 
+const BASE = process.env.RF_URL ?? "http://127.0.0.1:4173/Risk-force";
 const OUT = "/opt/cursor/artifacts";
-const ROOT = join(import.meta.dirname, "..", "dist");
-const MIME = {
-  ".html": "text/html",
-  ".js": "application/javascript",
-  ".css": "text/css",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".json": "application/json",
-};
+const TMP = "/tmp/cursor/screenshots";
+mkdirSync(OUT, { recursive: true });
+mkdirSync(TMP, { recursive: true });
 
 async function shot(page, name) {
-  const path = `${OUT}/${name}.png`;
+  const path = join(TMP, `${name}.png`);
   await page.screenshot({ path, fullPage: false });
+  copyFileSync(path, join(OUT, `${name}.png`));
   console.log("saved", name);
+}
+
+async function waitRF(page) {
+  await page.waitForFunction(
+    () =>
+      window.__RF__ &&
+      typeof window.__RF__.createBattle === "function" &&
+      Object.keys(window.__RF__.neighbors ?? {}).length > 0,
+    null,
+    { timeout: 30000 },
+  );
 }
 
 async function dismissToast(page) {
   await page.evaluate(() => {
-    try {
-      window.__RF__?.dispatch?.({ type: "DISMISS_MESSAGE" });
-      window.__RF__?.dispatch?.({ type: "DISMISS_ECONOMY_SUMMARY" });
-      window.__RF__?.dispatch?.({ type: "DISMISS_NEWS_DIGEST" });
-    } catch {
-      /* */
-    }
+    window.__RF__?.dismissMessage?.();
+    window.__RF__?.dispatch?.({ type: "DISMISS_MESSAGE" });
+    window.__RF__?.dispatch?.({ type: "DISMISS_ECONOMY_SUMMARY" });
+    window.__RF__?.dispatch?.({ type: "DISMISS_NEWS_DIGEST" });
   });
+  await page.waitForTimeout(150);
 }
 
-function startStatic() {
-  return new Promise((resolve) => {
-    const server = createServer((req, res) => {
-      let p = req.url?.split("?")[0] || "/";
-      if (p === "/") p = "/index.html";
-      const file = join(ROOT, p.replace(/^\//, ""));
-      if (!existsSync(file)) {
-        res.writeHead(404);
-        res.end("missing");
-        return;
-      }
-      res.writeHead(200, { "Content-Type": MIME[extname(file)] || "text/plain" });
-      res.end(readFileSync(file));
-    });
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address();
-      resolve({ server, url: `http://127.0.0.1:${port}/` });
-    });
-  });
+async function openLobby(page) {
+  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(400);
+  const newBtn = page.getByRole("button", { name: /New Campaign/i });
+  if (await newBtn.count()) await newBtn.click();
+  await page.waitForTimeout(500);
 }
 
-async function bootGame(page) {
-  await page.waitForFunction(() => window.__RF__?.dispatch, null, {
-    timeout: 15000,
-  });
+async function startWithDoctrine(page) {
+  await openLobby(page);
+  const iron = page.getByRole("button", { name: /Ironclad/i });
+  if (await iron.count()) await iron.first().click();
+  await page.waitForTimeout(200);
+  await shot(page, page.viewportSize().width < 1000 ? "mobile-lobby-doctrine" : "desktop-lobby-doctrine");
+  await page.getByRole("button", { name: /^Start$/i }).click();
+  await page.waitForTimeout(800);
+  await waitRF(page);
   await page.evaluate(() => {
     window.__RF__.dispatch({
       type: "NEW_GAME",
@@ -78,36 +75,7 @@ async function bootGame(page) {
   await dismissToast(page);
 }
 
-async function capture(page, tag) {
-  // Lobby doctrine pick
-  await page.evaluate(() => {
-    window.__RF__.dispatch({
-      type: "LOAD_STATE",
-      payload: {
-        state: { ...window.__RF__.getState(), screen: "lobby", phase: "play" },
-      },
-    });
-  });
-  // Lobby is React-routed via App state — force via menu path
-  await page.goto(page.url());
-  await page.waitForTimeout(500);
-  // Click Solo if on menu
-  const solo = page.getByRole("button", { name: /Solo/i });
-  if (await solo.first().isVisible().catch(() => false)) {
-    await solo.first().click();
-    await page.waitForTimeout(400);
-  }
-  // Select Ironclad doctrine card if present
-  const iron = page.getByRole("button", { name: /Ironclad/i });
-  if (await iron.first().isVisible().catch(() => false)) {
-    await iron.first().click();
-    await page.waitForTimeout(200);
-  }
-  await shot(page, `${tag}-lobby-doctrine`);
-
-  await bootGame(page);
-
-  // Enrich state for feature shots
+async function enrich(page) {
   await page.evaluate(() => {
     const s = window.__RF__.getState();
     const home = Object.entries(s.territories).find(
@@ -128,6 +96,7 @@ async function capture(page, tag) {
           screen: "map",
           phase: "play",
           selectedTerritoryId: enemy,
+          handoff: null,
           strikeFx: [
             {
               id: "sfx-demo",
@@ -148,7 +117,6 @@ async function capture(page, tag) {
             },
           ],
           newsFeed: [
-            ...(s.newsFeed ?? []),
             {
               id: "n-evt",
               turn: s.turn,
@@ -196,15 +164,12 @@ async function capture(page, tag) {
                   mode: "drone",
                 },
               ],
-              researched: [
-                ...new Set([
-                  ...(player.researched ?? []),
-                  "officer_corps",
-                  "cruise_networks",
-                  "orbital_uplink",
-                  "stealth_recon",
-                ]),
-              ],
+              resources: {
+                ...player.resources,
+                energy: 800,
+                alloy: 200,
+                supply: 120,
+              },
             },
           },
           territories: {
@@ -241,38 +206,32 @@ async function capture(page, tag) {
   });
   await page.waitForTimeout(400);
   await dismissToast(page);
+}
 
-  // Fresh HUD with doctrine
+async function runViewport(browser, viewport, tag) {
+  const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
+  await startWithDoctrine(page);
+  // startWithDoctrine already saved lobby for this viewport via width check — re-save with tag
+  // (lobby already captured inside startWithDoctrine with mobile/desktop prefix)
+
+  await enrich(page);
   await shot(page, `${tag}-hud-doctrine`);
-
-  // Strike FX on map + enemy selected
   await shot(page, `${tag}-strike-fx`);
-
-  // Open news for event headline
-  const newsBtn = page.getByRole("button", { name: /News/i });
-  if (await newsBtn.first().isVisible().catch(() => false)) {
-    await newsBtn.first().click();
-    await page.waitForTimeout(300);
-    await shot(page, `${tag}-event-news`);
-    await page.keyboard.press("Escape").catch(() => {});
-    await page.evaluate(() =>
-      window.__RF__.dispatch({ type: "MARK_NEWS_READ" }),
-    );
-  }
-
-  // Recon exact vs pick another unrevealed enemy for approx — show sheet
-  await page.waitForTimeout(200);
   await shot(page, `${tag}-recon-reveal`);
-
-  // Labels + chips: zoom mid
-  await page.evaluate(() => {
-    const api = window.__RF__;
-    // nudge camera if exposed; otherwise just screenshot map
-    void api;
-  });
   await shot(page, `${tag}-labels-chips`);
 
-  // Army / invade with template + commander
+  // News / event
+  await page.evaluate(() => window.__RF__?.openNews?.());
+  await page.waitForTimeout(350);
+  await shot(page, `${tag}-event-news`);
+  await page.evaluate(() => {
+    window.__RF__?.closeNews?.();
+    window.__RF__.dispatch({ type: "MARK_NEWS_READ" });
+    window.__RF__.dispatch({ type: "DISMISS_NEWS_DIGEST" });
+  });
+  await page.waitForTimeout(200);
+
+  // Invade templates + commander
   await page.evaluate(() => {
     const s = window.__RF__.getState();
     const home = Object.entries(s.territories).find(
@@ -286,19 +245,19 @@ async function capture(page, tag) {
           selectedTerritoryId: home,
           screen: "invade",
           message: null,
+          handoff: null,
+          newsDigest: null,
         },
       },
     });
   });
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(500);
   const tpl = page.getByRole("button", { name: /Vanguard push/i });
-  if (await tpl.first().isVisible().catch(() => false)) {
-    await tpl.first().click();
+  if (await tpl.count()) {
+    await tpl.first().click({ force: true });
     await page.waitForTimeout(200);
   }
   await shot(page, `${tag}-template-commander`);
-
-  // Naval / air route hint — stay on invade with layer text
   await shot(page, `${tag}-naval-air-layer`);
 
   // Hot-seat handoff
@@ -320,34 +279,19 @@ async function capture(page, tag) {
       },
     });
   });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(350);
   await shot(page, `${tag}-hotseat-handoff`);
+
+  await page.close();
 }
 
 async function main() {
-  const { server, url } = await startStatic();
   const browser = await chromium.launch({ headless: true });
   try {
-    for (const [tag, size] of [
-      ["desktop", { width: 1400, height: 900 }],
-      ["mobile", { width: 844, height: 390 }],
-    ]) {
-      const page = await browser.newPage({
-        viewport: size,
-        deviceScaleFactor: 1,
-      });
-      await page.goto(url, { waitUntil: "networkidle" });
-      await page.waitForTimeout(600);
-      // Expose RF
-      await page.waitForFunction(() => window.__RF__?.dispatch, null, {
-        timeout: 20000,
-      });
-      await capture(page, tag);
-      await page.close();
-    }
+    await runViewport(browser, { width: 1400, height: 900 }, "desktop");
+    await runViewport(browser, { width: 844, height: 390 }, "mobile");
   } finally {
     await browser.close();
-    server.close();
   }
   console.log("done");
 }
