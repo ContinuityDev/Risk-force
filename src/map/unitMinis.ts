@@ -249,12 +249,12 @@ export function layoutUnitMinis(
   const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
   const gap = Math.max(0.55, size * 0.18);
   const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
-  // Use a tightened label box — map labels often pad wider than the glyph.
+  // Inflate label boxes so chips cannot sit on "Greenland" / "Eastern Canada" glyphs.
   const labelBoxes: Box[] = labels.map((l) => ({
     x: l.x,
     y: l.y,
-    w: Math.min(l.w, Math.max(size * 1.4, 8)),
-    h: Math.max(l.h, size * 0.55),
+    w: Math.max(l.w * 1.15, size * 2.2, 10),
+    h: Math.max(l.h * 1.35, size * 0.85, 4),
   }));
   const occupied: Box[] = [...labelBoxes, ...occupiedExtra];
   const out: PlacedUnitMini[] = [];
