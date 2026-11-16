@@ -60,7 +60,7 @@ export const STRIKE_DEFS: Record<
 };
 
 function territoryLabel(id: string): string {
-  return TERRITORIES.find((t) => t.id === id)?.name ?? id;
+  return TERRITORIES.find((t) => t.id === id)?.name ?? id.replace(/_/g, " ");
 }
 
 export function playerHasStrikeAsset(

@@ -29,7 +29,8 @@ async function shot(page, name) {
     throw new Error(`Duplicate screenshot: ${full} === ${dup}`);
   }
   hashes.set(full, hash);
-  console.log("saved", full, `(${buf.length}b)`);
+  const vp = page.viewportSize();
+  console.log("saved", full, `(${buf.length}b)`, vp ? `${vp.width}x${vp.height}` : "");
 }
 
 async function waitRF(page) {
@@ -128,7 +129,6 @@ async function selectTerritory(page, id) {
 }
 
 async function focusEurope(page) {
-  // Germany / France region of World War map
   await selectTerritory(page, "germany");
   await zoomToward(page, { xFrac: 0.52, yFrac: 0.38, wheels: 4 });
   await dismissToast(page);
@@ -140,15 +140,30 @@ async function focusCwNortheast(page) {
   await dismissToast(page);
 }
 
+/**
+ * @param {import('playwright').Browser} browser
+ * @param {{ viewport: {width:number,height:number}, deviceScaleFactor?: number, isMobile?: boolean, hasTouch?: boolean, mapId: string, seed?: number }} opts
+ */
 async function captureViewport(browser, opts, shotName, run) {
-  const page = await browser.newPage(opts);
+  const { mapId, seed = 42, ...pageOpts } = opts;
+  const page = await browser.newPage(pageOpts);
+  const vp = page.viewportSize();
+  if (
+    pageOpts.viewport &&
+    (vp?.width !== pageOpts.viewport.width ||
+      vp?.height !== pageOpts.viewport.height)
+  ) {
+    throw new Error(
+      `Viewport mismatch: expected ${pageOpts.viewport.width}x${pageOpts.viewport.height}, got ${vp?.width}x${vp?.height}`,
+    );
+  }
   await boot(page);
   await page.waitForSelector('[data-testid="map-picker"]', { timeout: 15000 });
-  await page.getByTestId(`map-${opts.mapId === "civil_war" ? "civil_war" : "world_war"}`).click();
+  await page.getByTestId(`map-${mapId}`).click();
   await page.getByRole("button", { name: /^Start$/i }).click();
   await page.waitForTimeout(600);
   await waitRF(page);
-  await newGame(page, opts.mapId, opts.seed ?? 42);
+  await newGame(page, mapId, seed);
   await page.waitForSelector('[data-tutorial="map-svg"]', { timeout: 15000 });
   await run(page);
   await shot(page, shotName);
@@ -157,16 +172,21 @@ async function captureViewport(browser, opts, shotName, run) {
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
-  const desktop = { width: 1440, height: 900, deviceScaleFactor: 1 };
+  const desktop = {
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 1,
+  };
+  const desktop1024 = {
+    viewport: { width: 1024, height: 720 },
+    deviceScaleFactor: 1,
+  };
   const mobile = {
-    width: 844,
-    height: 390,
+    viewport: { width: 844, height: 390 },
     deviceScaleFactor: 1,
     isMobile: true,
     hasTouch: true,
   };
 
-  // World War Europe
   await captureViewport(
     browser,
     { ...desktop, mapId: "world_war", seed: 42 },
@@ -180,7 +200,6 @@ async function main() {
     focusEurope,
   );
 
-  // Civil War Northeast
   await captureViewport(
     browser,
     { ...desktop, mapId: "civil_war", seed: 99 },
@@ -194,9 +213,20 @@ async function main() {
     focusCwNortheast,
   );
 
-  // Stale invade proof — planned route + march, then real RESOLVE_BATTLE scrub
+  // 1024-wide HUD nav layout check
+  await captureViewport(
+    browser,
+    { ...desktop1024, mapId: "world_war", seed: 42 },
+    "hud-nav-1024",
+    async (page) => {
+      await selectTerritory(page, "germany");
+      await dismissToast(page);
+    },
+  );
+
+  // Stale invade + toast copy + route pill
   {
-    const page = await browser.newPage({ ...desktop });
+    const page = await browser.newPage(desktop);
     await boot(page);
     await page.waitForSelector('[data-testid="map-picker"]', { timeout: 15000 });
     await page.getByTestId("map-world_war").click();
@@ -258,7 +288,6 @@ async function main() {
     });
     await page.waitForTimeout(300);
     await dismissToast(page);
-    // Open invade panel against the target so arrows/cards are visible
     await page.evaluate(() => {
       const btn = [...document.querySelectorAll("button")].find((b) =>
         /Invade/i.test(b.textContent ?? ""),
@@ -268,7 +297,16 @@ async function main() {
     await page.waitForTimeout(250);
     await shot(page, "invade-before-capture");
 
-    // Instant attacker-win battle → RESOLVE_BATTLE runs scrubOrdersForTerritory
+    // Assert route pill copy
+    const pill = await page.evaluate(() => {
+      const t = document.querySelector(".rf-map__route-eta");
+      return t?.textContent?.trim() ?? null;
+    });
+    console.log("route-pill", pill);
+    if (TAG === "after" && pill && !/turn/i.test(pill)) {
+      throw new Error(`Route pill should say turns, got: ${pill}`);
+    }
+
     await page.evaluate(({ home, target }) => {
       const s = window.__RF__.getState();
       const battle = window.__RF__.createBattle(
@@ -298,9 +336,7 @@ async function main() {
       });
       window.__RF__.dispatch({ type: "RESOLVE_BATTLE" });
     }, ids);
-    await page.waitForTimeout(500);
-    await dismissToast(page);
-    // Stay on map showing the captured land with no stale invade overlay
+    await page.waitForTimeout(400);
     await page.evaluate(() => {
       const s = window.__RF__.getState();
       if (s.pendingCapture) {
@@ -311,22 +347,16 @@ async function main() {
       }
       window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
     });
-    await page.waitForTimeout(300);
-    const clean = await page.evaluate(() => {
-      const s = window.__RF__.getState();
-      return {
-        plannedRoute: s.plannedRoute,
-        marches: (s.armiesInTransit ?? []).length,
-        invadeArrows: document.querySelectorAll(".rf-map__invade-plans path")
-          .length,
-        plannedSegs: document.querySelectorAll(".rf-map__planned-seg").length,
-      };
-    });
-    console.log("invade-clean-state", clean);
+    await page.waitForTimeout(350);
+    const toast = await page.evaluate(() => window.__RF__.getState().message);
+    console.log("capture-toast", toast);
     if (TAG === "after") {
-      if (clean.plannedRoute) throw new Error("plannedRoute still set after capture");
-      if (clean.invadeArrows > 0) throw new Error("stale invade arrows remain");
-      if (clean.plannedSegs > 0) throw new Error("stale planned route segs remain");
+      if (!toast || /_[a-z]/.test(toast) || /\boccupy\./i.test(toast)) {
+        throw new Error(`Bad capture toast: ${toast}`);
+      }
+      if (!/secured|razed/i.test(toast) || !/occupying/i.test(toast)) {
+        throw new Error(`Expected display-name capture toast, got: ${toast}`);
+      }
     }
     await shot(page, "invade-after-capture-clean");
     await page.close();

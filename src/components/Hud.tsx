@@ -315,51 +315,64 @@ export function Hud({
         </button>
       )}
 
-      <nav className="rf-hud__nav rf-hud__nav--desktop">
-        {NAV.map(({ screen, label }) => (
+      <nav className="rf-hud__nav rf-hud__nav--desktop" aria-label="Primary">
+        <div className="rf-hud__nav-primary">
+          {NAV.filter((n) => n.screen !== "save").map(({ screen, label }) => (
+            <button
+              key={screen}
+              type="button"
+              className={state.screen === screen ? "primary" : "ghost"}
+              disabled={!isHumanTurn && screen !== "map"}
+              onClick={() =>
+                dispatch({ type: "SET_SCREEN", payload: { screen } })
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="rf-hud__nav-tools">
           <button
-            key={screen}
             type="button"
-            className={state.screen === screen ? "primary" : "ghost"}
-            disabled={!isHumanTurn && screen !== "map" && screen !== "save"}
+            className={state.screen === "save" ? "primary" : "ghost"}
             onClick={() =>
-              dispatch({ type: "SET_SCREEN", payload: { screen } })
+              dispatch({ type: "SET_SCREEN", payload: { screen: "save" } })
             }
           >
-            {label}
+            Save
           </button>
-        ))}
-        {onOpenMarket && (
+          {onOpenMarket && (
+            <button
+              type="button"
+              className="ghost"
+              onClick={onOpenMarket}
+              title={HELP.logistics}
+            >
+              Market
+            </button>
+          )}
           <button
             type="button"
             className="ghost"
-            onClick={onOpenMarket}
-            title={HELP.logistics}
+            onClick={() => setHelpOpen((v) => !v)}
+            title="Game loop help"
           >
-            Market
+            Help
           </button>
-        )}
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => setHelpOpen((v) => !v)}
-          title="Game loop help"
-        >
-          Help
-        </button>
-        {onTutorial && (
-          <button type="button" className="ghost" onClick={onTutorial}>
-            Tutorial
+          {onTutorial && (
+            <button type="button" className="ghost" onClick={onTutorial}>
+              Tutorial
+            </button>
+          )}
+          <button
+            type="button"
+            className="primary rf-hud__end-turn"
+            disabled={!isHumanTurn || state.phase !== "play"}
+            onClick={() => dispatch({ type: "END_TURN" })}
+          >
+            End Turn
           </button>
-        )}
-        <button
-          type="button"
-          className="primary"
-          disabled={!isHumanTurn || state.phase !== "play"}
-          onClick={() => dispatch({ type: "END_TURN" })}
-        >
-          End Turn
-        </button>
+        </div>
       </nav>
 
       <button

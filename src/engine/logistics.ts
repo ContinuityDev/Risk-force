@@ -7,6 +7,7 @@ import { getBuilding } from "../data/buildings";
 import { GAME_LOOP } from "../data/gameLoop";
 import { getTerritory } from "../data/map/territories";
 import { getUnit } from "../data/units";
+import { territoryDisplayName } from "../ui/displayNames";
 import type { GameState, TerritoryState } from "./state";
 import { ensureTerritoryHp, syncHpArray } from "./garrisonHp";
 
@@ -113,7 +114,9 @@ export function applySupplyAttrition(
     }
     if (lost > 0) {
       territories[tid] = { ...ensured, garrison, garrisonHp };
-      lines.push(`${tid}: ${lost} unsupplied units lost to attrition.`);
+      lines.push(
+        `${territoryDisplayName(tid)}: ${lost} unsupplied unit${lost === 1 ? "" : "s"} lost to attrition.`,
+      );
     }
   }
   return { territories, lines };

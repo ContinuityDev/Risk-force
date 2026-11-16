@@ -78,6 +78,7 @@ describe("orderCleanup", () => {
       (state.territories[target]!.garrison.trooper ?? 0) >= 4,
     ).toBe(true);
     expect(state.message ?? "").toMatch(/cancelled|friendly|Route cleared/i);
+    expect(state.message ?? "").not.toMatch(/_[a-z]/); // no snake_case ids
   });
 
   it("START_INVASION and END_TURN clear plannedRoute", () => {

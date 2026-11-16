@@ -991,13 +991,13 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     opacity="0.85"
                     markerEnd="url(#rf-march-arrow)"
                   />
-                  <circle cx={mx} cy={my} r={5 * zoomScale} fill={col} />
+                  <circle cx={mx} cy={my} r={Math.max(2.2, 4.2 * zoomScale)} fill={col} />
                   <text
                     x={mx}
-                    y={my - 7 * zoomScale}
+                    y={my - 6 * zoomScale}
                     textAnchor="middle"
                     className="rf-map__eta"
-                    fontSize={Math.max(7, 9 * zoomScale)}
+                    fontSize={8.5 * zoomScale}
                     fill="#e8eef4"
                   >
                     ETA {army.turnsRemaining} · {headCount}
@@ -1722,8 +1722,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   d={`M ${from.label.x} ${from.label.y} L ${to.label.x} ${to.label.y}`}
                   fill="none"
                   stroke="#b8f0ff"
-                  strokeWidth={Math.max(4, 6.5 * zoomScale)}
-                  strokeDasharray="8 4"
+                  strokeWidth={Math.max(0.7, 1.6 * zoomScale)}
+                  strokeDasharray={`${5.5 * zoomScale} ${3 * zoomScale}`}
                   strokeLinecap="round"
                   opacity="1"
                   className="rf-map__planned-seg"
@@ -1732,9 +1732,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             })}
             {(() => {
               const path = state.plannedRoute!;
-              const mid = path[Math.floor(path.length / 2)]!;
-              const midT = TERRITORIES.find((t) => t.id === mid);
-              if (!midT) return null;
+              const a = TERRITORIES.find((t) => t.id === path[0]);
+              const b = TERRITORIES.find(
+                (t) => t.id === path[path.length - 1],
+              );
+              if (!a || !b) return null;
               let total = 0;
               for (let i = 0; i < path.length - 1; i++) {
                 total += travelTurns(path[i]!, path[i + 1]!, [
@@ -1742,27 +1744,49 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 ]);
               }
               const hops = path.length - 1;
+              const label = `${hops} hop${hops === 1 ? "" : "s"} · ${total} turn${total === 1 ? "" : "s"}`;
+              // Midpoint of the full route, nudged perpendicular so it
+              // doesn't sit on the origin/target name labels.
+              // Size like territory labels: screenPx × zoomScale (zoomScale
+              // shrinks when zoomed in — absolute floors look huge).
+              const mx = (a.label.x + b.label.x) / 2;
+              const my = (a.label.y + b.label.y) / 2;
+              const dx = b.label.x - a.label.x;
+              const dy = b.label.y - a.label.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const offset = 16 * zoomScale;
+              const px = mx + (-dy / len) * offset;
+              const py = my + (dx / len) * offset;
+              const fontSize = 9 * zoomScale;
+              const textW = approxTextWidth(label, fontSize);
+              const padX = 3.4 * zoomScale;
+              const padY = 2 * zoomScale;
+              const rw = textW + padX * 2;
+              const rh = fontSize + padY * 2;
               return (
-                <g transform={`translate(${midT.label.x}, ${midT.label.y - 12})`}>
+                <g
+                  className="rf-map__route-pill"
+                  transform={`translate(${px}, ${py})`}
+                >
                   <rect
-                    x={-38}
-                    y={-12}
-                    width={76}
-                    height={18}
-                    rx={2}
-                    fill="rgba(8,16,24,0.94)"
-                    stroke="#9fdfff"
-                    strokeWidth={0.9}
+                    x={-rw / 2}
+                    y={-rh / 2}
+                    width={rw}
+                    height={rh}
+                    rx={rh / 2}
+                    fill="rgba(8,16,24,0.9)"
+                    stroke="rgba(159,223,255,0.45)"
+                    strokeWidth={0.45 * zoomScale}
                   />
                   <text
                     textAnchor="middle"
-                    y={2}
+                    dominantBaseline="middle"
                     className="rf-map__route-eta"
                     fill="#e8f7ff"
-                    fontSize={8}
-                    fontWeight={700}
+                    fontSize={fontSize}
+                    fontWeight={600}
                   >
-                    {hops} hop{hops === 1 ? "" : "s"} · {total}t
+                    {label}
                   </text>
                 </g>
               );

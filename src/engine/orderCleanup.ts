@@ -1,4 +1,5 @@
 import type { FactionId } from "../data/types";
+import { territoryDisplayName } from "../ui/displayNames";
 import { mergeIntoGarrison } from "./garrisonHp";
 import type { ArmyTransit, GameState } from "./state";
 
@@ -37,7 +38,7 @@ export function scrubOrdersForTerritory(
       };
       notice =
         notice ??
-        `Column arrives in friendly ${army.toId.replace(/_/g, " ")} — invasion cancelled.`;
+        `Column arrives in friendly ${territoryDisplayName(army.toId)} — invasion cancelled.`;
       continue;
     }
     // Destination owned by someone else who isn't the intended foe, or origin
@@ -56,7 +57,7 @@ export function scrubOrdersForTerritory(
     }
     notice =
       notice ??
-      `Orders updated — march on ${territoryId.replace(/_/g, " ")} cancelled.`;
+      `Orders updated — march on ${territoryDisplayName(territoryId)} cancelled.`;
   }
 
   let plannedRoute = state.plannedRoute;
@@ -69,7 +70,7 @@ export function scrubOrdersForTerritory(
       plannedRoute = null;
       notice =
         notice ??
-        `Route cleared — ${territoryId.replace(/_/g, " ")} is no longer a valid target.`;
+        `Route cleared — ${territoryDisplayName(territoryId)} is no longer a valid target.`;
     }
   }
 
