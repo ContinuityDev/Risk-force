@@ -5,6 +5,7 @@
 import { GAME_LOOP } from "../data/gameLoop";
 import type { GameState, PendingCapture, TerritoryState } from "./state";
 import { mergeIntoGarrison, normalizeForce, syncHpArray } from "./garrisonHp";
+import { scrubOrdersForTerritory } from "./orderCleanup";
 import type { StrikeForceSlot } from "./state";
 
 export function outputMultiplier(ts: TerritoryState): number {
@@ -224,16 +225,20 @@ function placeOccupation(
     }
   }
 
-  return {
-    ...state,
-    players,
-    territories,
-    pendingCapture: null,
-    battle: null,
-    phase: "play",
-    screen: "map",
-    message: `${tid} ${disposition === "raze" ? "razed" : "secured"} · ${take} occupy.`,
-  };
+  return scrubOrdersForTerritory(
+    {
+      ...state,
+      players,
+      territories,
+      pendingCapture: null,
+      battle: null,
+      plannedRoute: null,
+      phase: "play",
+      screen: "map",
+      message: `${tid} ${disposition === "raze" ? "razed" : "secured"} · ${take} occupy.`,
+    },
+    tid,
+  );
 }
 
 /** AI default: keep if many buildings, else raze. */

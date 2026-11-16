@@ -58,14 +58,14 @@ describe("unitMinis mid/deep dense cores", () => {
   it("keeps a multi-type mid grid beside Greenland buildings without covering the label", () => {
     const greenland = TERRITORIES.find((t) => t.id === "greenland")!;
     const cam = {
-      x: greenland.label.x - 160,
-      y: greenland.label.y - 80,
-      w: 320,
-      h: 160,
+      x: greenland.label.x - 250,
+      y: greenland.label.y - 125,
+      w: 500,
+      h: 250,
     };
-    const zoomScale = 320 / 1000;
+    const zoomScale = 500 / 1000;
     expect(miniZoomTier(zoomScale)).toBe("mid");
-    expect(iconWorldSize(zoomScale, 320, "mid")).toBeGreaterThan(2);
+    expect(iconWorldSize(zoomScale, 500, "mid")).toBeGreaterThan(2);
 
     const state = greenlandState();
     const labels = [
@@ -222,8 +222,8 @@ describe("unitMinis mid/deep dense cores", () => {
         garrison: { trooper: 5, hover_tank: 2 },
       };
     }
-    // Mid zoom over central Asia / USA west.
-    const cam = { x: 480, y: 90, w: 380, h: 190 };
+    // Mid zoom over central Asia / USA west (tier floor raised to 0.42).
+    const cam = { x: 420, y: 70, w: 500, h: 250 };
     const zoomScale = cam.w / 1000;
     expect(miniZoomTier(zoomScale)).toBe("mid");
     const labels = territories.map((t) => ({

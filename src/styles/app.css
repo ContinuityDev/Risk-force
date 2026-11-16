@@ -1081,11 +1081,12 @@
 }
 
 .rf-map__units {
+  /* Never block territory hit-testing — selection uses elementsFromPoint. */
   pointer-events: none;
 }
 
 .rf-map__unit-hit {
-  pointer-events: auto;
+  pointer-events: none;
   cursor: pointer;
 }
 
@@ -1102,10 +1103,12 @@
 }
 
 .rf-map__bldgs {
-  pointer-events: auto;
+  /* Overlays must not swallow taps on the territory path beneath. */
+  pointer-events: none;
 }
 
 .rf-map__bldg-hit {
+  pointer-events: none;
   cursor: pointer;
 }
 

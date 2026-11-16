@@ -41,6 +41,7 @@ import {
   aiCaptureDisposition,
   resolveCaptureDisposition,
 } from "./occupation";
+import { scrubOrdersForTerritory } from "./orderCleanup";
 import { checkEliminationsAndVictory } from "./victory";
 
 function dist(ax: number, ay: number, bx: number, by: number): number {
@@ -901,22 +902,32 @@ export function applyBattleResult(state: GameState): GameState {
           territories,
           battle: null,
           pendingCapture: pending,
+          plannedRoute: null,
         },
         disposition,
         total,
       );
-      return checkEliminationsAndVictory(occupied, previousOwner);
+      return checkEliminationsAndVictory(
+        scrubOrdersForTerritory(occupied, tid, {
+          notice: occupied.message,
+        }),
+        previousOwner,
+      );
     }
-    return {
-      ...state,
-      players,
-      territories,
-      battle: null,
-      pendingCapture: pending,
-      phase: "capture",
-      screen: "capture",
-      message: `${tid} captured — choose occupation strength.`,
-    };
+    return scrubOrdersForTerritory(
+      {
+        ...state,
+        players,
+        territories,
+        battle: null,
+        pendingCapture: pending,
+        plannedRoute: null,
+        phase: "capture",
+        screen: "capture",
+        message: `${tid} captured — choose occupation strength.`,
+      },
+      tid,
+    );
   }
 
   territories = {

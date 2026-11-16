@@ -365,6 +365,7 @@ export function InvadeView({
                 payload: { fromId, toId, force: slots },
               });
             }
+            dispatch({ type: "SET_PLANNED_ROUTE", payload: { path: null } });
           }}
         >
           {mode === "invade" ? "Launch Invasion" : "March Reinforcements"}
