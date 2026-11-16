@@ -99,17 +99,19 @@ export function LobbyScreen({
       </div>
 
       <div className="rf-lobby__vp">
-        <label className="rf-field rf-field--check">
-          <input
-            type="checkbox"
-            checked={vpEnabled}
-            onChange={(e) => setVpEnabled(e.target.checked)}
-          />
-          <span>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={vpEnabled}
+          className={`rf-check${vpEnabled ? " is-on" : ""}`}
+          onClick={() => setVpEnabled((v) => !v)}
+        >
+          <span className="rf-check__box" aria-hidden="true" />
+          <span className="rf-check__label">
             Victory points race (territories, cores, continents) — default win
             remains total domination
           </span>
-        </label>
+        </button>
         {vpEnabled && (
           <label className="rf-field">
             <span className="rf-label">Turn limit (0 = no limit)</span>

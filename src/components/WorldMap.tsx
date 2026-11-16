@@ -28,7 +28,12 @@ import {
   isTerritoryRevealed,
 } from "../engine/recon";
 import type { GameState, StrikeKind } from "../engine/state";
-import { playerHasStrikeAsset, strikeCooldownLeft } from "../engine/strikes";
+import {
+  playerHasStrikeAsset,
+  STRIKE_DEFS,
+  strikeCooldownLeft,
+} from "../engine/strikes";
+import { getUnit } from "../data/units";
 import {
   buildingsFingerprint,
   layoutBuildingMinis,
@@ -212,10 +217,17 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [shortLandscape, setShortLandscape] = useState(false);
   const [invadeOpen, setInvadeOpen] = useState(false);
+  /** Compact ops strip on enemy sheets: strike picker or recon picker. */
+  const [opsMode, setOpsMode] = useState<null | "strike" | "recon">(null);
+  const [strikePick, setStrikePick] = useState<StrikeKind>("cruise");
   const [invadePlans, setInvadePlans] = useState<InvadeOriginPlan[]>([]);
   const onInvadePlans = useCallback((plans: InvadeOriginPlan[]) => {
     setInvadePlans(plans);
   }, []);
+  useEffect(() => {
+    setOpsMode(null);
+    setInvadeOpen(false);
+  }, [state.selectedTerritoryId]);
   useEffect(() => {
     const mq = window.matchMedia(
       "(orientation: landscape) and (max-height: 500px)",
@@ -306,10 +318,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         deferredCam,
       ),
     [deferredCam],
-  );
-  const labelById = useMemo(
-    () => Object.fromEntries(labels.map((l) => [l.id, l])),
-    [labels],
   );
 
   const bldgFp = useMemo(
@@ -840,7 +848,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           const owner = ts?.owner ?? t.startingOwner;
           const base = factionColor(owner);
           const isSelected = state.selectedTerritoryId === t.id;
-          const lbl = labelById[t.id];
           return (
             <g
               key={t.id}
@@ -859,20 +866,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
-              {lbl && (
-                <text
-                  x={lbl.x}
-                  y={lbl.y}
-                  className="rf-map__label"
-                  fontSize={lbl.size}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  pointerEvents="none"
-                  filter="url(#rf-label-halo)"
-                >
-                  {lbl.text}
-                </text>
-              )}
             </g>
           );
         })}
@@ -1263,6 +1256,24 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             })()}
           </g>
         )}
+
+        {/* Labels last so chips/buildings/routes never cover territory names. */}
+        <g className="rf-map__labels" pointerEvents="none">
+          {labels.map((lbl) => (
+            <text
+              key={`label-${lbl.id}`}
+              x={lbl.x}
+              y={lbl.y}
+              className="rf-map__label"
+              fontSize={lbl.size}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              filter="url(#rf-label-halo)"
+            >
+              {lbl.text}
+            </text>
+          ))}
+        </g>
       </svg>
 
       <div className="rf-map__hint rf-text-dim">
@@ -1333,7 +1344,43 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               <>
                 <span className="rf-label">Selected</span>
                 <h3 className="rf-map__sheet-title">{selected.name}</h3>
-                <p className="rf-text-dim">
+                {/* Ops row sits under the title so Invade/Strike/Recon stay above the fold at 844×390. */}
+                {selectedIsEnemy && humanId && (
+                  <div className="rf-map__ops" data-tutorial="enemy-ops">
+                    <div className="rf-map__ops-row">
+                      <button
+                        type="button"
+                        className="primary"
+                        data-tutorial="invade-btn"
+                        onClick={() => {
+                          setOpsMode(null);
+                          setInvadeOpen(true);
+                        }}
+                      >
+                        Invade
+                      </button>
+                      <button
+                        type="button"
+                        className={opsMode === "strike" ? "primary" : "ghost"}
+                        onClick={() =>
+                          setOpsMode((m) => (m === "strike" ? null : "strike"))
+                        }
+                      >
+                        Strike
+                      </button>
+                      <button
+                        type="button"
+                        className={opsMode === "recon" ? "primary" : "ghost"}
+                        onClick={() =>
+                          setOpsMode((m) => (m === "recon" ? null : "recon"))
+                        }
+                      >
+                        Recon
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <p className="rf-text-dim rf-map__sheet-meta">
                   {selected.continent} · {biomeLabel(selected.id)}
                   {selectedTs
                     ? ` · ${selectedTs.control} · Pop ${selectedTs.population}`
@@ -1430,8 +1477,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               />
             ) : (
               <>
-                <div className="rf-map__sheet-actions">
-                  {!selectedIsEnemy && (
+                {!selectedIsEnemy && (
+                  <div className="rf-map__sheet-actions">
                     <button
                       type="button"
                       className="primary"
@@ -1444,17 +1491,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     >
                       Open Base
                     </button>
-                  )}
-                  {selectedIsEnemy ? (
-                    <button
-                      type="button"
-                      className="primary"
-                      data-tutorial="invade-btn"
-                      onClick={() => setInvadeOpen(true)}
-                    >
-                      Invade
-                    </button>
-                  ) : (
                     <button
                       type="button"
                       onClick={() =>
@@ -1466,8 +1502,133 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     >
                       Army
                     </button>
+                  </div>
+                )}
+
+                {selectedIsEnemy && humanId && opsMode === "strike" && (
+                  <div className="rf-map__strike-panel">
+                    <span className="rf-label">Strike targeting</span>
+                    {(
+                      ["cruise", "orbital", "kinetic"] as StrikeKind[]
+                    ).map((kind) => {
+                      const def = STRIKE_DEFS[kind];
+                      const cd = strikeCooldownLeft(state, humanId, kind);
+                      const has = playerHasStrikeAsset(state, humanId, kind);
+                      const selectedStrike = strikePick === kind;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          className={selectedStrike ? "primary" : "ghost"}
+                          disabled={!has || cd > 0}
+                          onClick={() => setStrikePick(kind)}
+                        >
+                          <strong>{def.label}</strong>
+                          <small>
+                            {def.cost.energy}E · {def.cost.alloy}A ·{" "}
+                            {def.cost.supply}S
+                            {cd > 0
+                              ? ` · CD ${cd}t`
+                              : ` · CD ${def.cooldown}t`}
+                            {!has ? " · no asset" : ""}
+                          </small>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={
+                        !playerHasStrikeAsset(state, humanId, strikePick) ||
+                        strikeCooldownLeft(state, humanId, strikePick) > 0
+                      }
+                      onClick={() =>
+                        dispatch({
+                          type: "LAUNCH_STRIKE",
+                          payload: {
+                            kind: strikePick,
+                            targetId: selected.id,
+                          },
+                        })
+                      }
+                    >
+                      Confirm {STRIKE_DEFS[strikePick].label}
+                    </button>
+                  </div>
+                )}
+
+                {selectedIsEnemy && humanId && opsMode === "recon" && (
+                  <div className="rf-map__strike-panel">
+                    <span className="rf-label">Recon</span>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        dispatch({
+                          type: "LAUNCH_RECON",
+                          payload: {
+                            targetId: selected.id,
+                            mode: "drone",
+                          },
+                        })
+                      }
+                    >
+                      Stealth drone · 40E
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() =>
+                        dispatch({
+                          type: "LAUNCH_RECON",
+                          payload: {
+                            targetId: selected.id,
+                            mode: "satellite",
+                          },
+                        })
+                      }
+                    >
+                      Satellite relay · 55E
+                    </button>
+                  </div>
+                )}
+
+                {selectedIsEnemy &&
+                  humanId &&
+                  isTerritoryRevealed(state, humanId, selected.id) && (
+                    <div className="rf-map__incoming">
+                      <span className="rf-label">Incoming marches</span>
+                      <ul>
+                        {(state.armiesInTransit ?? [])
+                          .filter(
+                            (a) =>
+                              a.toId === selected.id ||
+                              a.fromId === selected.id,
+                          )
+                          .map((a) => (
+                            <li key={a.id}>
+                              {a.owner} → {a.toId} · ETA {a.turnsRemaining}t ·{" "}
+                              {a.force
+                                .map((s) => {
+                                  try {
+                                    return `${getUnit(s.unitId).name}×${s.count}`;
+                                  } catch {
+                                    return `${s.unitId}×${s.count}`;
+                                  }
+                                })
+                                .join(", ") || "empty"}
+                            </li>
+                          ))}
+                        {(state.armiesInTransit ?? []).filter(
+                          (a) =>
+                            a.toId === selected.id ||
+                            a.fromId === selected.id,
+                        ).length === 0 && (
+                          <li className="rf-text-dim">None detected</li>
+                        )}
+                      </ul>
+                    </div>
                   )}
-                </div>
 
                 {!selectedIsEnemy && (
                   <>
@@ -1502,81 +1663,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                         );
                       })}
                     </ul>
-                  </>
-                )}
-
-                {selectedIsEnemy && humanId && (
-                  <>
-                    <p className="rf-hint">
-                      Enemy territory — Invade, Strike, or Recon without fog of
-                      war (garrisons approximate until revealed).
-                    </p>
-                    <div className="rf-map__sheet-actions rf-map__sheet-actions--stack">
-                      {(
-                        [
-                          ["cruise", "Cruise"],
-                          ["orbital", "Orbital"],
-                          ["kinetic", "Kinetic"],
-                        ] as [StrikeKind, string][]
-                      ).map(([kind, label]) => {
-                        const cd = strikeCooldownLeft(state, humanId, kind);
-                        const has = playerHasStrikeAsset(state, humanId, kind);
-                        return (
-                          <button
-                            key={kind}
-                            type="button"
-                            className={
-                              state.strikeTargeting === kind
-                                ? "primary"
-                                : "ghost"
-                            }
-                            disabled={!has || cd > 0}
-                            onClick={() =>
-                              dispatch({
-                                type: "LAUNCH_STRIKE",
-                                payload: {
-                                  kind,
-                                  targetId: selected.id,
-                                },
-                              })
-                            }
-                          >
-                            {label}
-                            {cd > 0 ? ` (${cd}t)` : ""}
-                          </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() =>
-                          dispatch({
-                            type: "LAUNCH_RECON",
-                            payload: {
-                              targetId: selected.id,
-                              mode: "drone",
-                            },
-                          })
-                        }
-                      >
-                        Recon drone
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() =>
-                          dispatch({
-                            type: "LAUNCH_RECON",
-                            payload: {
-                              targetId: selected.id,
-                              mode: "satellite",
-                            },
-                          })
-                        }
-                      >
-                        Sat relay
-                      </button>
-                    </div>
                   </>
                 )}
 

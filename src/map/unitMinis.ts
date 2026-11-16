@@ -244,21 +244,20 @@ export function layoutUnitMinis(
   occupiedExtra: Box[] = [],
 ): PlacedUnitMini[] {
   const tier: MiniZoomTier = miniZoomTier(zoomScale);
-  // World chips stay compact; mid/deep shrink slightly so Europe stays readable.
-  const sizeScale = tier === "world" ? 0.78 : tier === "mid" ? 0.82 : 0.88;
+  // Shrink chips so long names (Western China / Kazakhstan) stay readable.
+  const sizeScale = tier === "world" ? 0.72 : tier === "mid" ? 0.7 : 0.82;
   const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
-  const gap = Math.max(0.55, size * 0.18);
+  const gap = Math.max(0.55, size * 0.2);
   const labelById = Object.fromEntries(labels.map((l) => [l.id, l]));
-  // Mid/deep: inflate label boxes so chips clear name glyphs.
-  // World: keep tight boxes so sparse strength chips still place.
-  const labelPadW = tier === "world" ? 1 : 1.12;
-  const labelPadH = tier === "world" ? 1 : 1.3;
-  const labelMinW = tier === "world" ? size * 1.4 : size * 1.9;
+  // Inflate label boxes so chips never cover glyphs — prefer below/beside.
+  const labelPadW = tier === "world" ? 1.15 : 1.4;
+  const labelPadH = tier === "world" ? 1.15 : 1.65;
+  const labelMinW = tier === "world" ? size * 1.8 : size * 2.6;
   const labelBoxes: Box[] = labels.map((l) => ({
     x: l.x,
     y: l.y,
-    w: Math.max(l.w * labelPadW, labelMinW, 8),
-    h: Math.max(l.h * labelPadH, size * (tier === "world" ? 0.55 : 0.75), 3.5),
+    w: Math.max(l.w * labelPadW, labelMinW, 10),
+    h: Math.max(l.h * labelPadH, size * (tier === "world" ? 0.7 : 0.95), 4),
   }));
   const occupied: Box[] = [...labelBoxes, ...occupiedExtra];
   const out: PlacedUnitMini[] = [];
@@ -296,25 +295,27 @@ export function layoutUnitMinis(
       if (zoomScale >= 0.9 && t.area < 0.006) continue;
 
       const chipSize = size;
-      const aboveY = labelTop - gap * 1.4 - chipSize / 2;
-      const belowY = labelBot + gap + chipSize / 2;
-      const sideY = lbl?.y ?? ay;
+      const halfLabel = Math.max((lbl?.w ?? size * 2) / 2, chipSize * 0.9);
+      const aboveY = labelTop - gap * 1.6 - chipSize / 2;
+      const belowY = labelBot + gap * 1.35 + chipSize / 2;
+      const leftX = baseX - halfLabel - gap - chipSize / 2;
+      const rightX = baseX + halfLabel + gap + chipSize / 2;
+      // Below / far-below / above only — never at label-center Y (clips glyphs).
       const anchors = [
-        { x: baseX - chipSize * 1.55, y: sideY },
-        { x: baseX + chipSize * 1.55, y: sideY },
-        { x: baseX - chipSize * 1.75, y: sideY - chipSize * 0.45 },
-        { x: baseX + chipSize * 1.75, y: sideY - chipSize * 0.45 },
-        { x: baseX, y: aboveY },
-        { x: baseX - chipSize * 0.9, y: aboveY },
-        { x: baseX + chipSize * 0.9, y: aboveY },
         { x: baseX, y: belowY },
+        { x: leftX, y: belowY },
+        { x: rightX, y: belowY },
+        { x: baseX, y: belowY + chipSize * 0.9 },
+        { x: baseX, y: aboveY },
+        { x: leftX, y: aboveY },
+        { x: rightX, y: aboveY },
       ];
       const top = sorted[0]!;
       let placed = false;
       for (const a of anchors) {
         const box: Box = { x: a.x, y: a.y, w: chipSize, h: chipSize };
         // Strong pad so neighbor Europe chips don't stack.
-        if (occupied.some((o) => overlaps(box, o, gap * 0.85))) continue;
+        if (occupied.some((o) => overlaps(box, o, gap * 0.95))) continue;
         occupied.push(box);
         const m = toMini(
           `${t.id}:troops`,
@@ -329,31 +330,53 @@ export function layoutUnitMinis(
         placed = true;
         break;
       }
-      void placed;
+      if (!placed) {
+        // Last resort: below label, only skip the label box itself.
+        const fy = belowY + chipSize * 0.35;
+        const box: Box = { x: baseX, y: fy, w: chipSize, h: chipSize };
+        const hitsLabel = labelBoxes.some((o) => overlaps(box, o, gap * 0.4));
+        if (!hitsLabel) {
+          occupied.push(box);
+          const m = toMini(
+            `${t.id}:troops`,
+            top.unitId,
+            total,
+            baseX,
+            fy,
+            chipSize,
+            { territoryId: t.id, compact: true, owner: ts?.owner },
+          );
+          if (m) out.push(m);
+        }
+      }
       continue;
     }
 
-    // Mid: only larger territories get a multi-type row; Europe stays readable.
-    const forceCompact =
-      tier === "mid" && (t.area < 0.012 || sorted.length === 1);
+    // Mid: always one compact chip below/above — multi-type rows were clipping
+    // long names (Western China / Kazakhstan / Eastern India).
+    const forceCompact = tier === "mid";
     if (forceCompact) {
-      const chipSize = size * (t.area < 0.005 ? 0.85 : 1);
-      // Prefer sides so chips never cover "Greenland" / "Eastern Canada" glyphs.
-      const sideY = lbl?.y ?? ay;
-      const aboveY = labelTop - gap * 1.35 - chipSize / 2;
+      const chipSize = size * (t.area < 0.005 ? 0.75 : 0.85);
+      // Below / above only — side-at-label-Y was clipping "Western China" etc.
+      const halfLabel = Math.max((lbl?.w ?? size * 2.4) / 2, chipSize * 1.15);
+      const aboveY = labelTop - gap * 1.6 - chipSize / 2;
+      const belowY = labelBot + gap * 1.5 + chipSize / 2;
+      const leftX = baseX - halfLabel - gap * 1.2 - chipSize / 2;
+      const rightX = baseX + halfLabel + gap * 1.2 + chipSize / 2;
       const anchors = [
-        { x: baseX - chipSize * 1.25, y: sideY },
-        { x: baseX + chipSize * 1.25, y: sideY },
-        { x: baseX - chipSize * 1.45, y: sideY - chipSize * 0.35 },
-        { x: baseX + chipSize * 1.45, y: sideY - chipSize * 0.35 },
+        { x: baseX, y: belowY },
+        { x: leftX, y: belowY },
+        { x: rightX, y: belowY },
+        { x: baseX, y: belowY + chipSize },
         { x: baseX, y: aboveY },
-        { x: baseX - chipSize, y: aboveY },
-        { x: baseX + chipSize, y: aboveY },
+        { x: leftX, y: aboveY },
+        { x: rightX, y: aboveY },
       ];
       const top = sorted[0]!;
+      let placedMid = false;
       for (const a of anchors) {
         const box: Box = { x: a.x, y: a.y, w: chipSize, h: chipSize };
-        if (occupied.some((o) => overlaps(box, o, gap * 0.6))) continue;
+        if (occupied.some((o) => overlaps(box, o, gap * 0.75))) continue;
         occupied.push(box);
         const m = toMini(
           `${t.id}:troops`,
@@ -365,41 +388,57 @@ export function layoutUnitMinis(
           { territoryId: t.id, compact: true, owner: ts?.owner },
         );
         if (m) out.push(m);
+        placedMid = true;
         break;
+      }
+      if (!placedMid) {
+        const fy = belowY + chipSize * 1.2;
+        const box: Box = { x: baseX, y: fy, w: chipSize, h: chipSize };
+        const hitsLabel = labelBoxes.some((o) => overlaps(box, o, gap * 0.35));
+        if (!hitsLabel) {
+          occupied.push(box);
+          const m = toMini(
+            `${t.id}:troops`,
+            top.unitId,
+            total,
+            baseX,
+            fy,
+            chipSize,
+            { territoryId: t.id, compact: true, owner: ts?.owner },
+          );
+          if (m) out.push(m);
+        }
       }
       continue;
     }
 
-    // Mid: ≤3 types + optional +N. Deep: up to 6 types above the label.
-    const maxShow =
-      tier === "mid" ? Math.min(3, sorted.length) : Math.min(6, sorted.length);
+    // Deep: up to 6 types beside/below the label.
+    const maxShow = Math.min(6, sorted.length);
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
     const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
-    const cols =
-      tier === "deep"
-        ? Math.min(3, Math.max(2, Math.ceil(Math.sqrt(slotCount))))
-        : Math.min(3, slotCount);
+    const cols = Math.min(3, Math.max(2, Math.ceil(Math.sqrt(slotCount))));
     const rows = Math.ceil(slotCount / cols);
     const gridH = rows * size + (rows - 1) * gap;
     const gridW = cols * size + (cols - 1) * gap;
     // Prefer LEFT/RIGHT of the label at label height — buildings sit BELOW
     // the label, so this lane stays clear and on-camera at deep zoom.
-    const sideCy = lbl?.y ?? ay;
-    const sideX = baseX - gridW / 2 - gap - size * 1.1;
-    const rightX = baseX + gridW / 2 + gap + size * 1.1;
-    const clearGap = gap + size * 0.4;
+    const halfLabel = Math.max((lbl?.w ?? gridW) / 2, gridW / 2);
+    const sideX = baseX - halfLabel - gap - gridW / 2 - size * 0.35;
+    const rightX = baseX + halfLabel + gap + gridW / 2 + size * 0.35;
+    const clearGap = gap + size * 0.5;
     const aboveCy = labelTop - clearGap - gridH / 2;
+    const belowCy = labelBot + clearGap + gridH / 2;
 
+    // Below first, then far sides at below/above — never cy == label center.
     const anchors = [
-      { cx: sideX - size * 0.25, cy: sideCy },
-      { cx: rightX + size * 0.25, cy: sideCy },
-      { cx: sideX - size * 0.7, cy: sideCy },
-      { cx: rightX + size * 0.7, cy: sideCy },
-      { cx: sideX, cy: sideCy - size * 0.55 },
-      { cx: rightX, cy: sideCy - size * 0.55 },
-      { cx: baseX, cy: aboveCy - size * 0.2 },
-      { cx: baseX - size * 0.5, cy: aboveCy - size * 0.2 },
+      { cx: baseX, cy: belowCy },
+      { cx: sideX, cy: belowCy },
+      { cx: rightX, cy: belowCy },
+      { cx: baseX, cy: belowCy + size },
+      { cx: baseX, cy: aboveCy },
+      { cx: sideX, cy: aboveCy },
+      { cx: rightX, cy: aboveCy },
     ];
 
     let placed = false;
@@ -425,12 +464,12 @@ export function layoutUnitMinis(
     }
 
     if (!placed) {
-      // Fallback: one compact chip above the label.
-      const chipSize = size * 0.9;
+      // Fallback: one compact chip BELOW the label (never cover glyphs).
+      const chipSize = size * 0.85;
       const fx = baseX;
-      const fy = labelTop - gap - chipSize / 2;
+      const fy = labelBot + gap * 1.2 + chipSize / 2;
       const box: Box = { x: fx, y: fy, w: chipSize, h: chipSize };
-      if (!occupied.some((o) => overlaps(box, o, gap * 0.4))) {
+      if (!occupied.some((o) => overlaps(box, o, gap * 0.5))) {
         occupied.push(box);
         const top = sorted[0]!;
         const m = toMini(
