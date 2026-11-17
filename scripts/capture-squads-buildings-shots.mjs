@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { copyFileSync, mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright";
 
@@ -46,6 +46,25 @@ async function boot(page) {
   await page.waitForTimeout(300);
 }
 
+async function dismissUi(page) {
+  await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "DISMISS_MESSAGE" });
+    window.__RF__.dispatch({ type: "DISMISS_ECONOMY_SUMMARY" });
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: null },
+    });
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
+    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
+  });
+  const backdrop = page.locator('[aria-label="Close panel"]');
+  if (await backdrop.count()) {
+    await backdrop.first().click({ force: true }).catch(() => {});
+  }
+  await page.keyboard.press("Escape").catch(() => {});
+  await page.waitForTimeout(150);
+}
+
 async function prep(page) {
   return page.evaluate(() => {
     const s = window.__RF__.getState();
@@ -87,9 +106,9 @@ async function prep(page) {
               ),
             },
           },
-          selectedTerritoryId: home,
-          squads: [],
+          selectedTerritoryId: null,
           selectedSquadId: null,
+          squads: [],
           armiesInTransit: [],
           message: null,
           screen: "map",
@@ -114,8 +133,9 @@ async function main() {
   });
   await boot(page);
   const ids = await prep(page);
+  await dismissUi(page);
 
-  // Create squad panel
+  // Create squad panel: select home then force-open via create button
   await page.evaluate((home) => {
     window.__RF__.dispatch({
       type: "SELECT_TERRITORY",
@@ -123,97 +143,93 @@ async function main() {
     });
     window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
   }, ids.home);
-  await page.waitForTimeout(200);
-  // Open create via dispatch preview state for panel — use CREATE then open squads
-  await page.evaluate((home) => {
-    window.__RF__.dispatch({
-      type: "CREATE_SQUAD",
-      payload: {
-        territoryId: home,
-        force: [
-          { unitId: "trooper", count: 5 },
-          { unitId: "assault_mech", count: 1 },
-        ],
-        name: "Vanguard",
-      },
-    });
-  }, ids.home);
-
-  // Create squad panel screenshot — open CreateSquadPanel by clicking button if present
+  await page.waitForTimeout(250);
   const createBtn = page.getByTestId("create-squad-btn");
   if (await createBtn.count()) {
-    await createBtn.click();
-    await page.waitForTimeout(200);
+    await createBtn.click({ force: true });
+    await page.waitForTimeout(250);
     await shot(page, "create-panel");
     await page.keyboard.press("Escape").catch(() => {});
-  } else {
-    // Force panel via evaluating a synthetic UI is hard; screenshot squads tab instead
-    await shot(page, "create-panel");
+    await dismissUi(page);
   }
 
-  // Selected squad + route
-  const squadId = await page.evaluate(() => window.__RF__.getState().squads[0]?.id);
-  if (ids.enemy && squadId) {
-    await page.evaluate(
-      ({ squadId, toId }) => {
+  // Create Vanguard + show selected route
+  await page.evaluate(
+    ({ home, enemy }) => {
+      window.__RF__.dispatch({
+        type: "CREATE_SQUAD",
+        payload: {
+          territoryId: home,
+          force: [
+            { unitId: "trooper", count: 5 },
+            { unitId: "assault_mech", count: 1 },
+          ],
+          name: "Vanguard",
+        },
+      });
+      const squadId = window.__RF__.getState().squads[0]?.id;
+      if (squadId && enemy) {
         window.__RF__.dispatch({
           type: "SELECT_SQUAD",
           payload: { squadId },
         });
         window.__RF__.dispatch({
           type: "ORDER_SQUAD_MOVE",
-          payload: { squadId, toId },
+          payload: { squadId, toId: enemy },
         });
-        window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
-      },
-      { squadId, toId: ids.enemy },
-    );
-    await page.waitForTimeout(250);
-    await shot(page, "selected-route");
-  }
-
-  // Pending join
-  await prep(page);
-  await page.evaluate((home) => {
-    window.__RF__.dispatch({
-      type: "CREATE_SQUAD",
-      payload: {
-        territoryId: home,
-        force: [{ unitId: "trooper", count: 3 }],
-        name: "Core",
-      },
-    });
-  }, ids.home);
-  const coreId = await page.evaluate(() =>
-    window.__RF__.getState().squads.find((s) => s.name === "Core")?.id,
+      }
+      window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
+    },
+    { home: ids.home, enemy: ids.enemy },
   );
-  if (ids.friend && coreId) {
-    await page.evaluate(
-      ({ squadId, fromId }) => {
+  await page.waitForTimeout(300);
+  await shot(page, "selected-route");
+
+  // Pending join on map
+  await prep(page);
+  await dismissUi(page);
+  await page.evaluate(
+    ({ home, friend }) => {
+      window.__RF__.dispatch({
+        type: "CREATE_SQUAD",
+        payload: {
+          territoryId: home,
+          force: [{ unitId: "trooper", count: 3 }],
+          name: "Core",
+        },
+      });
+      const squadId = window.__RF__.getState().squads.find(
+        (s) => s.name === "Core",
+      )?.id;
+      if (squadId && friend) {
         window.__RF__.dispatch({
           type: "ADD_TO_SQUAD",
           payload: {
             squadId,
-            fromId,
+            fromId: friend,
             force: [{ unitId: "trooper", count: 2 }],
           },
         });
-        window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
-      },
-      { squadId: coreId, fromId: ids.friend },
-    );
-    await page.waitForTimeout(250);
-    await shot(page, "pending-join");
-  }
+        window.__RF__.dispatch({
+          type: "SELECT_SQUAD",
+          payload: { squadId },
+        });
+      }
+      window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
+    },
+    { home: ids.home, friend: ids.friend },
+  );
+  await page.waitForTimeout(350);
+  await shot(page, "pending-join");
 
-  // Squads tab
+  // Squads tab (list + joining group)
   await page.evaluate(() => {
     window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "squads" } });
   });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   await shot(page, "tab");
 
-  // Building menu + workers + delete
+  // Building menu on base
   await page.evaluate((home) => {
     window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "base" } });
     window.__RF__.dispatch({
@@ -221,21 +237,18 @@ async function main() {
       payload: { territoryId: home },
     });
   }, ids.home);
-  await page.waitForTimeout(400);
-  // Click barracks pad if possible
-  const barracks = page.locator(".rf-base__structure").first();
-  if (await barracks.count()) {
-    await barracks.click({ force: true });
-    await page.waitForTimeout(200);
+  await page.waitForTimeout(450);
+  const structure = page.locator(".rf-base__structure").first();
+  if (await structure.count()) {
+    await structure.click({ force: true });
+    await page.waitForTimeout(250);
   }
   await shot(page, "building-menu");
 
-  // Workers panel via menu
   const workersBtn = page.getByRole("menuitem", { name: /Workers/i });
   if (await workersBtn.count()) {
-    await workersBtn.click();
+    await workersBtn.click({ force: true });
     await page.waitForTimeout(200);
-    // Staff nexus for effect text
     await page.evaluate((home) => {
       const st = window.__RF__.getState();
       const nexus = st.territories[home].buildings.find(
@@ -252,13 +265,11 @@ async function main() {
         });
       }
     }, ids.home);
-    await page.waitForTimeout(150);
-    await shot(page, "workers-effect");
-  } else {
-    await shot(page, "workers-effect");
+    await page.waitForTimeout(200);
   }
+  await shot(page, "workers-effect");
 
-  // Capture result — simulate pending capture screen
+  // Capture result screen
   await page.evaluate((home) => {
     const st = window.__RF__.getState();
     window.__RF__.dispatch({
@@ -283,7 +294,7 @@ async function main() {
       },
     });
   }, ids.home);
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(350);
   await shot(page, "capture-result");
 
   await browser.close();
