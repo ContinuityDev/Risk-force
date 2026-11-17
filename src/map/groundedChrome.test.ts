@@ -60,6 +60,15 @@ describe("groundedChrome", () => {
     }
   });
 
+  it("keeps building/unit hit boxes near the visual footprint", () => {
+    const b = groundedBuildingFootprint(8.2, 0.18);
+    const u = groundedUnitFootprint(7.5, 0.18, { count: 3 });
+    // ~3.3px/wu on height-limited mobile → pad*2 ≤ ~10wu ≈ 33px.
+    expect(b.hit.w).toBeLessThanOrEqual(10);
+    expect(u.hit.w).toBeLessThanOrEqual(10.5);
+    expect(b.hit.w).toBeGreaterThan(b.sprite.w * 0.85);
+  });
+
   it("shadow is tight (footprint-width) and offset slightly to light", () => {
     const fp = groundedUnitFootprint(8, 0.4, { count: 3 });
     expect(fp.shadow.rx).toBeLessThan(8 * 0.45);

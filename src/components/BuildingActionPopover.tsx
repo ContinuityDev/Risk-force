@@ -1,10 +1,13 @@
 import { type ReactNode, forwardRef } from "react";
 import { getBuilding, isTrainingBuilding } from "../data/buildings";
+import { GAME_LOOP } from "../data/gameLoop";
 import { getUnit } from "../data/units";
 import type { GameAction } from "../engine/actions";
+import { costShortfalls } from "../engine/economy";
 import type { GameState, PlacedBuilding, PlayerState } from "../engine/state";
-import { workerCapForBuilding } from "../engine/training";
+import { canQueueWorker, workerCapForBuilding } from "../engine/training";
 import { workerEffectForBuilding } from "../engine/workerEffects";
+import { CostLabel } from "./CostLabel";
 
 export type BuildingPopoverMode = "menu" | "train" | "workers" | "info" | "delete";
 
@@ -152,15 +155,17 @@ export const BuildingActionPopover = forwardRef<
 
       {mode === "menu" && (
         <div className="rf-bldg-pop__items">
-          {isTrainingBuilding(def) && instance.buildRemaining <= 0 && (
+          {(isTrainingBuilding(def) || def.producesWorkers) &&
+            instance.buildRemaining <= 0 && (
             <button
               type="button"
               role="menuitem"
               className="rf-bldg-pop__item"
+              data-testid="building-train-btn"
               onClick={() => onMode("train")}
             >
               <Icon name="train" />
-              <span>Train unit</span>
+              <span>{def.producesWorkers ? "Train" : "Train unit"}</span>
             </button>
           )}
           <button
@@ -206,8 +211,45 @@ export const BuildingActionPopover = forwardRef<
           >
             ← Menu
           </button>
-          <span className="rf-label">Queue unit</span>
-          {trainables.length === 0 && (
+          <span className="rf-label">Queue</span>
+          {def.producesWorkers &&
+            (() => {
+              const cost = {
+                energy: GAME_LOOP.training.worker.energy,
+                alloy: GAME_LOOP.training.worker.alloy,
+              };
+              const short = costShortfalls(activePlayer, cost);
+              const check = canQueueWorker(activePlayer, ts, 1);
+              const hardBlock =
+                !canAct || (check.ok === false && short.length === 0);
+              return (
+                <ul className="rf-bldg-pop__train-list">
+                  <li>
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={hardBlock}
+                      data-testid="train-worker"
+                      onClick={() => {
+                        if (short.length || !check.ok) return;
+                        dispatch({
+                          type: "TRAIN_WORKER",
+                          payload: { territoryId, count: 1 },
+                        });
+                      }}
+                    >
+                      Train worker
+                      <CostLabel
+                        cost={cost}
+                        shortfalls={short}
+                        showNeed={short.length > 0}
+                      />
+                    </button>
+                  </li>
+                </ul>
+              );
+            })()}
+          {trainables.length === 0 && !def.producesWorkers && (
             <p className="rf-hint">No trainable units at this structure.</p>
           )}
           <ul className="rf-bldg-pop__train-list">

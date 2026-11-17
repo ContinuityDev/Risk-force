@@ -137,16 +137,17 @@ export function groundedUnitFootprint(
         }
       : null,
     progressBar: null,
-    // Match building hit budget so unit chips stay ≥40px on focus frames.
+    // Tight hit ≈ visual footprint + small margin (~24–36px on focus frames).
+    // Oversized pads stole territory / building taps after PR #18.
     hit: (() => {
-      const pad = Math.max(s * 0.95, 6.4);
-      const top = spriteY * scaleY - pad * 0.25;
-      const bottom = shadow.cy + shadow.ry + pad * 0.5;
+      const pad = Math.min(Math.max(s * 0.52, 2.0), 5.0);
+      const top = spriteY * scaleY - pad * 0.08;
+      const bottom = shadow.cy + shadow.ry + pad * 0.2;
       return {
         x: -pad,
         y: top,
         w: pad * 2,
-        h: Math.max(pad * 2, bottom - top, 12.2),
+        h: Math.max(pad * 1.55, bottom - top),
       };
     })(),
   };
@@ -213,16 +214,17 @@ export function groundedBuildingFootprint(
             h: barH,
           }
         : null,
-    // ≥40px taps on height-limited mobile maps (scale ≈3.3px/wu at focus).
+    // Visual footprint + small margin — keep under ~36px mobile / ~24px desktop
+    // so neighboring territory and unit taps still land.
     hit: (() => {
-      const pad = Math.max(s * 0.95, 6.4);
-      const top = spriteY * scaleY - pad * 0.25;
-      const bottom = shadow.cy + shadow.ry + pad * 0.5;
+      const pad = Math.min(Math.max(s * 0.5, 1.9), 4.8);
+      const top = spriteY * scaleY - pad * 0.08;
+      const bottom = shadow.cy + shadow.ry + pad * 0.22;
       return {
         x: -pad,
         y: top,
         w: pad * 2,
-        h: Math.max(pad * 2, bottom - top, 12.2),
+        h: Math.max(pad * 1.5, bottom - top),
       };
     })(),
   };

@@ -87,6 +87,7 @@ import {
 } from "./GroundedMapMinis";
 import { MapSquadDock } from "./MapSquadDock";
 import { SquadsView } from "./SquadsView";
+import { TerritoryBuildCatalog } from "./TerritoryBuildCatalog";
 import { TerritoryBuildList } from "./TerritoryBuildList";
 
 interface WorldMapProps {
@@ -288,7 +289,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [opsMode, setOpsMode] = useState<null | "strike" | "recon">(null);
   const [strikePick, setStrikePick] = useState<StrikeKind>("cruise");
   const [sheetSection, setSheetSection] = useState<
-    "overview" | "buildings" | "create" | "building"
+    "overview" | "buildings" | "build" | "create" | "building"
   >("overview");
   const [mapBuildingMenu, setMapBuildingMenu] = useState<{
     territoryId: string;
@@ -854,38 +855,47 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         target,
       );
       const onTerritory = Boolean(territoryId);
-      const squadHit =
-        target.closest?.("[data-squad-id].rf-map__squad-hit")?.getAttribute(
-          "data-squad-id",
-        ) ?? null;
-      const bldgHit = target.closest?.(".rf-map__bldg-hit");
-      const bldgTerritory = bldgHit?.getAttribute("data-territory-id");
-      const bldgInstance = bldgHit?.getAttribute("data-instance-id");
-      let pendingBuilding: { territoryId: string; instanceId: string } | null =
-        null;
-      if (
-        bldgTerritory &&
-        bldgInstance &&
-        humanId &&
-        state.territories[bldgTerritory]?.owner === humanId
-      ) {
-        pendingBuilding = {
-          territoryId: bldgTerritory,
-          instanceId: bldgInstance,
-        };
-      }
+      // Prefer squad → unit → building when stacked (buildings paint above
+      // units; oversized hits used to steal every tap).
+      const stack = document.elementsFromPoint(e.clientX, e.clientY);
+      const squadEl = stack.find((el) =>
+        (el as Element).classList?.contains("rf-map__squad-hit"),
+      ) as Element | undefined;
+      const unitEl = stack.find((el) =>
+        (el as Element).classList?.contains("rf-map__unit-hit"),
+      ) as Element | undefined;
+      const bldgEl = stack.find((el) =>
+        (el as Element).classList?.contains("rf-map__bldg-hit"),
+      ) as Element | undefined;
+
+      const squadHit = squadEl?.getAttribute("data-squad-id") ?? null;
+
       let createFromUnit: string | null = null;
-      const unitHit = target.closest?.(
-        "[data-territory-id].rf-map__unit-hit",
-      );
-      if (unitHit && humanId && !pendingBuilding) {
-        const utid = unitHit.getAttribute("data-territory-id");
+      if (unitEl && humanId && !squadHit) {
+        const utid = unitEl.getAttribute("data-territory-id");
         const ts = utid ? state.territories[utid] : undefined;
         const hasUnits =
           utid &&
           ts?.owner === humanId &&
           Object.values(ts.garrison ?? {}).some((c) => c > 0);
         if (hasUnits) createFromUnit = utid;
+      }
+
+      let pendingBuilding: { territoryId: string; instanceId: string } | null =
+        null;
+      if (!squadHit && !createFromUnit && bldgEl && humanId) {
+        const bldgTerritory = bldgEl.getAttribute("data-territory-id");
+        const bldgInstance = bldgEl.getAttribute("data-instance-id");
+        if (
+          bldgTerritory &&
+          bldgInstance &&
+          state.territories[bldgTerritory]?.owner === humanId
+        ) {
+          pendingBuilding = {
+            territoryId: bldgTerritory,
+            instanceId: bldgInstance,
+          };
+        }
       }
 
       (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
@@ -1003,7 +1013,26 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
 
       if (pointersRef.current.size === 0) {
         if (g.mode === "pan" && !g.moved) {
-          if (g.pendingBuilding) {
+          // Squad / unit first — never let a building hit steal those taps.
+          if (g.pendingSquadId) {
+            const sid = g.pendingSquadId;
+            dispatch({
+              type: "SELECT_SQUAD",
+              payload: {
+                squadId:
+                  sid === selectedSquadIdRef.current ? null : sid,
+              },
+            });
+            setMapBuildingMenu(null);
+          } else if (g.pendingCreateSquadTerritoryId) {
+            setSheetSection("create");
+            dispatch({
+              type: "SELECT_TERRITORY",
+              payload: { territoryId: g.pendingCreateSquadTerritoryId },
+            });
+            setDetailOpen(true);
+            setMapBuildingMenu(null);
+          } else if (g.pendingBuilding) {
             const { territoryId: bTid, instanceId } = g.pendingBuilding;
             dispatch({
               type: "SELECT_SQUAD",
@@ -1037,23 +1066,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             setMapBuildingMode("menu");
             // Always open the building menu inside the right panel.
             setSheetSection("building");
-          } else if (g.pendingSquadId) {
-            const sid = g.pendingSquadId;
-            dispatch({
-              type: "SELECT_SQUAD",
-              payload: {
-                squadId:
-                  sid === selectedSquadIdRef.current ? null : sid,
-              },
-            });
-            setMapBuildingMenu(null);
-          } else if (g.pendingCreateSquadTerritoryId) {
-            setSheetSection("create");
-            dispatch({
-              type: "SELECT_TERRITORY",
-              payload: { territoryId: g.pendingCreateSquadTerritoryId },
-            });
-            setDetailOpen(true);
           } else if (g.pendingTerritoryId) {
             const tid = g.pendingTerritoryId;
             const squadId = selectedSquadIdRef.current;
@@ -2342,12 +2354,26 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 </div>
               </div>
             )}
-                {!shortLandscape && (
+                {!shortLandscape && selectedTs && (
+                  <p
+                    className="rf-text-dim rf-map__sheet-meta"
+                    data-testid="territory-sheet-meta"
+                  >
+                    {selected.continent} · {biomeLabel(selected.id)}
+                    {` · ${selectedTs.control} · Pop ${selectedTs.population}`}
+                    {selectedTs.owner === humanId
+                      ? ` · Workers ${selectedTs.workers ?? 0}`
+                      : ""}
+                    {selectedTs.owner === humanId && (
+                      <span data-testid="territory-worker-count" hidden>
+                        {selectedTs.workers ?? 0}
+                      </span>
+                    )}
+                  </p>
+                )}
+                {!shortLandscape && !selectedTs && (
                   <p className="rf-text-dim rf-map__sheet-meta">
                     {selected.continent} · {biomeLabel(selected.id)}
-                    {selectedTs
-                      ? ` · ${selectedTs.control} · Pop ${selectedTs.population}`
-                      : ""}
                   </p>
                 )}
                 {selectedTs && !shortLandscape && (
@@ -2437,6 +2463,17 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 <div className="rf-map__sheet-actions" data-tutorial="dock-base">
                   <button
                     type="button"
+                    className={sheetSection === "build" ? "primary" : "ghost"}
+                    data-testid="sheet-build-btn"
+                    onClick={() => {
+                      setSheetSection("build");
+                      setMapBuildingMenu(null);
+                    }}
+                  >
+                    Build
+                  </button>
+                  <button
+                    type="button"
                     className={
                       sheetSection === "buildings" || sheetSection === "overview"
                         ? "primary"
@@ -2501,6 +2538,22 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   </div>
                 );
               })()}
+
+            {humanId &&
+              selectedTs?.owner === humanId &&
+              sheetSection === "build" &&
+              state.players[humanId] && (
+                <TerritoryBuildCatalog
+                  territoryId={selected.id}
+                  territory={selectedTs}
+                  activePlayer={state.players[humanId]!}
+                  canAct={
+                    state.playerOrder[state.activePlayerIndex] === humanId &&
+                    state.phase === "play"
+                  }
+                  dispatch={dispatch}
+                />
+              )}
 
             {humanId &&
               selectedTs?.owner === humanId &&
