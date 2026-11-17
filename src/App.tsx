@@ -376,10 +376,13 @@ export default function App() {
         );
         if (news) batch.push(news);
 
-        // Invasions march via the travel system; battle resolves on arrival.
+        // Attacks march via the travel system; battle resolves on arrival.
         transport.dispatch(action);
-        if (action.type === "START_INVASION") {
-          // Primary strike launched — finish the turn after other queued acts.
+        if (
+          action.type === "START_INVASION" ||
+          action.type === "ORDER_MOVE"
+        ) {
+          // Primary strike / march launched — finish the turn after other acts.
           break;
         }
         if (action.type === "END_TURN") {

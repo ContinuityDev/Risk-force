@@ -229,7 +229,11 @@ describe("one-start + neutrals", () => {
     expect(plans[0]!.toId).toBe(neutralNeighbor);
 
     const actions = planAiTurn(state);
-    expect(actions.some((a) => a.type === "START_INVASION")).toBe(true);
+    expect(
+      actions.some(
+        (a) => a.type === "START_INVASION" || a.type === "ORDER_MOVE",
+      ),
+    ).toBe(true);
     for (const a of actions) {
       state = reduce(state, a);
     }
