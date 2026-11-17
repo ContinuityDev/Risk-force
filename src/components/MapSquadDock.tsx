@@ -16,6 +16,9 @@ interface MapSquadDockProps {
   humanId: string;
   dispatch: (action: GameAction) => void;
   onFocusSquad?: (squadId: string, territoryId: string) => void;
+  /** Controlled open; defaults to collapsed when omitted. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 function compositionSummary(force: StrikeForceSlot[]): string {
@@ -37,8 +40,15 @@ export function MapSquadDock({
   humanId,
   dispatch,
   onFocusSquad,
+  open: openProp,
+  onOpenChange,
 }: MapSquadDockProps) {
-  const [open, setOpen] = useState(true);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = openProp ?? localOpen;
+  const setOpen = (next: boolean) => {
+    onOpenChange?.(next);
+    if (openProp === undefined) setLocalOpen(next);
+  };
   const squads = useMemo(
     () => listPlayerSquads(state, humanId),
     [state.squads, humanId],
@@ -62,7 +72,7 @@ export function MapSquadDock({
         type="button"
         className="rf-map__legend-toggle"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
       >
         <span className="rf-label">
           Squads · {squads.length}

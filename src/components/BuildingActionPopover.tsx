@@ -25,6 +25,8 @@ interface BuildingActionPopoverProps {
   hidden?: boolean;
   /** Extra menu rows (e.g. War College commissions), inserted before Delete. */
   menuExtras?: ReactNode;
+  /** Flow inside a sheet instead of a fixed floating popover. */
+  embedded?: boolean;
 }
 
 function Icon({ name }: { name: "train" | "workers" | "info" | "delete" }) {
@@ -90,6 +92,7 @@ export const BuildingActionPopover = forwardRef<
     dispatch,
     hidden,
     menuExtras,
+    embedded = false,
   },
   ref,
 ) {
@@ -118,15 +121,19 @@ export const BuildingActionPopover = forwardRef<
   return (
     <div
       ref={ref}
-      className="rf-bldg-pop"
+      className={`rf-bldg-pop${embedded ? " rf-bldg-pop--embedded" : ""}`}
       role="menu"
       data-testid="building-popover"
       data-tutorial="base-train"
-      style={{
-        left,
-        top,
-        visibility: hidden ? "hidden" : "visible",
-      }}
+      style={
+        embedded
+          ? undefined
+          : {
+              left,
+              top,
+              visibility: hidden ? "hidden" : "visible",
+            }
+      }
     >
       <header className="rf-bldg-pop__head">
         <div>

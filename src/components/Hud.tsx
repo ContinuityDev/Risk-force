@@ -472,7 +472,10 @@ export function Hud({
         </div>
       )}
 
-      {state.message && (
+      {state.message &&
+        state.screen !== "capture" &&
+        state.phase !== "capture" &&
+        !state.pendingCapture && (
         <div className="rf-hud__message rf-hud__toast" role="status">
           <span>{state.message}</span>
           <button

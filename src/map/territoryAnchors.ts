@@ -302,13 +302,15 @@ export function labelKeepOutBox(
   label: { x: number; y: number; w: number; h: number },
   miniSize: number,
 ): { x: number; y: number; w: number; h: number } {
+  // Keep names readable without swallowing whole archipelagos / small plots
+  // when minis grow for mobile readability.
   return {
     x: label.x,
     // Bias the keep-out below the glyph so south-of-label feet don't rise
     // back into the letters.
-    y: label.y + miniSize * 0.28,
-    w: Math.max(label.w * 1.45, miniSize * 2.4, 11),
-    h: Math.max(label.h * 2.4, miniSize * 1.9, 8),
+    y: label.y + miniSize * 0.2,
+    w: Math.max(label.w * 1.25, miniSize * 1.55, 9),
+    h: Math.max(label.h * 1.85, miniSize * 1.35, 6),
   };
 }
 

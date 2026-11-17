@@ -12,6 +12,8 @@ interface CreateSquadPanelProps {
   territoryId: string;
   dispatch: (action: GameAction) => void;
   onClose: () => void;
+  /** Compact layout for the short-landscape map sheet. */
+  compact?: boolean;
 }
 
 export function CreateSquadPanel({
@@ -19,6 +21,7 @@ export function CreateSquadPanel({
   territoryId,
   dispatch,
   onClose,
+  compact = false,
 }: CreateSquadPanelProps) {
   const ts = state.territories[territoryId];
   const garrison = ts?.garrison ?? {};
@@ -44,7 +47,7 @@ export function CreateSquadPanel({
 
   return (
     <div
-      className="rf-squads__create-panel"
+      className={`rf-squads__create-panel${compact ? " rf-squads__create-panel--compact" : ""}`}
       data-testid="create-squad-panel"
     >
       <header className="rf-squads__create-head">

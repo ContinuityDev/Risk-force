@@ -1306,6 +1306,9 @@
   z-index: 60;
   min-width: 11rem;
   max-width: min(16rem, calc(100vw - 1rem));
+  max-height: min(70vh, 22rem);
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 0.35rem;
   display: flex;
   flex-direction: column;
@@ -1313,6 +1316,31 @@
   background: rgba(10, 14, 18, 0.97);
   border: 1px solid rgba(126, 182, 201, 0.45);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+}
+
+.rf-bldg-pop--embedded {
+  position: relative;
+  left: auto;
+  top: auto;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  visibility: visible;
+  box-shadow: none;
+  border-color: rgba(126, 182, 201, 0.28);
+}
+
+.rf-map__territory-drawer--sheet .rf-bldg-pop--embedded {
+  max-height: min(40vh, 9.5rem);
+  overflow: auto;
+}
+
+.rf-map__sheet-building-action {
+  margin-top: 0.35rem;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
 }
 
 .rf-bldg-pop__head {
@@ -3710,6 +3738,79 @@ button.danger {
   max-height: min(70vh, 18rem);
   border-radius: var(--rf-radius) var(--rf-radius) 0 0;
   animation: rf-drawer-in-up 0.2s ease;
+  overflow: auto;
+}
+
+/* Short-landscape territory sheet: bottom of the map, no modal backdrop.
+   Must beat `.rf-drawer--inline.rf-map__territory-drawer` (same specificity). */
+.rf-drawer--inline.rf-map__territory-drawer.rf-map__territory-drawer--sheet {
+  position: absolute;
+  top: auto;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: 0.35rem;
+  width: auto;
+  max-width: none;
+  max-height: min(48vh, 11.5rem);
+  height: auto;
+  padding: 0.35rem 0.55rem 0.45rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  z-index: 8;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.rf-map__territory-drawer--sheet .rf-map__sheet-buildings {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.rf-map__territory-drawer--sheet .rf-map__build-list {
+  max-height: none;
+}
+
+.rf-map__territory-drawer--sheet .rf-map__sheet-actions {
+  flex-wrap: nowrap;
+  margin: 0.2rem 0 0.35rem;
+}
+
+.rf-map__territory-drawer--sheet .rf-map__sheet-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 36px;
+  font-size: 0.72rem;
+}
+
+.rf-map__territory-drawer--sheet .rf-map__sheet-title {
+  margin: 0.05rem 0 0.1rem;
+  font-size: 0.95rem;
+}
+
+.rf-map__territory-drawer--sheet .rf-map__build-list {
+  max-height: min(36vh, 9rem);
+  overflow: auto;
+}
+
+.rf-drawer--inline.rf-map__territory-drawer.rf-map__territory-drawer--sheet-tall {
+  max-height: min(72vh, 17.5rem);
+}
+
+.rf-map__territory-drawer--sheet-tall .rf-map__build-list {
+  max-height: min(42vh, 11rem);
+}
+
+.rf-map__territory-drawer--sheet .rf-map__build-list button {
+  min-height: 34px;
+  padding: 0.2rem 0.35rem;
+}
+
+.rf-map__territory-drawer--sheet .rf-map__build-list .rf-sprite {
+  width: 22px !important;
+  height: 22px !important;
 }
 
 .rf-drawer--inline {
@@ -3836,6 +3937,21 @@ button.danger {
 
 .rf-map__legend--desktop {
   /* keep existing .rf-map__legend styles */
+}
+
+.rf-map__sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.rf-map__sheet-close {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  line-height: 1;
+  flex: 0 0 auto;
 }
 
 .rf-map__sheet-title {
@@ -4126,8 +4242,25 @@ button.danger {
     overflow: hidden;
   }
 
+  .rf-drawer--inline.rf-map__territory-drawer.rf-map__territory-drawer--sheet {
+    top: auto;
+    bottom: 0.3rem;
+    left: 0.35rem;
+    right: 0.35rem;
+    width: auto;
+    max-width: none;
+    max-height: min(48vh, 11.5rem);
+    height: auto;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
   .rf-map__territory-drawer .rf-picker__list {
     max-height: min(22vh, 6.5rem);
+  }
+
+  .rf-map__territory-drawer--sheet .rf-map__build-list {
+    max-height: min(26vh, 7.5rem);
   }
 
   .rf-map__territory-drawer:has(.rf-invade-from) {
@@ -4553,9 +4686,13 @@ button.danger {
     font-size: 0.72rem;
   }
 
-  .rf-shell:has(.rf-battle) .rf-hud__toast,
-  .rf-shell:has(.rf-capture) .rf-hud__toast {
+  .rf-shell:has(.rf-battle) .rf-hud__toast {
     bottom: max(0.55rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .rf-shell:has(.rf-capture) .rf-hud__toast,
+  .rf-shell:has(.rf-map-overlay) .rf-hud__toast {
+    display: none !important;
   }
 
   /* ── Map sheets: no overlap ───────────────────────────── */
@@ -6162,16 +6299,36 @@ button.is-unaffordable {
   background: linear-gradient(180deg, transparent, rgba(8, 12, 16, 0.97) 28%);
 }
 
+.rf-squads__create-panel--compact {
+  max-height: none;
+  gap: 0.4rem;
+}
+
+.rf-squads__create-panel--compact .rf-squads__create-footer {
+  position: static;
+  background: transparent;
+  padding-top: 0.15rem;
+}
+
+.rf-squads__create-panel--compact .rf-squads__force {
+  max-height: min(28vh, 7rem);
+}
+
 .rf-map-overlay {
   position: absolute;
   inset: 0;
-  z-index: 35;
+  z-index: 120;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: 0.75rem;
   background: color-mix(in srgb, var(--rf-bg, #0c1218) 45%, transparent);
   pointer-events: auto;
+}
+
+.rf-shell:has(.rf-map-overlay) .rf-hud__toast,
+.rf-shell:has(.rf-capture) .rf-hud__toast {
+  display: none !important;
 }
 
 .rf-capture--sheet {
@@ -6185,41 +6342,79 @@ button.is-unaffordable {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
-@media (orientation: landscape) and (max-height: 430px) {
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Sit under CONTINENTS (top-left) — bottom-left above the mobile dock. */
   .rf-map__squad-dock {
     left: 0.35rem;
-    bottom: auto;
-    top: 2.6rem;
-    max-width: min(42vw, 13rem);
+    right: auto;
+    top: auto;
+    bottom: calc(3.35rem + env(safe-area-inset-bottom, 0px));
+    max-width: min(38vw, 12rem);
+    max-height: min(42vh, 9.5rem);
     padding: 0.3rem 0.4rem;
+    z-index: 7;
   }
 
-  .rf-map__squad-sheet {
+  /* Keep expanded dock from climbing into CONTINENTS (top-left). */
+  .rf-map__squad-dock.is-open {
     top: auto;
-    bottom: 0.35rem;
+  }
+
+  .rf-map__squad-sheet,
+  .rf-map__squad-sheet--bottom {
+    top: auto;
+    bottom: calc(3.35rem + env(safe-area-inset-bottom, 0px));
     right: 0.35rem;
     left: auto;
-    width: min(48vw, 16rem);
-    max-height: min(55vh, 12rem);
+    width: min(52vw, 17rem);
+    max-height: min(58vh, 13rem);
     padding: 0.45rem 0.55rem;
+    z-index: 9;
   }
 
   .rf-map__squad-dock-body {
-    max-height: min(42vh, 8rem);
+    max-height: min(36vh, 7rem);
   }
 
-  .rf-drawer--inline.rf-map__territory-drawer {
+  .rf-drawer--inline.rf-map__territory-drawer:not(.rf-map__territory-drawer--sheet) {
     max-height: calc(100dvh - var(--rf-hud-h) - 3.4rem);
     overflow: auto;
+  }
+
+  .rf-drawer--inline.rf-map__territory-drawer.rf-map__territory-drawer--sheet {
+    top: auto !important;
+    left: 0.35rem !important;
+    right: 0.35rem !important;
+    bottom: 0.3rem !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(48vh, 11.5rem) !important;
+    height: auto !important;
+    overflow: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .rf-drawer--inline.rf-map__territory-drawer.rf-map__territory-drawer--sheet-tall {
+    max-height: min(72vh, 17.5rem) !important;
+  }
+
+  .rf-map__territory-drawer--sheet .rf-bldg-pop--embedded {
+    max-height: none;
   }
 
   .rf-map-overlay {
     align-items: stretch;
     padding: 0.35rem;
+    z-index: 100;
   }
 
   .rf-capture--sheet {
     max-height: none;
     height: 100%;
+  }
+
+  .rf-shell:has(.rf-capture) .rf-hud__toast,
+  .rf-shell:has(.rf-map-overlay) .rf-hud__toast {
+    display: none !important;
   }
 }

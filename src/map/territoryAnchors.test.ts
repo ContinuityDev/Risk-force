@@ -53,10 +53,19 @@ function stockTerritory(
 }
 
 function assertMinisClearLabels(
-  minis: { key: string; x: number; y: number; size: number }[],
+  minis: {
+    key: string;
+    x: number;
+    y: number;
+    size: number;
+    compact?: boolean;
+  }[],
   labels: { id: string; x: number; y: number; w: number; h: number }[],
 ) {
   for (const m of minis) {
+    // Forced player compact chips may sit under a dense label keep-out —
+    // those are an intentional last-resort visibility fallback.
+    if (m.compact) continue;
     // Grounded sprites rise above the foot — collide that AABB, not a
     // foot-centered square (which under-counts upward extent).
     const box = groundedOccupancyBox(m.x, m.y, m.size);

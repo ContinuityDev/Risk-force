@@ -283,15 +283,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   /** Selected-territory right sheet (always used on short landscape). */
   const [detailOpen, setDetailOpen] = useState(false);
   const [shortLandscape, setShortLandscape] = useState(false);
-  /** Territory whose garrison sheet / unit mini opened CreateSquadPanel. */
-  const [createSquadTerritoryId, setCreateSquadTerritoryId] = useState<
-    string | null
-  >(null);
   /** Compact ops strip on enemy sheets: strike picker or recon picker. */
   const [opsMode, setOpsMode] = useState<null | "strike" | "recon">(null);
   const [strikePick, setStrikePick] = useState<StrikeKind>("cruise");
   const [sheetSection, setSheetSection] = useState<
-    "overview" | "buildings" | "create"
+    "overview" | "buildings" | "create" | "building"
   >("overview");
   const [mapBuildingMenu, setMapBuildingMenu] = useState<{
     territoryId: string;
@@ -301,15 +297,22 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   } | null>(null);
   const [mapBuildingMode, setMapBuildingMode] =
     useState<BuildingPopoverMode>("menu");
+  const [squadDockOpen, setSquadDockOpen] = useState(false);
   useEffect(() => {
     setOpsMode(null);
-    setCreateSquadTerritoryId(null);
-    setSheetSection("overview");
+    // Short landscape: open straight on the buildings list so the sheet
+    // is not just a Buildings label above the fold.
+    setSheetSection(shortLandscape ? "buildings" : "overview");
     setMapBuildingMenu(null);
-  }, [state.selectedTerritoryId]);
+  }, [state.selectedTerritoryId, shortLandscape]);
   useEffect(() => {
     setMapBuildingMode("menu");
   }, [mapBuildingMenu?.instanceId]);
+  // Squad sheet owns selection details — keep the dock collapsed so it
+  // does not stack with CONTINENTS / the squad sheet.
+  useEffect(() => {
+    if (state.selectedSquadId) setSquadDockOpen(false);
+  }, [state.selectedSquadId]);
   useEffect(() => {
     const mq = window.matchMedia(
       "(orientation: landscape) and (max-height: 500px)",
@@ -374,11 +377,15 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     setDetailOpen(true);
     const t = TERRITORIES.find((x) => x.id === id);
     if (!t) return;
-    // Frame selection in the left ~58% so the right drawer does not cover it.
-    const focusW = Math.min(OCEAN_VIEW.w, Math.max(MIN_VIEW_W * 1.6, OCEAN_VIEW.w * 0.32));
+    // Tight regional frame so grounded minis stay readable (~18–24px).
+    const focusW = Math.min(
+      OCEAN_VIEW.w,
+      Math.max(MIN_VIEW_W * 2.2, OCEAN_VIEW.w * 0.18),
+    );
     const focusH = focusW * (OCEAN_VIEW.h / OCEAN_VIEW.w);
-    const cx = t.label.x + focusW * 0.14;
-    const cy = t.label.y;
+    // Bias left so a bottom/right sheet does not cover the selection.
+    const cx = t.label.x + focusW * 0.08;
+    const cy = t.label.y - focusH * 0.06;
     const next = clampCamera({
       x: cx - focusW / 2,
       y: cy - focusH / 2,
@@ -560,8 +567,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const squadMarkers = useMemo((): PlacedSquadMarker[] => {
     if (!humanId) return [];
     const tier = miniZoomTier(deferredCam.w / OCEAN_VIEW.w);
-    const size =
-      iconWorldSize(deferredCam.w / OCEAN_VIEW.w, deferredCam.w, tier) * 0.92;
+    const size = Math.max(
+      6.5,
+      iconWorldSize(deferredCam.w / OCEAN_VIEW.w, deferredCam.w, tier) * 1.35,
+    );
     const out: PlacedSquadMarker[] = [];
     const byId = Object.fromEntries(TERRITORIES.map((t) => [t.id, t]));
 
@@ -581,13 +590,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       }
     };
 
-    const inView = (x: number, y: number) =>
-      x >= deferredCam.x - 40 &&
-      x <= deferredCam.x + deferredCam.w + 40 &&
-      y >= deferredCam.y - 40 &&
-      y <= deferredCam.y + deferredCam.h + 40;
-
-    // Idle squads on territory
+    // Idle squads on territory — always render the player's own squads
+    // (never camera-cull them; the focus zoom may lag a frame behind).
     const idle = listPlayerSquads(state, humanId).filter(
       (s) => s.status === "idle",
     );
@@ -595,9 +599,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     for (const s of idle) {
       const tdef = byId[s.territoryId];
       const ts = state.territories[s.territoryId];
-      if (!tdef || !showChrome(tdef, ts)) continue;
-      const pole = getTerritoryAnchors(tdef).pole;
-      if (!inView(pole.x, pole.y)) continue;
+      if (!tdef || !ts) continue;
       const list = byTerritory.get(s.territoryId) ?? [];
       list.push(s);
       byTerritory.set(s.territoryId, list);
@@ -637,7 +639,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       });
     }
 
-    // Marching squads + pending joiners along their route
+    // Marching squads + pending joiners along their route (never cull player)
     for (const army of state.armiesInTransit ?? []) {
       if (army.owner !== humanId) continue;
       const from = byId[army.fromId];
@@ -647,7 +649,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         1 - army.turnsRemaining / Math.max(1, army.totalTurns);
       const t = Math.min(0.85, 0.12 + progress * 0.7);
       const pt = marchLandPoint(from, to, t, false);
-      if (!inView(pt.x, pt.y)) continue;
 
       if (army.squadId) {
         out.push({
@@ -981,17 +982,32 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           if (g.pendingBuilding) {
             const { territoryId: bTid, instanceId } = g.pendingBuilding;
             dispatch({
+              type: "SELECT_SQUAD",
+              payload: { squadId: null },
+            });
+            dispatch({
               type: "SELECT_TERRITORY",
               payload: { territoryId: bTid },
             });
             setDetailOpen(true);
+            const popW = 200;
+            const popH = 220;
+            const left = Math.min(
+              Math.max(8, e.clientX + 8),
+              window.innerWidth - popW - 8,
+            );
+            const top = Math.min(
+              Math.max(8, e.clientY - 24),
+              window.innerHeight - popH - 8,
+            );
             setMapBuildingMenu({
               territoryId: bTid,
               instanceId,
-              left: e.clientX + 8,
-              top: Math.max(8, e.clientY - 24),
+              left,
+              top,
             });
             setMapBuildingMode("menu");
+            setSheetSection(shortLandscape ? "building" : "buildings");
           } else if (g.pendingSquadId) {
             const sid = g.pendingSquadId;
             dispatch({
@@ -1003,7 +1019,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             });
             setMapBuildingMenu(null);
           } else if (g.pendingCreateSquadTerritoryId) {
-            setCreateSquadTerritoryId(g.pendingCreateSquadTerritoryId);
             setSheetSection("create");
             dispatch({
               type: "SELECT_TERRITORY",
@@ -1026,11 +1041,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 payload: { squadId: null },
               });
             } else {
-              // Empty map tap with a sheet open dismisses selection.
-              if (
-                tid === selectedIdRef.current &&
-                !shortLandscape
-              ) {
+              // Re-tap selected territory on short landscape reopens the sheet.
+              if (tid === selectedIdRef.current && shortLandscape) {
                 setDetailOpen(true);
               }
               dispatch({
@@ -1089,12 +1101,12 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     if (!t) return;
     const focusW = Math.min(
       OCEAN_VIEW.w,
-      Math.max(MIN_VIEW_W * 1.6, OCEAN_VIEW.w * 0.32),
+      Math.max(MIN_VIEW_W * 2.2, OCEAN_VIEW.w * 0.18),
     );
     const focusH = focusW * (OCEAN_VIEW.h / OCEAN_VIEW.w);
     const next = clampCamera({
-      x: t.label.x + focusW * 0.14 - focusW / 2,
-      y: t.label.y - focusH / 2,
+      x: t.label.x + focusW * 0.08 - focusW / 2,
+      y: t.label.y - focusH * 0.06 - focusH / 2,
       w: focusW,
       h: focusH,
     });
@@ -2211,9 +2223,15 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       )}
 
       <Drawer
-        open={Boolean(selected) && (shortLandscape ? detailOpen : true)}
+        open={
+          Boolean(selected) &&
+          !state.selectedSquadId &&
+          (shortLandscape ? detailOpen : true)
+        }
         onClose={() => {
           setDetailOpen(false);
+          setMapBuildingMenu(null);
+          setSheetSection("overview");
           if (!shortLandscape) {
             dispatch({
               type: "SELECT_TERRITORY",
@@ -2222,14 +2240,42 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           }
         }}
         side="right"
-        inline={!shortLandscape}
-        className="rf-map__territory-drawer"
+        inline
+        className={`rf-map__territory-drawer${
+          shortLandscape ? " rf-map__territory-drawer--sheet" : ""
+        }${
+          shortLandscape &&
+          (sheetSection === "building" ||
+            sheetSection === "create" ||
+            sheetSection === "buildings")
+            ? " rf-map__territory-drawer--sheet-tall"
+            : ""
+        }`}
         tutorialId="territory-sheet"
       >
         {selected && (
           <>
-            <span className="rf-label">Selected</span>
-            <h3 className="rf-map__sheet-title">{selected.name}</h3>
+            <header className="rf-map__sheet-head">
+              <div>
+                <span className="rf-label">Selected</span>
+                <h3 className="rf-map__sheet-title">{selected.name}</h3>
+              </div>
+              {shortLandscape && (
+                <button
+                  type="button"
+                  className="ghost rf-map__sheet-close"
+                  data-testid="territory-sheet-close"
+                  aria-label="Close territory sheet"
+                  onClick={() => {
+                    setDetailOpen(false);
+                    setMapBuildingMenu(null);
+                    setSheetSection("overview");
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </header>
             {selectedIsEnemy && humanId && (
               <div className="rf-map__ops" data-tutorial="enemy-ops">
                 <div className="rf-map__ops-row">
@@ -2254,13 +2300,15 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 </div>
               </div>
             )}
-                <p className="rf-text-dim rf-map__sheet-meta">
-                  {selected.continent} · {biomeLabel(selected.id)}
-                  {selectedTs
-                    ? ` · ${selectedTs.control} · Pop ${selectedTs.population}`
-                    : ""}
-                </p>
-                {selectedTs && (
+                {!shortLandscape && (
+                  <p className="rf-text-dim rf-map__sheet-meta">
+                    {selected.continent} · {biomeLabel(selected.id)}
+                    {selectedTs
+                      ? ` · ${selectedTs.control} · Pop ${selectedTs.population}`
+                      : ""}
+                  </p>
+                )}
+                {selectedTs && !shortLandscape && (
                   <p
                     className={`rf-map__sheet-owner${selectedTs.owner === "neutral" ? " is-neutral" : ""}`}
                     data-testid="territory-owner-label"
@@ -2292,7 +2340,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     )}
                   </p>
                 )}
-                {selectedTs && humanId && (
+                {selectedTs && humanId && !shortLandscape && (
                   <p className="rf-map__sheet-garrison" title={HELP.recon}>
                     <span className="rf-label">Garrison</span>{" "}
                     {isTerritoryRevealed(state, humanId, selected.id)
@@ -2308,6 +2356,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 )}
                 {selectedTs &&
                   humanId &&
+                  !shortLandscape &&
                   selectedTs.owner === humanId &&
                   commandersOnTerritory(
                     state.players[humanId]!,
@@ -2340,20 +2389,21 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
 
             {humanId &&
               selectedTs?.owner === humanId &&
-              !selectedIsEnemy && (
+              !selectedIsEnemy &&
+              sheetSection !== "create" &&
+              sheetSection !== "building" && (
                 <div className="rf-map__sheet-actions" data-tutorial="dock-base">
                   <button
                     type="button"
                     className={
-                      sheetSection === "buildings" ||
-                      (sheetSection === "overview" && !createSquadTerritoryId)
+                      sheetSection === "buildings" || sheetSection === "overview"
                         ? "primary"
                         : "ghost"
                     }
                     data-testid="sheet-buildings-btn"
                     onClick={() => {
                       setSheetSection("buildings");
-                      setCreateSquadTerritoryId(null);
+                      setMapBuildingMenu(null);
                     }}
                   >
                     Buildings
@@ -2361,15 +2411,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   {Object.values(selectedTs.garrison).some((c) => c > 0) && (
                     <button
                       type="button"
-                      className={
-                        sheetSection === "create" || createSquadTerritoryId
-                          ? "primary"
-                          : "ghost"
-                      }
+                      className="ghost"
                       data-testid="create-squad-btn"
                       onClick={() => {
                         setSheetSection("create");
-                        setCreateSquadTerritoryId(selected.id);
+                        setMapBuildingMenu(null);
                       }}
                     >
                       Create squad
@@ -2380,8 +2426,43 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
 
             {humanId &&
               selectedTs?.owner === humanId &&
-              (sheetSection === "buildings" ||
-                (sheetSection === "overview" && !createSquadTerritoryId)) && (
+              sheetSection === "building" &&
+              mapBuildingMenu &&
+              (() => {
+                const inst = selectedTs.buildings.find(
+                  (b) => b.instanceId === mapBuildingMenu.instanceId,
+                );
+                if (!inst || !state.players[humanId]) return null;
+                return (
+                  <div className="rf-map__sheet-building-action">
+                    <BuildingActionPopover
+                      state={state}
+                      activePlayer={state.players[humanId]!}
+                      territoryId={selected.id}
+                      instance={inst}
+                      canAct={
+                        state.playerOrder[state.activePlayerIndex] ===
+                          humanId && state.phase === "play"
+                      }
+                      left={0}
+                      top={0}
+                      mode={mapBuildingMode}
+                      onMode={setMapBuildingMode}
+                      onClose={() => {
+                        setMapBuildingMenu(null);
+                        setSheetSection("buildings");
+                        setMapBuildingMode("menu");
+                      }}
+                      dispatch={dispatch}
+                      embedded
+                    />
+                  </div>
+                );
+              })()}
+
+            {humanId &&
+              selectedTs?.owner === humanId &&
+              (sheetSection === "buildings" || sheetSection === "overview") && (
                 <section className="rf-map__sheet-buildings">
                   <span className="rf-label">Buildings</span>
                   <TerritoryBuildList
@@ -2389,34 +2470,38 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     trainingQueue={selectedTs.trainingQueue}
                     selectedInstanceId={mapBuildingMenu?.instanceId}
                     onSelectBuilding={(instanceId) => {
-                      const el = svgRef.current;
-                      const rect = el?.getBoundingClientRect();
                       setMapBuildingMenu({
                         territoryId: selected.id,
                         instanceId,
-                        left: (rect?.right ?? 320) - 200,
-                        top: (rect?.top ?? 80) + 80,
+                        left: 12,
+                        top: 12,
                       });
                       setMapBuildingMode("menu");
+                      // On short landscape, replace sheet content so the
+                      // popover is never clipped under the sheet.
+                      if (shortLandscape) {
+                        setSheetSection("building");
+                      } else {
+                        setSheetSection("buildings");
+                      }
                     }}
                   />
                 </section>
               )}
 
-            {(createSquadTerritoryId === selected.id ||
-              sheetSection === "create") &&
+            {sheetSection === "create" &&
             humanId &&
             selectedTs?.owner === humanId ? (
               <CreateSquadPanel
                 state={state}
                 territoryId={selected.id}
                 dispatch={dispatch}
+                compact={shortLandscape}
                 onClose={() => {
-                  setCreateSquadTerritoryId(null);
                   setSheetSection("buildings");
                 }}
               />
-            ) : (
+            ) : sheetSection === "building" ? null : (
               <>
 
                 {selectedIsEnemy && humanId && opsMode === "strike" && (
@@ -2543,7 +2628,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     </div>
                   )}
 
-                {!selectedIsEnemy && (
+                {!selectedIsEnemy && !shortLandscape && (
                   <>
                     <span className="rf-label">Your territories</span>
                     <ul className="rf-picker__list rf-map__owned-list">
@@ -2579,7 +2664,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   </>
                 )}
 
-                {marchTargets.length > 0 && (
+                {marchTargets.length > 0 && !shortLandscape && (
                   <div className="rf-map__march">
                     <span className="rf-label">March to (friendly)</span>
                     <ul className="rf-picker__list">
@@ -2660,16 +2745,25 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         )}
       </aside>
 
-      {humanId && (
+      {humanId &&
+        state.screen !== "capture" &&
+        !state.pendingCapture && (
         <MapSquadDock
           state={state}
           humanId={humanId}
           dispatch={dispatch}
+          open={squadDockOpen}
+          onOpenChange={setSquadDockOpen}
         />
       )}
 
       {humanId && state.selectedSquadId && state.players[humanId] && (
-        <div className="rf-map__squad-sheet" data-testid="map-squad-sheet">
+        <div
+          className={`rf-map__squad-sheet${
+            shortLandscape ? " rf-map__squad-sheet--bottom" : ""
+          }`}
+          data-testid="map-squad-sheet"
+        >
           <SquadsView
             state={state}
             activePlayer={state.players[humanId]!}
@@ -2686,7 +2780,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         </div>
       )}
 
+      {/* Floating popover only when not already embedded in the territory sheet. */}
       {mapBuildingMenu &&
+        sheetSection !== "building" &&
         state.players[humanId ?? ""] &&
         (() => {
           const inst = state.territories[
@@ -2707,7 +2803,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               top={mapBuildingMenu.top}
               mode={mapBuildingMode}
               onMode={setMapBuildingMode}
-              onClose={() => setMapBuildingMenu(null)}
+              onClose={() => {
+                setMapBuildingMenu(null);
+                setMapBuildingMode("menu");
+              }}
               dispatch={dispatch}
             />
           );

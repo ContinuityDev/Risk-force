@@ -110,8 +110,11 @@ describe("buildingMinis", () => {
       { x: 0, y: 0, w: 1000, h: 500 },
       [],
     );
-    // World zoom leaves the pole to unit strength chips (no building pads).
-    expect(world).toEqual([]);
+    // Player bases keep a compact building chip at world zoom.
+    expect(world.length).toBeGreaterThan(0);
+    expect(world.every((m) => m.compact || m.buildingId === "command_nexus")).toBe(
+      true,
+    );
 
     const midCam = {
       x: tdef.label.x - 225,
@@ -134,9 +137,9 @@ describe("buildingMinis", () => {
     );
     const deepIcons = deep.filter((m) => !m.more && !m.compact);
     expect(deepIcons.length).toBe(4);
-    // Deep icons stay compact enough to clear the country label (~≤4 wu).
-    expect(deepIcons[0]!.size).toBeGreaterThan(2.5);
-    expect(deepIcons[0]!.size).toBeLessThanOrEqual(4.0);
+    // Deep icons stay readable but still fit inland clusters.
+    expect(deepIcons[0]!.size).toBeGreaterThanOrEqual(4.0);
+    expect(deepIcons[0]!.size).toBeLessThanOrEqual(7.0);
   });
 
   it("falls back to a compact marker when the cluster cannot fit", () => {
@@ -191,7 +194,7 @@ describe("buildingMinis", () => {
       true,
     );
 
-    // Territory-filling label → emit nothing rather than overlapping the name.
+    // Territory-filling label — player bases still get a forced compact chip.
     const giantLabel = {
       id: tid,
       x: tdef.label.x,
@@ -199,15 +202,15 @@ describe("buildingMinis", () => {
       w: 80,
       h: 60,
     };
-    expect(
-      layoutBuildingMinis(
-        [tdef],
-        state,
-        0.5,
-        { x: tdef.label.x - 200, y: tdef.label.y - 100, w: 400, h: 200 },
-        [giantLabel],
-      ),
-    ).toEqual([]);
+    const forced = layoutBuildingMinis(
+      [tdef],
+      state,
+      0.5,
+      { x: tdef.label.x - 200, y: tdef.label.y - 100, w: 400, h: 200 },
+      [giantLabel],
+    );
+    expect(forced.length).toBe(1);
+    expect(forced[0]!.compact).toBe(true);
   });
 
   it("emits nothing for empty or razed buildings (seed-77 Maghreb outposts)", async () => {

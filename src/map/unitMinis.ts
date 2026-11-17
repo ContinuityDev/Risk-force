@@ -168,11 +168,13 @@ export function layoutUnitMinis(
     if (!sorted.length) continue;
 
     const pole = getTerritoryAnchors(t).pole;
+    const isPlayer = ts?.owner && ts.owner !== "neutral";
     if (
-      pole.x < cam.x - 40 ||
-      pole.x > cam.x + cam.w + 40 ||
-      pole.y < cam.y - 40 ||
-      pole.y > cam.y + cam.h + 40
+      !isPlayer &&
+      (pole.x < cam.x - 40 ||
+        pole.x > cam.x + cam.w + 40 ||
+        pole.y < cam.y - 40 ||
+        pole.y > cam.y + cam.h + 40)
     ) {
       continue;
     }
@@ -182,15 +184,16 @@ export function layoutUnitMinis(
 
     const placeCompact = (chipSize: number) => {
       const slot = claimInteriorSlot(t, chipSize, occupied, gap * 0.7);
-      if (!slot) return false;
-      occupied.push(groundedOccupancyBox(slot.x, slot.y, chipSize));
+      const pt = slot ?? (isPlayer ? { x: pole.x, y: pole.y + chipSize * 0.45 } : null);
+      if (!pt) return false;
+      occupied.push(groundedOccupancyBox(pt.x, pt.y, chipSize));
       const top = sorted[0]!;
       const m = toMini(
         `${t.id}:troops`,
         top.unitId,
         total,
-        slot.x,
-        slot.y,
+        pt.x,
+        pt.y,
         chipSize,
         { territoryId: t.id, compact: true, owner: ts?.owner },
       );

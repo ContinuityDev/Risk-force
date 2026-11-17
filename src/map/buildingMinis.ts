@@ -134,8 +134,9 @@ export function iconWorldSize(
   const raw = camW * frac;
   // Hard clamps — deep zoom stays small enough to fit a full building cluster
   // inland beside the country label (e.g. 4 on Sweden with upright sprites).
-  const min = tier === "deep" ? 2.8 : tier === "mid" ? 1.8 : 1.2;
-  const max = tier === "deep" ? 4.0 : tier === "mid" ? 5.0 : 2.6;
+  // Keep grounded minis readable on 844×390 without blowing inland clusters.
+  const min = tier === "deep" ? 4.0 : tier === "mid" ? 3.2 : 2.0;
+  const max = tier === "deep" ? 7.0 : tier === "mid" ? 5.5 : 3.6;
   void zoomScale;
   return Math.min(max, Math.max(min, raw));
 }
@@ -242,29 +243,48 @@ export function layoutBuildingMinis(
     if (!buildings.length) continue;
 
     const pole = getTerritoryAnchors(t).pole;
+    const isPlayerBase = ts?.owner && ts.owner !== "neutral";
+    // Always keep player bases; cull quiet neutrals that are far off-camera.
     if (
-      pole.x < cam.x - 40 ||
-      pole.x > cam.x + cam.w + 40 ||
-      pole.y < cam.y - 40 ||
-      pole.y > cam.y + cam.h + 40
+      !isPlayerBase &&
+      (pole.x < cam.x - 40 ||
+        pole.x > cam.x + cam.w + 40 ||
+        pole.y < cam.y - 40 ||
+        pole.y > cam.y + cam.h + 40)
     ) {
       continue;
     }
 
     if (tier === "world") {
-      // World zoom: unit strength chips own the pole.
+      // Player bases keep a compact building chip even at world zoom so the
+      // map always shows something to tap; quiet neutrals stay bare.
+      if (isPlayerBase) {
+        const compact =
+          tryPlaceCompact(
+            t,
+            buildings,
+            Math.max(size * 1.35, 2.6),
+            gap,
+            occupied,
+          ) ?? forcePlayerCompact(t, buildings, Math.max(size * 1.35, 2.6), occupied);
+        if (compact) out.push(compact);
+      }
       continue;
     }
 
     const sorted = sortBuildings(buildings);
     if (tier === "mid" && isSmallPlot(t.area)) {
-      const compact = tryPlaceCompact(
-        t,
-        buildings,
-        Math.max(size * 0.8, 1.5),
-        gap,
-        occupied,
-      );
+      const compact =
+        tryPlaceCompact(
+          t,
+          buildings,
+          Math.max(size * 0.8, 1.5),
+          gap,
+          occupied,
+        ) ??
+        (isPlayerBase
+          ? forcePlayerCompact(t, buildings, Math.max(size * 0.8, 1.5), occupied)
+          : null);
       if (compact) out.push(compact);
       continue;
     }
@@ -336,10 +356,72 @@ export function layoutBuildingMinis(
       gap,
       occupied,
     );
-    if (compact) out.push(compact);
+    if (compact) {
+      out.push(compact);
+      continue;
+    }
+
+    // Player bases must stay visible even when label keep-out fills the plot.
+    if (isPlayerBase) {
+      const forced = forcePlayerCompact(t, buildings, size, occupied);
+      if (forced) out.push(forced);
+    }
   }
 
   return out;
+}
+
+/** Last-resort chip for owned bases — prefer inland pole, ignore label boxes. */
+function forcePlayerCompact(
+  t: TerritoryDef,
+  buildings: PlacedBuilding[],
+  size: number,
+  occupied: Box[],
+): PlacedMini | null {
+  const anchors = getTerritoryAnchors(t);
+  const candidates = [
+    { x: anchors.pole.x, y: anchors.pole.y + size * 0.55 },
+    { x: anchors.pole.x, y: anchors.pole.y },
+    { x: anchors.pole.x + size * 0.4, y: anchors.pole.y + size * 0.35 },
+    { x: anchors.pole.x - size * 0.4, y: anchors.pole.y + size * 0.35 },
+  ];
+  // Prefer a free slot; otherwise park on the pole anyway.
+  let pt = candidates[0]!;
+  for (const c of candidates) {
+    const box = groundedOccupancyBox(c.x, c.y, size);
+    const hits = occupied.some(
+      (o) =>
+        box.x < o.x + o.w &&
+        box.x + box.w > o.x &&
+        box.y < o.y + o.h &&
+        box.y + box.h > o.y,
+    );
+    if (!hits) {
+      pt = c;
+      break;
+    }
+  }
+  occupied.push(groundedOccupancyBox(pt.x, pt.y, size * 1.1));
+  let spriteId = "building-nexus";
+  try {
+    spriteId = getBuilding(sortBuildings(buildings)[0]!.buildingId).sprite.id;
+  } catch {
+    /* */
+  }
+  return {
+    key: `${t.id}:compact`,
+    territoryId: t.id,
+    buildingId: "command_nexus",
+    spriteId,
+    spriteUrl: getSpriteUrl(spriteId),
+    x: pt.x,
+    y: pt.y,
+    size: Math.max(size, 3.2),
+    constructing: false,
+    progress: 1,
+    compact: true,
+    count: buildings.length,
+  };
 }
 
 /** Stable fingerprint so React only reflows when buildings change. */
