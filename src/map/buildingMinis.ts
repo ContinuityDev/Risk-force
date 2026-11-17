@@ -34,6 +34,7 @@ export interface PlacedMini {
   key: string;
   territoryId: string;
   buildingId: string;
+  instanceId?: string;
   spriteId: string;
   spriteUrl: string;
   x: number;
@@ -167,6 +168,7 @@ function toMini(
     key: `${tId}:${b.instanceId}`,
     territoryId: tId,
     buildingId: b.buildingId,
+    instanceId: b.instanceId,
     spriteId: def.sprite.id,
     spriteUrl: getSpriteUrl(def.sprite.id),
     x,

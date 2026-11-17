@@ -30,6 +30,7 @@ import {
 } from "../engine/training";
 import { workerEffectForBuilding } from "../engine/workerEffects";
 import { pulseResources } from "../ui/resourcePulse";
+import { BuildingActionPopover } from "./BuildingActionPopover";
 import { CostLabel } from "./CostLabel";
 import { Drawer } from "./Drawer";
 import { Sprite } from "./Sprite";
@@ -509,109 +510,84 @@ export function BaseView({
         {buildingMenu &&
           selectedInst &&
           selectedDef &&
+          tid &&
           buildingMenu.instanceId === selectedInst.instanceId && (
-            <div
+            <BuildingActionPopover
               ref={ctxRef}
-              className="rf-base__ctx"
-              role="menu"
-              data-tutorial="base-train"
-              style={{
-                left: buildingMenu.left,
-                top: buildingMenu.top,
-                visibility:
-                  buildingMenu.left === 0 && buildingMenu.top === 0
-                    ? "hidden"
-                    : "visible",
-              }}
-            >
-              {isTrainingBuilding(selectedDef) &&
-                selectedInst.buildRemaining <= 0 && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="rf-base__ctx-item"
-                    onClick={() => {
-                      setBuildingMenu(null);
-                      setDrawerMode("train");
-                      setDrawerOpen(true);
-                    }}
-                  >
-                    Train unit
-                  </button>
-                )}
-              {selectedDef.id === "war_college" &&
-                selectedInst.buildRemaining <= 0 &&
-                tid &&
-                (
-                  [
-                    "infantry",
-                    "armor",
-                    "air",
-                    "cyber",
-                  ] as const
-                ).map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    role="menuitem"
-                    className="rf-base__ctx-item"
-                    disabled={
-                      !canAct ||
-                      (activePlayer.commanders ?? []).some((c) => c.role === role)
-                    }
-                    onClick={() => {
-                      setBuildingMenu(null);
-                      dispatch({
-                        type: "TRAIN_COMMANDER",
-                        payload: {
-                          territoryId: tid,
-                          role,
-                        },
-                      });
-                    }}
-                  >
-                    Commission {role} officer
-                  </button>
-                ))}
-              <button
-                type="button"
-                role="menuitem"
-                className="rf-base__ctx-item"
-                onClick={() => {
+              state={state}
+              activePlayer={activePlayer}
+              territoryId={tid}
+              instance={selectedInst}
+              canAct={canAct}
+              left={buildingMenu.left}
+              top={buildingMenu.top}
+              mode="menu"
+              hidden={buildingMenu.left === 0 && buildingMenu.top === 0}
+              dispatch={dispatch}
+              onClose={() => setBuildingMenu(null)}
+              onMode={(m) => {
+                if (m === "train") {
+                  setBuildingMenu(null);
+                  setDrawerMode("train");
+                  setDrawerOpen(true);
+                  return;
+                }
+                if (m === "workers") {
                   setBuildingMenu(null);
                   setDrawerMode("staff");
                   setDrawerOpen(true);
-                }}
-              >
-                Workers
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="rf-base__ctx-item"
-                onClick={() => {
+                  return;
+                }
+                if (m === "info") {
                   setBuildingMenu(null);
                   setDrawerMode("info");
                   setDrawerOpen(true);
-                }}
-              >
-                Info
-              </button>
-              {selectedDef.id !== "command_nexus" && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="rf-base__ctx-item rf-base__ctx-item--danger"
-                  data-testid="building-delete"
-                  onClick={() => {
-                    setBuildingMenu(null);
-                    setDeleteConfirmId(selectedInst.instanceId);
-                  }}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
+                  return;
+                }
+                if (m === "delete") {
+                  setBuildingMenu(null);
+                  setDeleteConfirmId(selectedInst.instanceId);
+                }
+              }}
+              menuExtras={
+                selectedDef.id === "war_college" &&
+                selectedInst.buildRemaining <= 0
+                  ? (
+                      [
+                        "infantry",
+                        "armor",
+                        "air",
+                        "cyber",
+                      ] as const
+                    ).map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        role="menuitem"
+                        className="rf-bldg-pop__item"
+                        disabled={
+                          !canAct ||
+                          (activePlayer.commanders ?? []).some(
+                            (c) => c.role === role,
+                          )
+                        }
+                        onClick={() => {
+                          setBuildingMenu(null);
+                          dispatch({
+                            type: "TRAIN_COMMANDER",
+                            payload: {
+                              territoryId: tid,
+                              role,
+                            },
+                          });
+                        }}
+                      >
+                        <span>Commission {role} officer</span>
+                      </button>
+                    ))
+                  : undefined
+              }
+            />
           )}
 
         {deleteConfirmId && selectedInst?.instanceId === deleteConfirmId && (

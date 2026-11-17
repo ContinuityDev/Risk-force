@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+/**
+ * Map-first PR screenshots for #18 — mobile 844×390 first, then desktop.
+ */
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright";
@@ -46,25 +49,6 @@ async function boot(page) {
   await page.waitForTimeout(300);
 }
 
-async function dismissUi(page) {
-  await page.evaluate(() => {
-    window.__RF__.dispatch({ type: "DISMISS_MESSAGE" });
-    window.__RF__.dispatch({ type: "DISMISS_ECONOMY_SUMMARY" });
-    window.__RF__.dispatch({
-      type: "SELECT_TERRITORY",
-      payload: { territoryId: null },
-    });
-    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
-    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
-  });
-  const backdrop = page.locator('[aria-label="Close panel"]');
-  if (await backdrop.count()) {
-    await backdrop.first().click({ force: true }).catch(() => {});
-  }
-  await page.keyboard.press("Escape").catch(() => {});
-  await page.waitForTimeout(150);
-}
-
 async function prep(page) {
   return page.evaluate(() => {
     const s = window.__RF__.getState();
@@ -84,9 +68,26 @@ async function prep(page) {
         control: "occupied",
         occupiedTurns: 1,
         trainingQueue: [],
+        buildings: territories[friend].buildings ?? [],
       };
     }
     const homeTs = territories[home];
+    const buildings = [...(homeTs.buildings ?? [])].map((b) =>
+      b.buildingId === "command_nexus" || b.buildingId === "barracks"
+        ? { ...b, buildRemaining: 0, hp: Math.max(b.hp, 200) }
+        : b,
+    );
+    if (!buildings.some((b) => b.buildingId === "barracks")) {
+      buildings.push({
+        instanceId: "shot_barracks",
+        buildingId: "barracks",
+        x: 2,
+        y: 1,
+        hp: 260,
+        buildRemaining: 0,
+        workers: 0,
+      });
+    }
     window.__RF__.dispatch({
       type: "LOAD_STATE",
       payload: {
@@ -99,11 +100,7 @@ async function prep(page) {
               garrison: { trooper: 12, assault_mech: 2 },
               workers: 20,
               population: 25,
-              buildings: homeTs.buildings.map((b) =>
-                b.buildingId === "command_nexus"
-                  ? { ...b, workers: 0, buildRemaining: 0 }
-                  : b,
-              ),
+              buildings,
             },
           },
           selectedTerritoryId: null,
@@ -113,6 +110,7 @@ async function prep(page) {
           message: null,
           screen: "map",
           phase: "play",
+          pendingCapture: null,
         },
       },
     });
@@ -121,21 +119,21 @@ async function prep(page) {
 }
 
 async function shot(page, name) {
-  const path = join(OUT, `squads-${name}.png`);
+  const path = join(OUT, name);
   await page.screenshot({ path, fullPage: false });
   console.log("saved", path);
 }
 
-async function main() {
-  const browser = await chromium.launch({ headless: true });
+async function captureViewport(browser, tag, viewport) {
   const page = await browser.newPage({
-    viewport: { width: 1440, height: 900 },
+    viewport,
+    isMobile: viewport.height <= 430,
+    hasTouch: viewport.height <= 430,
   });
   await boot(page);
   const ids = await prep(page);
-  await dismissUi(page);
 
-  // Create squad panel: select home then force-open via create button
+  // 1) Territory sheet with buildings
   await page.evaluate((home) => {
     window.__RF__.dispatch({
       type: "SELECT_TERRITORY",
@@ -143,17 +141,86 @@ async function main() {
     });
     window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
   }, ids.home);
+  await page.waitForTimeout(400);
+  await shot(page, `${tag}-territory-buildings.png`);
+
+  // 2) Barracks popover with Train / Workers / Info / Delete
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: home },
+    });
+  }, ids.home);
+  await page.waitForTimeout(350);
+  const buildingsBtn = page.getByTestId("sheet-buildings-btn");
+  if (await buildingsBtn.count()) {
+    await buildingsBtn.click({ force: true });
+    await page.waitForTimeout(200);
+  }
+  const barracksRow = page.getByTestId("build-row-barracks");
+  if (await barracksRow.count()) {
+    await barracksRow.click({ force: true });
+    await page.waitForTimeout(300);
+  } else {
+    // Open popover via map building instance id
+    await page.evaluate((home) => {
+      const st = window.__RF__.getState();
+      const b = st.territories[home].buildings.find(
+        (x) => x.buildingId === "barracks",
+      );
+      if (!b) return;
+      // Select territory; popover is opened by clicking the build row in UI.
+      console.log("barracks", b.instanceId);
+    }, ids.home);
+  }
+  await shot(page, `${tag}-barracks-menu.png`);
+
+  // Train a unit through the popover if open
+  const trainItem = page.getByRole("menuitem", { name: /Train unit/i });
+  if (await trainItem.count()) {
+    await trainItem.click({ force: true });
+    await page.waitForTimeout(200);
+    const trainTrooper = page.getByTestId("train-trooper");
+    if (await trainTrooper.count()) {
+      await trainTrooper.click({ force: true });
+      await page.waitForTimeout(200);
+    }
+  } else {
+    await page.evaluate((home) => {
+      window.__RF__.dispatch({
+        type: "TRAIN_UNIT",
+        payload: { territoryId: home, unitId: "trooper", count: 1 },
+      });
+    }, ids.home);
+  }
+  await shot(page, `${tag}-barracks-train.png`);
+
+  // 3) Create squad sheet — dismiss building popover first
+  await page.locator(".rf-bldg-pop__close").click({ force: true }).catch(() => {});
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: home },
+    });
+  }, ids.home);
   await page.waitForTimeout(250);
   const createBtn = page.getByTestId("create-squad-btn");
   if (await createBtn.count()) {
     await createBtn.click({ force: true });
-    await page.waitForTimeout(250);
-    await shot(page, "create-panel");
-    await page.keyboard.press("Escape").catch(() => {});
-    await dismissUi(page);
+    await page.waitForTimeout(400);
   }
+  // Ensure unit steppers are in view
+  await page
+    .locator("[data-testid='create-squad-panel']")
+    .evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    })
+    .catch(() => {});
+  await page.waitForTimeout(150);
+  await shot(page, `${tag}-create-squad.png`);
 
-  // Create Vanguard + show selected route
+  // 4) Create Core squad, select, march → selected route
+  await prep(page);
   await page.evaluate(
     ({ home, enemy }) => {
       window.__RF__.dispatch({
@@ -168,26 +235,32 @@ async function main() {
         },
       });
       const squadId = window.__RF__.getState().squads[0]?.id;
-      if (squadId && enemy) {
+      if (squadId) {
         window.__RF__.dispatch({
           type: "SELECT_SQUAD",
           payload: { squadId },
         });
-        window.__RF__.dispatch({
-          type: "ORDER_SQUAD_MOVE",
-          payload: { squadId, toId: enemy },
-        });
+        if (enemy) {
+          window.__RF__.dispatch({
+            type: "ORDER_SQUAD_MOVE",
+            payload: { squadId, toId: enemy },
+          });
+          // Keep selection to show route + mini
+          window.__RF__.dispatch({
+            type: "SELECT_SQUAD",
+            payload: { squadId },
+          });
+        }
       }
       window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
     },
     { home: ids.home, enemy: ids.enemy },
   );
-  await page.waitForTimeout(300);
-  await shot(page, "selected-route");
+  await page.waitForTimeout(450);
+  await shot(page, `${tag}-selected-squad-route.png`);
 
-  // Pending join on map
+  // 5) Pending join + dock
   await prep(page);
-  await dismissUi(page);
   await page.evaluate(
     ({ home, friend }) => {
       window.__RF__.dispatch({
@@ -215,88 +288,61 @@ async function main() {
           payload: { squadId },
         });
       }
+      window.__RF__.dispatch({ type: "DISMISS_MESSAGE" });
       window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
     },
     { home: ids.home, friend: ids.friend },
   );
-  await page.waitForTimeout(350);
-  await shot(page, "pending-join");
-
-  // Squads tab (list + joining group)
-  await page.evaluate(() => {
-    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "squads" } });
-  });
-  await page.waitForTimeout(400);
-  await shot(page, "tab");
-
-  // Building menu on base
-  await page.evaluate((home) => {
-    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "base" } });
-    window.__RF__.dispatch({
-      type: "SELECT_TERRITORY",
-      payload: { territoryId: home },
-    });
-  }, ids.home);
   await page.waitForTimeout(450);
-  const structure = page.locator(".rf-base__structure").first();
-  if (await structure.count()) {
-    await structure.click({ force: true });
-    await page.waitForTimeout(250);
-  }
-  await shot(page, "building-menu");
+  await shot(page, `${tag}-pending-join.png`);
+  await shot(page, `${tag}-squad-dock.png`);
 
-  const workersBtn = page.getByRole("menuitem", { name: /Workers/i });
-  if (await workersBtn.count()) {
-    await workersBtn.click({ force: true });
-    await page.waitForTimeout(200);
-    await page.evaluate((home) => {
+  // 6) Capture sheet over map — captured enemy, not origin
+  await page.evaluate(
+    ({ home, enemy }) => {
       const st = window.__RF__.getState();
-      const nexus = st.territories[home].buildings.find(
-        (b) => b.buildingId === "command_nexus",
-      );
-      if (nexus) {
-        window.__RF__.dispatch({
-          type: "ASSIGN_WORKERS",
-          payload: {
-            territoryId: home,
-            instanceId: nexus.instanceId,
-            workers: 2,
+      const target = enemy || "papua_new_guinea";
+      window.__RF__.dispatch({
+        type: "LOAD_STATE",
+        payload: {
+          state: {
+            ...st,
+            phase: "capture",
+            screen: "capture",
+            pendingCapture: {
+              territoryId: target,
+              attacker: "player",
+              fromId: home,
+              survivors: [{ unitId: "trooper", count: 4 }],
+              population: 8,
+              workers: 2,
+              buildings: st.territories[target]?.buildings ?? [],
+              supplyStock: 10,
+            },
+            message: "Captured — choose occupation strength.",
+            selectedSquadId: null,
           },
-        });
-      }
-    }, ids.home);
-    await page.waitForTimeout(200);
-  }
-  await shot(page, "workers-effect");
-
-  // Capture result screen
-  await page.evaluate((home) => {
-    const st = window.__RF__.getState();
-    window.__RF__.dispatch({
-      type: "LOAD_STATE",
-      payload: {
-        state: {
-          ...st,
-          phase: "capture",
-          screen: "capture",
-          pendingCapture: {
-            territoryId: home,
-            attacker: "player",
-            fromId: home,
-            survivors: [{ unitId: "trooper", count: 4 }],
-            population: 8,
-            workers: 2,
-            buildings: st.territories[home].buildings,
-            supplyStock: 10,
-          },
-          message: "Captured — choose occupation strength.",
         },
-      },
-    });
-  }, ids.home);
-  await page.waitForTimeout(350);
-  await shot(page, "capture-result");
+      });
+    },
+    { home: ids.home, enemy: ids.enemy },
+  );
+  await page.waitForTimeout(400);
+  await shot(page, `${tag}-capture-sheet.png`);
 
+  await page.close();
+}
+
+async function main() {
+  const browser = await chromium.launch({ headless: true });
+  await captureViewport(browser, "mobile", {
+    width: 844,
+    height: 390,
+  });
+  await captureViewport(browser, "desktop", {
+    width: 1440,
+    height: 900,
+  });
   await browser.close();
   console.log("done");
 }

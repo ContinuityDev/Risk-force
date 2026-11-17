@@ -23,6 +23,9 @@ interface SquadsViewProps {
   activePlayer: PlayerState;
   dispatch: (action: GameAction) => void;
   canAct: boolean;
+  /** Full page vs map-first sheet (list lives in MapSquadDock). */
+  variant?: "page" | "sheet";
+  onClose?: () => void;
 }
 
 function garrisonTotal(g: Record<string, number>): number {
@@ -47,15 +50,22 @@ export function SquadsView({
   activePlayer,
   dispatch,
   canAct,
+  variant = "page",
+  onClose,
 }: SquadsViewProps) {
+  const isSheet = variant === "sheet";
   const squads = useMemo(
     () => listPlayerSquads(state, activePlayer.id),
     [state.squads, activePlayer.id],
   );
 
-  const selectedId =
-    state.selectedSquadId &&
-    squads.some((s) => s.id === state.selectedSquadId)
+  const selectedId = isSheet
+    ? state.selectedSquadId &&
+      squads.some((s) => s.id === state.selectedSquadId)
+      ? state.selectedSquadId
+      : null
+    : state.selectedSquadId &&
+        squads.some((s) => s.id === state.selectedSquadId)
       ? state.selectedSquadId
       : (squads[0]?.id ?? null);
 
@@ -142,6 +152,11 @@ export function SquadsView({
     dispatch({ type: "SELECT_SQUAD", payload: { squadId } });
   }
 
+  function closeSheet() {
+    dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
+    onClose?.();
+  }
+
   function setAddCount(unitId: string, count: number) {
     const max = addGarrison[unitId] ?? 0;
     setAddForce((prev) => ({
@@ -164,6 +179,418 @@ export function SquadsView({
       ? travelEtaLabel(addFromId, currentSquadLocation(state, selected), addSlots, state.territories)
       : null;
 
+  const detailPanel = selected ? (
+    <aside className="rf-squads__detail">
+      <header className="rf-squads__detail-head">
+        <div>
+          <h3>{selected.name}</h3>
+          <p className="rf-hint">
+            {territoryDisplayName(currentSquadLocation(state, selected))} ·{" "}
+            {statusLabel(selected.status)} · Str{" "}
+            {squadStrength(selected.force)}
+          </p>
+        </div>
+        <div className="rf-squads__detail-actions">
+          {isSheet ? (
+            <button type="button" className="ghost" onClick={closeSheet}>
+              Close
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                dispatch({ type: "SET_SCREEN", payload: { screen: "map" } })
+              }
+            >
+              Map
+            </button>
+          )}
+        </div>
+      </header>
+
+      <ul className="rf-squads__comp">
+        {selected.force.map((slot) => {
+          const u = getUnit(slot.unitId);
+          return (
+            <li key={slot.unitId}>
+              <Sprite id={u.sprite.id} size={28} anim="none" />
+              <span>
+                {unitDisplayName(slot.unitId)}×{slot.count}
+              </span>
+              <CounterStrip unitId={slot.unitId} />
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="rf-squads__tabs">
+        <button
+          type="button"
+          className={detailTab === "overview" ? "primary" : "ghost"}
+          onClick={() => setDetailTab("overview")}
+        >
+          Manage
+        </button>
+        <button
+          type="button"
+          className={detailTab === "add" ? "primary" : "ghost"}
+          disabled={selected.status === "engaged"}
+          onClick={() => setDetailTab("add")}
+        >
+          Add units
+        </button>
+        <button
+          type="button"
+          className={detailTab === "depart" ? "primary" : "ghost"}
+          disabled={selected.status !== "idle"}
+          onClick={() => setDetailTab("depart")}
+        >
+          Depart
+        </button>
+      </div>
+
+      {detailTab === "overview" && (
+        <div className="rf-squads__section">
+          <label className="rf-squads__rename">
+            <span className="rf-label">Rename</span>
+            <div className="rf-squads__rename-row">
+              <input
+                type="text"
+                maxLength={28}
+                value={rename}
+                onChange={(e) => setRename(e.target.value)}
+              />
+              <button
+                type="button"
+                className="ghost"
+                disabled={!canAct || !rename.trim()}
+                onClick={() =>
+                  dispatch({
+                    type: "RENAME_SQUAD",
+                    payload: { squadId: selected.id, name: rename },
+                  })
+                }
+              >
+                Save
+              </button>
+            </div>
+          </label>
+
+          {mergeCandidates.length > 0 && selected.status === "idle" && (
+            <div className="rf-squads__merge">
+              <PickerList
+                label="Merge another idle squad here"
+                value={mergeFromId}
+                onChange={setMergeFromId}
+                emptyText="No other idle squads in this territory"
+                options={mergeCandidates.map((s) => ({
+                  id: s.id,
+                  label: s.name,
+                  meta: compositionSummary(s.force),
+                }))}
+              />
+              <button
+                type="button"
+                className="ghost"
+                disabled={!canAct || !mergeFromId}
+                onClick={() => {
+                  dispatch({
+                    type: "MERGE_SQUADS",
+                    payload: {
+                      intoId: selected.id,
+                      fromId: mergeFromId,
+                    },
+                  });
+                  setMergeFromId("");
+                }}
+              >
+                Merge selected
+              </button>
+            </div>
+          )}
+
+          <footer className="rf-squads__danger">
+            <button
+              type="button"
+              className="ghost"
+              disabled={
+                !canAct ||
+                selected.status === "marching" ||
+                selected.status === "engaged"
+              }
+              onClick={() => {
+                dispatch({
+                  type: "DISBAND_SQUAD",
+                  payload: { squadId: selected.id },
+                });
+              }}
+            >
+              Disband into local garrison
+            </button>
+          </footer>
+        </div>
+      )}
+
+      {detailTab === "add" && (
+        <div className="rf-squads__section">
+          {addTerritoriesByContinent.map(([continent, terrs]) => (
+            <div key={continent} className="rf-squads__add-group">
+              <span className="rf-label">{continent}</span>
+              <ul className="rf-picker__list">
+                {terrs.map((t) => {
+                  const g = state.territories[t.id]?.garrison ?? {};
+                  const total = garrisonTotal(g);
+                  return (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        className={addFromId === t.id ? "primary" : "ghost"}
+                        onClick={() => {
+                          setAddFromId(t.id);
+                          setAddForce({});
+                        }}
+                      >
+                        <strong>{t.name}</strong>
+                        <small>Garrison {total}</small>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+
+          {addFromId && (
+            <section className="rf-squads__force rf-invade__force">
+              <span className="rf-label">Units to send</span>
+              {addEta != null && addSlots.length > 0 && (
+                <p className="rf-hint">
+                  Travel ~{addEta} turn{addEta === 1 ? "" : "s"}
+                </p>
+              )}
+              <ul>
+                {addUnits.map((u) => {
+                  const reserve = addGarrison[u.id] ?? 0;
+                  return (
+                    <li key={u.id}>
+                      <Sprite id={u.sprite.id} size={32} anim="none" />
+                      <div>
+                        <strong>{u.name}</strong>
+                        <small>Avail {reserve}</small>
+                        <CounterStrip unitId={u.id} />
+                      </div>
+                      <div className="rf-invade__stepper">
+                        <button
+                          type="button"
+                          disabled={!canAct || (addForce[u.id] ?? 0) <= 0}
+                          onClick={() =>
+                            setAddCount(u.id, (addForce[u.id] ?? 0) - 1)
+                          }
+                        >
+                          −
+                        </button>
+                        <strong>{addForce[u.id] ?? 0}</strong>
+                        <button
+                          type="button"
+                          disabled={
+                            !canAct || (addForce[u.id] ?? 0) >= reserve
+                          }
+                          onClick={() =>
+                            setAddCount(u.id, (addForce[u.id] ?? 0) + 1)
+                          }
+                        >
+                          +
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                className="primary"
+                disabled={!canAct || addSlots.length === 0}
+                onClick={() => {
+                  dispatch({
+                    type: "ADD_TO_SQUAD",
+                    payload: {
+                      squadId: selected.id,
+                      fromId: addFromId,
+                      force: addSlots,
+                    },
+                  });
+                  setAddForce({});
+                }}
+              >
+                Dispatch reinforcements
+              </button>
+            </section>
+          )}
+        </div>
+      )}
+
+      {detailTab === "depart" && (
+        <div className="rf-squads__section">
+          <div className="rf-squads__modes">
+            <button
+              type="button"
+              className={departMode === "garrison" ? "primary" : "ghost"}
+              onClick={() => setDepartMode("garrison")}
+            >
+              To garrison
+            </button>
+            <button
+              type="button"
+              className={departMode === "new_squad" ? "primary" : "ghost"}
+              onClick={() => setDepartMode("new_squad")}
+            >
+              New squad
+            </button>
+          </div>
+
+          {departMode === "new_squad" && (
+            <label className="rf-squads__rename">
+              <span className="rf-label">New squad name</span>
+              <input
+                type="text"
+                maxLength={28}
+                value={departName}
+                onChange={(e) => setDepartName(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
+          )}
+
+          <section className="rf-squads__force rf-invade__force">
+            <span className="rf-label">Units to depart</span>
+            <ul>
+              {selected.force.map((slot) => {
+                const u = getUnit(slot.unitId);
+                return (
+                  <li key={slot.unitId}>
+                    <Sprite id={u.sprite.id} size={32} anim="none" />
+                    <div>
+                      <strong>{u.name}</strong>
+                      <small>In squad {slot.count}</small>
+                      <CounterStrip unitId={slot.unitId} />
+                    </div>
+                    <div className="rf-invade__stepper">
+                      <button
+                        type="button"
+                        disabled={
+                          !canAct || (departForce[slot.unitId] ?? 0) <= 0
+                        }
+                        onClick={() =>
+                          setDepartCount(
+                            slot.unitId,
+                            (departForce[slot.unitId] ?? 0) - 1,
+                          )
+                        }
+                      >
+                        −
+                      </button>
+                      <strong>{departForce[slot.unitId] ?? 0}</strong>
+                      <button
+                        type="button"
+                        disabled={
+                          !canAct ||
+                          (departForce[slot.unitId] ?? 0) >= slot.count
+                        }
+                        onClick={() =>
+                          setDepartCount(
+                            slot.unitId,
+                            (departForce[slot.unitId] ?? 0) + 1,
+                          )
+                        }
+                      >
+                        +
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <button
+              type="button"
+              className="primary"
+              disabled={!canAct || departSlots.length === 0}
+              onClick={() => {
+                dispatch({
+                  type: "DEPART_SQUAD",
+                  payload: {
+                    squadId: selected.id,
+                    force: departSlots,
+                    mode: departMode,
+                    name:
+                      departMode === "new_squad"
+                        ? departName.trim() || undefined
+                        : undefined,
+                  },
+                });
+                setDepartForce({});
+              }}
+            >
+              Depart units
+            </button>
+          </section>
+        </div>
+      )}
+    </aside>
+  ) : null;
+
+  const joinersSection =
+    pendingJoiners.length > 0 ? (
+      <section
+        className={
+          isSheet ? "rf-squads__joiners rf-squads__joiners--compact" : "rf-squads__joiners"
+        }
+      >
+        <span className="rf-label">Reinforcements en route</span>
+        <ul>
+          {pendingJoiners.map((army) => {
+            const squad = squads.find((s) => s.id === army.joiningSquadId);
+            const destId = squad
+              ? currentSquadLocation(state, squad)
+              : army.toId;
+            return (
+              <li key={army.id}>
+                <div>
+                  <strong>
+                    {compositionSummary(army.force)} → {squad?.name ?? "Squad"}
+                  </strong>
+                  <small>
+                    {territoryDisplayName(army.fromId)} →{" "}
+                    {territoryDisplayName(destId)} · {army.turnsRemaining} turn
+                    {army.turnsRemaining === 1 ? "" : "s"} · joining
+                  </small>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    ) : null;
+
+  if (isSheet) {
+    return (
+      <div
+        className="rf-squads rf-squads--sheet rf-fade-in"
+        data-testid="squad-sheet"
+        data-tutorial="squads-view"
+      >
+        {joinersSection}
+        {selected ? (
+          detailPanel
+        ) : (
+          <p className="rf-hint rf-squads__sheet-hint">
+            Select a squad on the map
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="rf-squads rf-fade-in" data-tutorial="squads-view">
       <header className="rf-view-header">
@@ -183,41 +610,14 @@ export function SquadsView({
         </p>
       </header>
 
-      {pendingJoiners.length > 0 && (
-        <section className="rf-squads__joiners">
-          <span className="rf-label">Reinforcements en route</span>
-          <ul>
-            {pendingJoiners.map((army) => {
-              const squad = squads.find((s) => s.id === army.joiningSquadId);
-              const destId = squad
-                ? currentSquadLocation(state, squad)
-                : army.toId;
-              return (
-                <li key={army.id}>
-                  <div>
-                    <strong>
-                      {compositionSummary(army.force)} →{" "}
-                      {squad?.name ?? "Squad"}
-                    </strong>
-                    <small>
-                      {territoryDisplayName(army.fromId)} →{" "}
-                      {territoryDisplayName(destId)} · {army.turnsRemaining}{" "}
-                      turn{army.turnsRemaining === 1 ? "" : "s"} · joining
-                    </small>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      {joinersSection}
 
       <div className="rf-squads__layout">
         <section className="rf-squads__list">
           <span className="rf-label">Your squads</span>
           {squads.length === 0 && (
             <p className="rf-hint">
-              No squads yet — form one from a garrison on the map or in Base.
+              No squads yet — form one from a garrison on the map.
             </p>
           )}
           <ul>
@@ -244,369 +644,7 @@ export function SquadsView({
           </ul>
         </section>
 
-        {selected && (
-          <aside className="rf-squads__detail">
-            <header className="rf-squads__detail-head">
-              <div>
-                <h3>{selected.name}</h3>
-                <p className="rf-hint">
-                  {territoryDisplayName(currentSquadLocation(state, selected))}{" "}
-                  · {statusLabel(selected.status)} · Str{" "}
-                  {squadStrength(selected.force)}
-                </p>
-              </div>
-              <div className="rf-squads__detail-actions">
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() =>
-                    dispatch({ type: "SET_SCREEN", payload: { screen: "map" } })
-                  }
-                >
-                  Map
-                </button>
-              </div>
-            </header>
-
-            <ul className="rf-squads__comp">
-              {selected.force.map((slot) => {
-                const u = getUnit(slot.unitId);
-                return (
-                  <li key={slot.unitId}>
-                    <Sprite id={u.sprite.id} size={28} anim="none" />
-                    <span>
-                      {unitDisplayName(slot.unitId)}×{slot.count}
-                    </span>
-                    <CounterStrip unitId={slot.unitId} />
-                  </li>
-                );
-              })}
-            </ul>
-
-            <div className="rf-squads__tabs">
-              <button
-                type="button"
-                className={detailTab === "overview" ? "primary" : "ghost"}
-                onClick={() => setDetailTab("overview")}
-              >
-                Manage
-              </button>
-              <button
-                type="button"
-                className={detailTab === "add" ? "primary" : "ghost"}
-                disabled={selected.status === "engaged"}
-                onClick={() => setDetailTab("add")}
-              >
-                Add units
-              </button>
-              <button
-                type="button"
-                className={detailTab === "depart" ? "primary" : "ghost"}
-                disabled={selected.status !== "idle"}
-                onClick={() => setDetailTab("depart")}
-              >
-                Depart
-              </button>
-            </div>
-
-            {detailTab === "overview" && (
-              <div className="rf-squads__section">
-                <label className="rf-squads__rename">
-                  <span className="rf-label">Rename</span>
-                  <div className="rf-squads__rename-row">
-                    <input
-                      type="text"
-                      maxLength={28}
-                      value={rename}
-                      onChange={(e) => setRename(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="ghost"
-                      disabled={!canAct || !rename.trim()}
-                      onClick={() =>
-                        dispatch({
-                          type: "RENAME_SQUAD",
-                          payload: { squadId: selected.id, name: rename },
-                        })
-                      }
-                    >
-                      Save
-                    </button>
-                  </div>
-                </label>
-
-                {mergeCandidates.length > 0 && selected.status === "idle" && (
-                  <div className="rf-squads__merge">
-                    <PickerList
-                      label="Merge another idle squad here"
-                      value={mergeFromId}
-                      onChange={setMergeFromId}
-                      emptyText="No other idle squads in this territory"
-                      options={mergeCandidates.map((s) => ({
-                        id: s.id,
-                        label: s.name,
-                        meta: compositionSummary(s.force),
-                      }))}
-                    />
-                    <button
-                      type="button"
-                      className="ghost"
-                      disabled={!canAct || !mergeFromId}
-                      onClick={() => {
-                        dispatch({
-                          type: "MERGE_SQUADS",
-                          payload: {
-                            intoId: selected.id,
-                            fromId: mergeFromId,
-                          },
-                        });
-                        setMergeFromId("");
-                      }}
-                    >
-                      Merge selected
-                    </button>
-                  </div>
-                )}
-
-                <footer className="rf-squads__danger">
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={
-                      !canAct ||
-                      selected.status === "marching" ||
-                      selected.status === "engaged"
-                    }
-                    onClick={() => {
-                      dispatch({
-                        type: "DISBAND_SQUAD",
-                        payload: { squadId: selected.id },
-                      });
-                    }}
-                  >
-                    Disband into local garrison
-                  </button>
-                </footer>
-              </div>
-            )}
-
-            {detailTab === "add" && (
-              <div className="rf-squads__section">
-                {addTerritoriesByContinent.map(([continent, terrs]) => (
-                  <div key={continent} className="rf-squads__add-group">
-                    <span className="rf-label">{continent}</span>
-                    <ul className="rf-picker__list">
-                      {terrs.map((t) => {
-                        const g = state.territories[t.id]?.garrison ?? {};
-                        const total = garrisonTotal(g);
-                        return (
-                          <li key={t.id}>
-                            <button
-                              type="button"
-                              className={
-                                addFromId === t.id ? "primary" : "ghost"
-                              }
-                              onClick={() => {
-                                setAddFromId(t.id);
-                                setAddForce({});
-                              }}
-                            >
-                              <strong>{t.name}</strong>
-                              <small>Garrison {total}</small>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ))}
-
-                {addFromId && (
-                  <section className="rf-squads__force rf-invade__force">
-                    <span className="rf-label">Units to send</span>
-                    {addEta != null && addSlots.length > 0 && (
-                      <p className="rf-hint">
-                        Travel ~{addEta} turn{addEta === 1 ? "" : "s"}
-                      </p>
-                    )}
-                    <ul>
-                      {addUnits.map((u) => {
-                        const reserve = addGarrison[u.id] ?? 0;
-                        return (
-                          <li key={u.id}>
-                            <Sprite id={u.sprite.id} size={32} anim="none" />
-                            <div>
-                              <strong>{u.name}</strong>
-                              <small>Avail {reserve}</small>
-                              <CounterStrip unitId={u.id} />
-                            </div>
-                            <div className="rf-invade__stepper">
-                              <button
-                                type="button"
-                                disabled={
-                                  !canAct || (addForce[u.id] ?? 0) <= 0
-                                }
-                                onClick={() =>
-                                  setAddCount(u.id, (addForce[u.id] ?? 0) - 1)
-                                }
-                              >
-                                −
-                              </button>
-                              <strong>{addForce[u.id] ?? 0}</strong>
-                              <button
-                                type="button"
-                                disabled={
-                                  !canAct ||
-                                  (addForce[u.id] ?? 0) >= reserve
-                                }
-                                onClick={() =>
-                                  setAddCount(u.id, (addForce[u.id] ?? 0) + 1)
-                                }
-                              >
-                                +
-                              </button>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={!canAct || addSlots.length === 0}
-                      onClick={() => {
-                        dispatch({
-                          type: "ADD_TO_SQUAD",
-                          payload: {
-                            squadId: selected.id,
-                            fromId: addFromId,
-                            force: addSlots,
-                          },
-                        });
-                        setAddForce({});
-                      }}
-                    >
-                      Dispatch reinforcements
-                    </button>
-                  </section>
-                )}
-              </div>
-            )}
-
-            {detailTab === "depart" && (
-              <div className="rf-squads__section">
-                <div className="rf-squads__modes">
-                  <button
-                    type="button"
-                    className={
-                      departMode === "garrison" ? "primary" : "ghost"
-                    }
-                    onClick={() => setDepartMode("garrison")}
-                  >
-                    To garrison
-                  </button>
-                  <button
-                    type="button"
-                    className={
-                      departMode === "new_squad" ? "primary" : "ghost"
-                    }
-                    onClick={() => setDepartMode("new_squad")}
-                  >
-                    New squad
-                  </button>
-                </div>
-
-                {departMode === "new_squad" && (
-                  <label className="rf-squads__rename">
-                    <span className="rf-label">New squad name</span>
-                    <input
-                      type="text"
-                      maxLength={28}
-                      value={departName}
-                      onChange={(e) => setDepartName(e.target.value)}
-                      placeholder="Optional"
-                    />
-                  </label>
-                )}
-
-                <section className="rf-squads__force rf-invade__force">
-                  <span className="rf-label">Units to depart</span>
-                  <ul>
-                    {selected.force.map((slot) => {
-                      const u = getUnit(slot.unitId);
-                      return (
-                        <li key={slot.unitId}>
-                          <Sprite id={u.sprite.id} size={32} anim="none" />
-                          <div>
-                            <strong>{u.name}</strong>
-                            <small>In squad {slot.count}</small>
-                            <CounterStrip unitId={slot.unitId} />
-                          </div>
-                          <div className="rf-invade__stepper">
-                            <button
-                              type="button"
-                              disabled={
-                                !canAct ||
-                                (departForce[slot.unitId] ?? 0) <= 0
-                              }
-                              onClick={() =>
-                                setDepartCount(
-                                  slot.unitId,
-                                  (departForce[slot.unitId] ?? 0) - 1,
-                                )
-                              }
-                            >
-                              −
-                            </button>
-                            <strong>{departForce[slot.unitId] ?? 0}</strong>
-                            <button
-                              type="button"
-                              disabled={
-                                !canAct ||
-                                (departForce[slot.unitId] ?? 0) >= slot.count
-                              }
-                              onClick={() =>
-                                setDepartCount(
-                                  slot.unitId,
-                                  (departForce[slot.unitId] ?? 0) + 1,
-                                )
-                              }
-                            >
-                              +
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={!canAct || departSlots.length === 0}
-                    onClick={() => {
-                      dispatch({
-                        type: "DEPART_SQUAD",
-                        payload: {
-                          squadId: selected.id,
-                          force: departSlots,
-                          mode: departMode,
-                          name:
-                            departMode === "new_squad"
-                              ? departName.trim() || undefined
-                              : undefined,
-                        },
-                      });
-                      setDepartForce({});
-                    }}
-                  >
-                    Depart units
-                  </button>
-                </section>
-              </div>
-            )}
-          </aside>
-        )}
+        {detailPanel}
       </div>
     </div>
   );

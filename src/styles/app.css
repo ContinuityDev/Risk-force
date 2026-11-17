@@ -1258,7 +1258,8 @@
   box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45);
 }
 
-.rf-base__yard:has(.rf-base__ctx) {
+.rf-base__yard:has(.rf-base__ctx),
+.rf-base__yard:has(.rf-bldg-pop) {
   overflow: visible;
   z-index: 5;
 }
@@ -1298,6 +1299,107 @@
 .rf-base__ctx-item--danger,
 .rf-base__ctx-item.is-danger {
   color: #d07070;
+}
+
+.rf-bldg-pop {
+  position: fixed;
+  z-index: 60;
+  min-width: 11rem;
+  max-width: min(16rem, calc(100vw - 1rem));
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: rgba(10, 14, 18, 0.97);
+  border: 1px solid rgba(126, 182, 201, 0.45);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+}
+
+.rf-bldg-pop__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.35rem 0.35rem;
+  border-bottom: 1px solid rgba(126, 182, 201, 0.2);
+}
+
+.rf-bldg-pop__head .rf-label {
+  display: block;
+  margin-bottom: 0.1rem;
+}
+
+.rf-bldg-pop__head strong {
+  font-size: 0.85rem;
+}
+
+.rf-bldg-pop__close {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.rf-bldg-pop__items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.rf-bldg-pop__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  text-align: left;
+  min-height: 36px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  border: 0;
+  background: transparent;
+  color: var(--rf-text);
+  cursor: pointer;
+}
+
+.rf-bldg-pop__item:hover,
+.rf-bldg-pop__item:focus-visible {
+  background: rgba(126, 182, 201, 0.15);
+}
+
+.rf-bldg-pop__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rf-bldg-pop__item--danger {
+  color: #d07070;
+}
+
+.rf-bldg-pop__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.35rem;
+}
+
+.rf-bldg-pop__back {
+  align-self: flex-start;
+  font-size: 0.72rem;
+}
+
+.rf-bldg-pop__train-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-bldg-pop__confirm p {
+  margin: 0;
+  font-size: 0.8rem;
 }
 
 .rf-base__staff-effect {
@@ -1800,6 +1902,33 @@ button.danger {
 }
 
 /* ── Squads ─────────────────────────────────────────────── */
+
+.rf-squads--sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+}
+
+.rf-squads--sheet .rf-squads__detail {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
+}
+
+.rf-squads__joiners--compact {
+  margin-bottom: 0;
+  padding: 0.45rem 0.55rem;
+}
+
+.rf-squads__joiners--compact ul {
+  margin-top: 0.3rem;
+}
+
+.rf-squads__sheet-hint {
+  margin: 0.5rem 0 0;
+}
 
 .rf-squads__layout {
   display: grid;
@@ -4561,7 +4690,8 @@ button.danger {
     touch-action: pan-x pan-y;
   }
 
-  .rf-base__yard:has(.rf-base__ctx) {
+  .rf-base__yard:has(.rf-base__ctx),
+  .rf-base__yard:has(.rf-bldg-pop) {
     overflow: visible;
   }
 
@@ -5855,5 +5985,241 @@ button.is-unaffordable {
 @media (orientation: landscape) and (max-height: 390px) and (max-width: 700px) {
   .rf-lobby__doctrine-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── Map-first: squad dock, sheets, building hits, capture overlay ── */
+
+.rf-map__squad-hit {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.rf-map__bldgs .rf-map__bldg-hit[data-instance-id] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.rf-map__squads {
+  pointer-events: none;
+}
+
+.rf-map__squads .rf-map__squad-hit {
+  pointer-events: auto;
+}
+
+.rf-map__joining-label {
+  font-family: var(--rf-font-display);
+  letter-spacing: 0.02em;
+  paint-order: stroke fill;
+  stroke: #081018;
+  stroke-width: 0.45px;
+}
+
+.rf-map__squad-dock {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 3.4rem;
+  z-index: 7;
+  min-width: 11rem;
+  max-width: min(18rem, 46vw);
+  padding: 0.55rem 0.7rem;
+  border: var(--rf-hairline);
+  background: rgba(8, 12, 16, 0.9);
+  font-size: 0.72rem;
+  pointer-events: auto;
+}
+
+.rf-map__squad-dock.is-collapsed {
+  min-width: auto;
+  padding: 0.4rem 0.55rem;
+}
+
+.rf-map__squad-dock-body {
+  margin-top: 0.35rem;
+  max-height: min(40vh, 14rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.rf-map__squad-dock-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.rf-map__squad-dock-list button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.rf-map__squad-dock-list small {
+  opacity: 0.75;
+  font-size: 0.68rem;
+}
+
+.rf-map__squad-dock-joiners {
+  list-style: none;
+  margin: 0 0 0.45rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--rf-text-dim);
+}
+
+.rf-map__joining-tag {
+  display: inline-block;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid rgba(184, 240, 255, 0.35);
+  color: #b8f0ff;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rf-map__squad-sheet {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 9;
+  width: min(20rem, 44vw);
+  max-height: min(72vh, 28rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0.65rem 0.75rem;
+  border: var(--rf-hairline);
+  background: rgba(8, 12, 16, 0.94);
+  pointer-events: auto;
+}
+
+.rf-map__build-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 11rem;
+  overflow: auto;
+}
+
+.rf-map__build-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-align: left;
+  padding: 0.3rem 0.4rem;
+}
+
+.rf-map__build-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.rf-map__build-row-body small {
+  opacity: 0.75;
+  font-size: 0.68rem;
+}
+
+.rf-squads__create-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  max-height: min(62vh, 24rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 0.25rem;
+}
+
+.rf-squads__create-panel .rf-squads__force {
+  flex: 1 1 auto;
+  min-height: 4.5rem;
+  max-height: min(36vh, 12rem);
+  overflow: auto;
+}
+
+.rf-squads__create-panel .rf-squads__force ul {
+  margin: 0.35rem 0 0;
+}
+
+.rf-squads__create-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-top: 0.35rem;
+  background: linear-gradient(180deg, transparent, rgba(8, 12, 16, 0.97) 28%);
+}
+
+.rf-map-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--rf-bg, #0c1218) 45%, transparent);
+  pointer-events: auto;
+}
+
+.rf-capture--sheet {
+  width: min(28rem, 100%);
+  max-height: min(78vh, 32rem);
+  overflow: auto;
+  margin: 0;
+  padding: 0.85rem 1rem 1rem;
+  border: var(--rf-hairline);
+  background: rgba(10, 14, 18, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .rf-map__squad-dock {
+    left: 0.35rem;
+    bottom: auto;
+    top: 2.6rem;
+    max-width: min(42vw, 13rem);
+    padding: 0.3rem 0.4rem;
+  }
+
+  .rf-map__squad-sheet {
+    top: auto;
+    bottom: 0.35rem;
+    right: 0.35rem;
+    left: auto;
+    width: min(48vw, 16rem);
+    max-height: min(55vh, 12rem);
+    padding: 0.45rem 0.55rem;
+  }
+
+  .rf-map__squad-dock-body {
+    max-height: min(42vh, 8rem);
+  }
+
+  .rf-drawer--inline.rf-map__territory-drawer {
+    max-height: calc(100dvh - var(--rf-hud-h) - 3.4rem);
+    overflow: auto;
+  }
+
+  .rf-map-overlay {
+    align-items: stretch;
+    padding: 0.35rem;
+  }
+
+  .rf-capture--sheet {
+    max-height: none;
+    height: 100%;
   }
 }

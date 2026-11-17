@@ -389,16 +389,95 @@ async function runSuite(page, label) {
     throw new Error("delete failed");
   }
 
-  // Squads tab renders
+  // Map-first: squad dock + tap-select sheet (no Squads tab)
   await page.evaluate(() => {
-    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "squads" } });
+    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
   });
-  await page.waitForTimeout(200);
-  const tab = await page.locator(".rf-squads, [data-testid='squads-view']").count();
-  if (!tab) {
-    // SquadsView may use rf-squads class
-    const body = await page.locator("text=Squad").count();
-    if (!body) throw new Error("Squads tab not visible");
+  await page.waitForTimeout(250);
+  const dock = await page.getByTestId("squad-dock").count();
+  if (!dock) throw new Error("squad dock missing");
+
+  // Select a squad via dispatch and ensure sheet + marker appear
+  const anySquad = await page.evaluate(() => {
+    const st = window.__RF__.getState();
+    const id = st.squads[0]?.id;
+    if (!id) return null;
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: id } });
+    return id;
+  });
+  if (!anySquad) throw new Error("no squad to select");
+  await page.waitForTimeout(300);
+  const sheet = await page.getByTestId("squad-sheet").count();
+  const marker = await page.locator("[data-testid='selected-squad'], [data-testid='squad-marker']").count();
+  if (!sheet) throw new Error("squad sheet missing after select");
+  if (!marker) throw new Error("squad marker missing on map");
+
+  // Territory sheet buildings (no Base tab)
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: home },
+    });
+  }, ids4.home);
+  await page.waitForTimeout(250);
+  const builds = await page.getByTestId("territory-buildings").count();
+  if (!builds) throw new Error("territory buildings list missing");
+
+  // Capture overlay titles the captured territory, not the origin
+  await page.evaluate(
+    ({ home, enemy }) => {
+      const st = window.__RF__.getState();
+      const target = enemy || home;
+      window.__RF__.dispatch({
+        type: "LOAD_STATE",
+        payload: {
+          state: {
+            ...st,
+            phase: "capture",
+            screen: "capture",
+            pendingCapture: {
+              territoryId: target,
+              attacker: "player",
+              fromId: home,
+              survivors: [{ unitId: "trooper", count: 3 }],
+              population: 6,
+              workers: 1,
+              buildings: st.territories[target]?.buildings ?? [],
+              supplyStock: 4,
+            },
+            message: null,
+          },
+        },
+      });
+    },
+    { home: ids4.home, enemy: ids4.enemy },
+  );
+  await page.waitForTimeout(250);
+  const capName = await page.getByTestId("capture-territory-name").textContent();
+  const expected = await page.evaluate((enemy) => {
+    try {
+      return window.__RF__.getState
+        ? // name via territory display in DOM assertion only
+          enemy
+        : enemy;
+    } catch {
+      return enemy;
+    }
+  }, ids4.enemy);
+  if (!capName || /Secure\s*$/i.test(capName)) {
+    throw new Error("capture title missing: " + capName);
+  }
+  // Must not falsely title the origin when a distinct enemy was captured
+  if (ids4.enemy && ids4.enemy !== ids4.home) {
+    const tid = await page
+      .getByTestId("capture-sheet")
+      .getAttribute("data-territory-id");
+    if (tid !== ids4.enemy) {
+      throw new Error(
+        `capture sheet territory ${tid} != captured ${ids4.enemy} (expected ${expected})`,
+      );
+    }
   }
 
   console.log("ok", label);

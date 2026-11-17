@@ -33,7 +33,6 @@ import { CaptureView } from "./components/CaptureView";
 import { EconomySummary } from "./components/EconomySummary";
 import { HandoffScreen } from "./components/HandoffScreen";
 import { Hud } from "./components/Hud";
-import { SquadsView } from "./components/SquadsView";
 import { LobbyScreen } from "./components/LobbyScreen";
 import { MarketView } from "./components/MarketView";
 import { MenuScreen } from "./components/MenuScreen";
@@ -581,7 +580,12 @@ export default function App() {
           onOpenMarket={() => setMarketOpen(true)}
         />
         <main className="rf-main">
-          {state.screen === "map" && (
+          {/* Map-first: keep the theater visible for base/squads/capture;
+              tutorial may still SET_SCREEN to base and gets the full yard. */}
+          {(state.screen === "map" ||
+            state.screen === "squads" ||
+            state.screen === "invade" ||
+            state.screen === "capture") && (
             <WorldMap state={state} dispatch={dispatch} />
           )}
           {state.screen === "base" && (
@@ -599,19 +603,13 @@ export default function App() {
               canAct={isHumanTurn && state.phase === "play"}
             />
           )}
-          {(state.screen === "squads" || state.screen === "invade") && (
-            <SquadsView
-              state={state}
-              activePlayer={activePlayer}
-              dispatch={dispatch}
-              canAct={isHumanTurn && state.phase === "play"}
-            />
-          )}
           {state.screen === "battle" && (
             <BattleView state={state} dispatch={dispatch} />
           )}
-          {state.screen === "capture" && (
-            <CaptureView state={state} dispatch={dispatch} />
+          {state.screen === "capture" && state.pendingCapture && (
+            <div className="rf-map-overlay" data-testid="capture-overlay">
+              <CaptureView state={state} dispatch={dispatch} />
+            </div>
           )}
           {state.screen === "save" && (
             <SaveScreen state={state} dispatch={dispatch} />
@@ -636,6 +634,10 @@ export default function App() {
           isHumanTurn={isHumanTurn}
           dispatch={dispatch}
           onOpenMarket={() => setMarketOpen(true)}
+          onTutorial={() => {
+            setTutorialStep(0);
+            setTutorialActive(true);
+          }}
           marketOpen={marketOpen}
         />
         {tutorialActive && (
