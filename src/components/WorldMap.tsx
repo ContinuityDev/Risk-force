@@ -2745,9 +2745,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         )}
       </aside>
 
+      {/* Dock lists squads when none is selected; the squad sheet owns selection. */}
       {humanId &&
         state.screen !== "capture" &&
-        !state.pendingCapture && (
+        !state.pendingCapture &&
+        !state.selectedSquadId && (
         <MapSquadDock
           state={state}
           humanId={humanId}

@@ -6327,8 +6327,13 @@ button.is-unaffordable {
 }
 
 .rf-shell:has(.rf-map-overlay) .rf-hud__toast,
-.rf-shell:has(.rf-capture) .rf-hud__toast {
+.rf-shell:has(.rf-capture) .rf-hud__toast,
+.rf-shell:has([data-testid="capture-overlay"]) .rf-hud__message,
+.rf-shell:has([data-testid="capture-overlay"]) .rf-hud__toast {
   display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .rf-capture--sheet {

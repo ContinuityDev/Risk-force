@@ -389,15 +389,16 @@ async function runSuite(page, label) {
     throw new Error("delete failed");
   }
 
-  // Map-first: squad dock + tap-select sheet (no Squads tab)
+  // Map-first: dock when nothing selected; sheet when a squad is selected
   await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
     window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
   });
   await page.waitForTimeout(250);
   const dock = await page.getByTestId("squad-dock").count();
   if (!dock) throw new Error("squad dock missing");
 
-  // Select a squad via dispatch and ensure sheet + marker appear
+  // Select a squad via dispatch and ensure sheet + marker appear (dock hides)
   const anySquad = await page.evaluate(() => {
     const st = window.__RF__.getState();
     const id = st.squads[0]?.id;
@@ -407,10 +408,12 @@ async function runSuite(page, label) {
   });
   if (!anySquad) throw new Error("no squad to select");
   await page.waitForTimeout(300);
-  const sheet = await page.getByTestId("squad-sheet").count();
+  const sheet = await page.getByTestId("map-squad-sheet").count();
   const marker = await page.locator("[data-testid='selected-squad'], [data-testid='squad-marker']").count();
+  const dockWhileSelected = await page.getByTestId("squad-dock").count();
   if (!sheet) throw new Error("squad sheet missing after select");
   if (!marker) throw new Error("squad marker missing on map");
+  if (dockWhileSelected) throw new Error("squad dock should hide while selected");
 
   // Territory sheet buildings (no Base tab)
   await page.evaluate((home) => {
