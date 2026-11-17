@@ -202,9 +202,10 @@ export function buildInteriorSlots(
   label?: Pt,
 ): Pt[] {
   const slots: Pt[] = [];
-  const minSep = footprint * 1.45;
+  const minSep = footprint * 1.35;
+  const landPad = Math.max(1.0, footprint * 0.55);
   const push = (p: Pt) => {
-    if (!footprintInsideRing(p.x, p.y, footprint, footprint, ring, 0.4)) return;
+    if (!footprintInsideRing(p.x, p.y, landPad, landPad, ring, 0.35)) return;
     if (slots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < minSep)) return;
     slots.push(p);
   };
@@ -212,30 +213,32 @@ export function buildInteriorSlots(
 
   const bbox = ringBBox(ring);
   const span = Math.max(bbox.maxX - bbox.minX, bbox.maxY - bbox.minY, 4);
-  const step = Math.max(footprint * 1.55, span * 0.09);
+  const step = Math.max(footprint * 1.35, span * 0.08);
 
   // Beside / below the country name (label is often the pole).
   if (label) {
-    const d = Math.max(step * 1.05, footprint * 1.55);
-    const offsets: Pt[] = [
-      { x: 0, y: d }, // south / below
-      { x: d * 0.85, y: d * 0.55 },
-      { x: -d * 0.85, y: d * 0.55 },
-      { x: d, y: 0 },
-      { x: -d, y: 0 },
-      { x: d * 0.7, y: -d * 0.35 },
-      { x: -d * 0.7, y: -d * 0.35 },
-      { x: 0, y: d * 1.7 },
-      { x: d * 1.35, y: d * 0.9 },
-      { x: -d * 1.35, y: d * 0.9 },
-    ];
+    const d = Math.max(step * 1.1, footprint * 1.6);
+    const offsets: Pt[] = [];
+    for (const mul of [1, 1.5, 2.1, 2.8, 3.6]) {
+      const r = d * mul;
+      offsets.push(
+        { x: 0, y: r },
+        { x: r * 0.85, y: r * 0.55 },
+        { x: -r * 0.85, y: r * 0.55 },
+        { x: r, y: 0 },
+        { x: -r, y: 0 },
+        { x: r * 0.7, y: -r * 0.4 },
+        { x: -r * 0.7, y: -r * 0.4 },
+        { x: 0, y: -r * 0.9 },
+      );
+    }
     for (const o of offsets) {
       push({ x: label.x + o.x, y: label.y + o.y });
     }
   }
 
   // Spiral around the pole
-  for (let ringN = 1; ringN <= 10 && slots.length < count; ringN++) {
+  for (let ringN = 1; ringN <= 14 && slots.length < count; ringN++) {
     const r = step * ringN;
     const n = Math.max(6, ringN * 6);
     for (let i = 0; i < n && slots.length < count; i++) {
@@ -244,10 +247,10 @@ export function buildInteriorSlots(
     }
   }
 
-  // Fallback grid over bbox if still short
-  if (slots.length < Math.min(6, count)) {
-    const gx = Math.max(3, Math.floor((bbox.maxX - bbox.minX) / step));
-    const gy = Math.max(3, Math.floor((bbox.maxY - bbox.minY) / step));
+  // Always grid the bbox so large landmasses get spread anchors.
+  {
+    const gx = Math.max(4, Math.floor((bbox.maxX - bbox.minX) / step));
+    const gy = Math.max(4, Math.floor((bbox.maxY - bbox.minY) / step));
     for (let iy = 1; iy < gy && slots.length < count; iy++) {
       for (let ix = 1; ix < gx && slots.length < count; ix++) {
         push({
@@ -302,15 +305,18 @@ export function labelKeepOutBox(
   label: { x: number; y: number; w: number; h: number },
   miniSize: number,
 ): { x: number; y: number; w: number; h: number } {
-  // Keep names readable without swallowing whole archipelagos / small plots
-  // when minis grow for mobile readability.
+  // Hard keep-out around the country name. Sized from the glyph first —
+  // fixed floors of 7×5 ate skinny archipelagos (Indonesia) and forced
+  // every chip onto the label. Mini size only adds a modest pad.
+  const s = Math.max(miniSize, 2);
+  const glyphW = Math.max(label.w, 3.5);
+  const glyphH = Math.max(label.h, 1.6);
   return {
     x: label.x,
-    // Bias the keep-out below the glyph so south-of-label feet don't rise
-    // back into the letters.
-    y: label.y + miniSize * 0.2,
-    w: Math.max(label.w * 1.25, miniSize * 1.55, 9),
-    h: Math.max(label.h * 1.85, miniSize * 1.35, 6),
+    // Bias south: upright sprites with feet below the glyph still clear it.
+    y: label.y + Math.min(s * 0.08, 0.7),
+    w: Math.max(glyphW * 1.18, glyphW + s * 0.25),
+    h: Math.max(glyphH * 1.55, glyphH + s * 0.42),
   };
 }
 
@@ -363,35 +369,72 @@ export function getTerritoryAnchors(t: TerritoryDef): TerritoryAnchorSet {
       }
     }
   }
-  // Footprint scale for slot spacing — keep modest so we stay inland.
-  const fp = Math.max(1.8, Math.min(2.8, Math.sqrt(Math.max(t.area, 0.001)) * 6));
+  // Footprint scale for slot spacing — modest so skinny land still yields
+  // many candidates; larger rings ask for a wider lattice.
+  const ringA = ringArea(ring);
+  const fp = Math.max(
+    1.7,
+    Math.min(2.8, Math.sqrt(Math.max(t.area, 0.001)) * 6.5),
+  );
   const labelPt = { x: t.label.x, y: t.label.y };
-  let slots = rings.length
-    ? buildInteriorSlots(ring, pole, 24, fp, labelPt)
-    : [pole];
+  // Archipelagos (Indonesia) and multi-island states: seed slots on every
+  // substantial landmass so minis spread across land instead of clumping
+  // on the labeled island under a neighbor's keep-out.
+  const rankedRings = rings
+    .map((r, i) => ({ r, i, a: ringArea(r) }))
+    .sort((x, y) => y.a - x.a);
+  const areaFloor = Math.max(ringA * 0.12, 40);
+  const landmasses = rankedRings.filter(
+    (x, idx) => idx === 0 || x.a >= areaFloor,
+  ).slice(0, 6);
+  let slots: Pt[] = [];
+  if (!rings.length) {
+    slots = [pole];
+  } else {
+    for (const { r, i, a } of landmasses) {
+      const localPole = i === largestRingIndex ? pole : poleOfRing(r);
+      const budget =
+        a > 200 ? 18 : a > 80 ? 14 : a > 40 ? 10 : 8;
+      const localLabel = i === largestRingIndex ? labelPt : undefined;
+      const local = buildInteriorSlots(r, localPole, budget, fp, localLabel);
+      for (const p of local) {
+        if (slots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < fp * 1.1)) {
+          continue;
+        }
+        slots.push(p);
+      }
+    }
+  }
   // Prefer deepest inland slots, then ones offset from the name glyph
   // (beside/below) so claimInteriorSlot can clear label keep-outs.
   if (rings.length && slots.length) {
     slots = [...slots].sort((a, b) => {
+      // Prefer clearance from the country name first so clusters fan off
+      // the labeled landmass (Sumatra / New Guinea for Indonesia).
+      const away =
+        Math.hypot(b.x - labelPt.x, b.y - labelPt.y) -
+        Math.hypot(a.x - labelPt.x, a.y - labelPt.y);
+      if (Math.abs(away) > 4) return away;
       const edge =
         distanceToRingEdge(b.x, b.y, ring) -
         distanceToRingEdge(a.x, a.y, ring);
       if (Math.abs(edge) > 0.35) return edge;
-      // Prefer south/east of the label so pieces sit under/beside the name.
       const score = (p: Pt) => {
         const dx = p.x - labelPt.x;
         const dy = p.y - labelPt.y;
-        const away = Math.hypot(dx, dy);
-        return away * 2 + Math.max(0, dy) * 3 + Math.abs(dx);
+        const d = Math.hypot(dx, dy);
+        return d * 2 + Math.max(0, dy) * 3 + Math.abs(dx);
       };
       return score(b) - score(a);
     });
-    // Keep pole as the deepest inland point (not necessarily the label).
-    pole = [...slots].sort(
-      (a, b) =>
-        distanceToRingEdge(b.x, b.y, ring) -
-        distanceToRingEdge(a.x, a.y, ring),
-    )[0] ?? pole;
+    // Keep pole as the deepest inland point on the largest ring.
+    pole = [...slots]
+      .filter((p) => pointInRing(p.x, p.y, ring))
+      .sort(
+        (a, b) =>
+          distanceToRingEdge(b.x, b.y, ring) -
+          distanceToRingEdge(a.x, a.y, ring),
+      )[0] ?? pole;
   }
   const set: TerritoryAnchorSet = {
     territoryId: t.id,
@@ -409,6 +452,31 @@ export function clearTerritoryAnchorCache(): void {
   cache.clear();
 }
 
+/**
+ * Land pad for inland checks. Visual minis can be large (~24–36px on screen)
+ * while only the foot needs to sit on land — using size/2 rejects every slot
+ * on skinny archipelagos (Indonesia) and forces a clump on the label.
+ */
+export function landFootHalf(size: number): number {
+  return Math.max(1.05, Math.min(size * 0.3, 2.6));
+}
+
+/** Ring that contains (x,y), preferring the largest landmass on ties. */
+function ringContaining(
+  x: number,
+  y: number,
+  rings: Ring[],
+  preferIdx: number,
+): Ring | null {
+  if (rings[preferIdx] && pointInRing(x, y, rings[preferIdx]!)) {
+    return rings[preferIdx]!;
+  }
+  for (const r of rings) {
+    if (pointInRing(x, y, r)) return r;
+  }
+  return null;
+}
+
 /** Pick the next free interior slot near the pole, avoiding occupied boxes. */
 export function claimInteriorSlot(
   t: TerritoryDef,
@@ -417,11 +485,17 @@ export function claimInteriorSlot(
   pad = 0.6,
 ): Pt | null {
   const anchors = getTerritoryAnchors(t);
-  const ring = anchors.rings[anchors.largestRingIndex];
-  if (!ring) return null;
-  const half = size / 2;
-  const tryPoint = (s: Pt, landHalf: number, softPad: number): Pt | null => {
-    if (!footprintInsideRing(s.x, s.y, landHalf, landHalf, ring, 0.35)) {
+  if (!anchors.rings.length) return null;
+  const foot = landFootHalf(size);
+  const tryPoint = (s: Pt, softPad: number): Pt | null => {
+    const ring = ringContaining(
+      s.x,
+      s.y,
+      anchors.rings,
+      anchors.largestRingIndex,
+    );
+    if (!ring) return null;
+    if (!footprintInsideRing(s.x, s.y, foot, foot, ring, 0.35)) {
       return null;
     }
     // Collide with the upright sprite body, not a foot-centered square.
@@ -430,17 +504,18 @@ export function claimInteriorSlot(
     return s;
   };
   for (const s of anchors.slots) {
-    const hit = tryPoint(s, half, pad);
+    const hit = tryPoint(s, pad);
     if (hit) return hit;
   }
   // Soften peer-mini pad only — never relax below a floor so label keep-outs
   // stay hard (sprites must not rise into the country name).
-  const softPad = Math.max(pad * 0.7, 0.35);
+  const softPad = Math.max(pad * 0.55, 0.45);
   for (const s of anchors.slots) {
-    const hit = tryPoint(s, half, softPad);
+    const hit = tryPoint(s, softPad);
     if (hit) return hit;
   }
-  return tryPoint(anchors.pole, Math.max(0.85, half * 0.85), softPad);
+  // Last try: pole only if it clears keep-outs (never park on the label).
+  return tryPoint(anchors.pole, softPad);
 }
 
 /**
@@ -456,11 +531,14 @@ export function claimInteriorCluster(
 ): Pt[] {
   const out: Pt[] = [];
   const localOcc = [...occupied];
+  // Peer spacing is tighter than the painted sprite so readable minis can
+  // fan across skinny land; label keep-outs in `occupied` stay full-size.
+  const peerSize = Math.max(size * 0.4, Math.min(size * 0.58, 4.4));
   for (let i = 0; i < count; i++) {
     const p = claimInteriorSlot(t, size, localOcc, pad);
     if (!p) break;
     out.push(p);
-    localOcc.push(groundedOccupancyBox(p.x, p.y, size));
+    localOcc.push(groundedOccupancyBox(p.x, p.y, peerSize));
   }
   return out;
 }
@@ -525,7 +603,7 @@ export function marchLandPoint(
   };
 }
 
-/** Assert helper: point is inside the territory's largest landmass. */
+/** Assert helper: point is inside any of the territory's land rings. */
 export function isInsideTerritoryLand(
   t: TerritoryDef,
   x: number,
@@ -533,7 +611,14 @@ export function isInsideTerritoryLand(
   half = 0.8,
 ): boolean {
   const a = getTerritoryAnchors(t);
-  const ring = a.rings[a.largestRingIndex];
-  if (!ring) return false;
-  return footprintInsideRing(x, y, half, half, ring, 0.15);
+  if (!a.rings.length) return false;
+  const prefer = a.rings[a.largestRingIndex];
+  if (prefer && footprintInsideRing(x, y, half, half, prefer, 0.15)) {
+    return true;
+  }
+  return a.rings.some(
+    (ring, i) =>
+      i !== a.largestRingIndex &&
+      footprintInsideRing(x, y, half, half, ring, 0.15),
+  );
 }

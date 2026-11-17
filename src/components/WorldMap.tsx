@@ -62,6 +62,7 @@ import {
   claimInteriorCluster,
   getTerritoryAnchors,
   groundedOccupancyBox,
+  labelKeepOutBox,
   marchLandPoint,
 } from "../map/territoryAnchors";
 import {
@@ -574,8 +575,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     if (!humanId) return [];
     const tier = miniZoomTier(deferredCam.w / OCEAN_VIEW.w);
     const size = Math.max(
-      9,
-      iconWorldSize(deferredCam.w / OCEAN_VIEW.w, deferredCam.w, tier) * 1.7,
+      11,
+      iconWorldSize(deferredCam.w / OCEAN_VIEW.w, deferredCam.w, tier) * 1.35,
     );
     const out: PlacedSquadMarker[] = [];
     const byId = Object.fromEntries(TERRITORIES.map((t) => [t.id, t]));
@@ -612,7 +613,11 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     }
     for (const [tid, squadsOnPlot] of byTerritory) {
       const tdef = byId[tid]!;
+      const labelBoxes = labels
+        .filter((l) => l.id === tid)
+        .map((l) => labelKeepOutBox(l, size));
       const occupied = [
+        ...labelBoxes,
         ...unitMinis
           .filter((m) => m.territoryId === tid)
           .map((m) => groundedOccupancyBox(m.x, m.y, m.size)),
@@ -620,22 +625,35 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           .filter((m) => m.territoryId === tid)
           .map((m) => groundedOccupancyBox(m.x, m.y, m.size)),
       ];
-      const centers = claimInteriorCluster(
+      let placeSize = size;
+      let centers = claimInteriorCluster(
         tdef,
         squadsOnPlot.length,
-        size,
+        placeSize,
         occupied,
-        size * 0.35,
+        placeSize * 0.28,
       );
+      if (centers.length < squadsOnPlot.length) {
+        placeSize = size * 0.82;
+        centers = claimInteriorCluster(
+          tdef,
+          squadsOnPlot.length,
+          placeSize,
+          occupied,
+          placeSize * 0.22,
+        );
+      }
       squadsOnPlot.forEach((squad, i) => {
-        const c = centers[i] ?? getTerritoryAnchors(tdef).pole;
+        const c = centers[i];
+        if (!c) return;
+        occupied.push(groundedOccupancyBox(c.x, c.y, placeSize));
         out.push({
           key: squad.id,
           squadId: squad.id,
           territoryId: tid,
           x: c.x,
           y: c.y,
-          size,
+          size: placeSize,
           count: forceHeadcount(squad.force),
           spriteUrl: topSprite(squad.force),
           selected: state.selectedSquadId === squad.id,

@@ -120,21 +120,20 @@ function sortBuildings(buildings: PlacedBuilding[]): PlacedBuilding[] {
 
 /**
  * World-unit icon size from camera width so on-screen px grow with zoom-in.
- * Assumes ~560–700px map CSS width (drawer-safe). Caps so icons stay readable
- * but not absurd (~40px max on a typical 844 landscape frame).
+ * Assumes ~540–700px map CSS width (drawer-safe). Deep/mid target ≥24px tall
+ * on a typical 844×390 frame; caps keep inland clusters readable.
  */
 export function iconWorldSize(
   zoomScale: number,
   camW: number,
   tier: MiniZoomTier,
 ): number {
-  // Fraction of the visible camera width → roughly constant*growing screen px.
-  // ~1.6–2× prior mobile sizes; deep/mid aim for ~22–28px on phone frames.
+  // ~2× prior mobile sizes. At focus camW≈180 on ~844px map: deep ≈28–36px.
   const frac =
-    tier === "deep" ? 0.055 : tier === "mid" ? 0.038 : 0.02;
+    tier === "deep" ? 0.055 : tier === "mid" ? 0.042 : 0.026;
   const raw = camW * frac;
-  const min = tier === "deep" ? 5.2 : tier === "mid" ? 3.8 : 3.2;
-  const max = tier === "deep" ? 8.5 : tier === "mid" ? 6.2 : 5.4;
+  const min = tier === "deep" ? 6.5 : tier === "mid" ? 5.2 : 4.5;
+  const max = tier === "deep" ? 9.5 : tier === "mid" ? 7.5 : 6.2;
   void zoomScale;
   return Math.min(max, Math.max(min, raw));
 }
@@ -144,8 +143,8 @@ export function targetScreenPx(zoomScale: number): number {
   const tier = miniZoomTier(zoomScale);
   const camW = 1000 * zoomScale;
   const wu = iconWorldSize(zoomScale, camW, tier);
-  // Assume ~600px map CSS width
-  return Math.min(40, Math.max(10, (wu / camW) * 600));
+  // Assume ~540px map CSS width (844 landscape minus right dock)
+  return Math.min(56, Math.max(10, (wu / camW) * 540));
 }
 
 function toMini(
@@ -229,9 +228,10 @@ export function layoutBuildingMinis(
 ): PlacedMini[] {
   const tier = miniZoomTier(zoomScale);
   const size = iconWorldSize(zoomScale, cam.w, tier);
-  const gap = Math.max(0.8, size * 0.16);
-  // Hard label keep-out — minis must sit beside/below the country name.
-  const occupied: Box[] = labels.map((l) => labelKeepOutBox(l, size));
+  const gap = Math.max(1.1, size * 0.22);
+  // Peer occupancy only — each territory adds its own label keep-out so
+  // adjacent names (Indonesia / Malaysia) don't steal each other's slots.
+  const occupied: Box[] = [];
   const out: PlacedMini[] = [];
 
   const ranked = [...territories].sort((a, b) => b.area - a.area);
@@ -255,71 +255,110 @@ export function layoutBuildingMinis(
       continue;
     }
 
+    // Own name is hard. Nearby foreign names use a glyph-tight keep-out so
+    // shared coastlines (Borneo) don't erase every inland slot, while Civil
+    // War neighbors still refuse to cover each other's text.
+    const localOcc: Box[] = [
+      ...labels
+        .filter((l) => {
+          if (l.id === t.id) return true;
+          return Math.hypot(l.x - pole.x, l.y - pole.y) < size * 3.2 + l.w * 0.6;
+        })
+        .map((l) =>
+          labelKeepOutBox(
+            l,
+            l.id === t.id ? size : Math.min(size * 0.4, 2.8),
+          ),
+        ),
+      ...occupied,
+    ];
+
     if (tier === "world") {
       // Player bases keep a compact building chip even at world zoom so the
       // map always shows something to tap; quiet neutrals stay bare.
       if (isPlayerBase) {
-        const chip = Math.max(size * 1.7, 6.5);
+        const chip = Math.max(size * 1.35, 7.5);
         const compact =
-          tryPlaceCompact(t, buildings, chip, gap, occupied) ??
-          forcePlayerCompact(t, buildings, chip, occupied);
-        if (compact) out.push(compact);
+          tryPlaceCompact(t, buildings, chip, gap, localOcc) ??
+          forcePlayerCompact(t, buildings, chip, localOcc);
+        if (compact) {
+          occupied.push(groundedOccupancyBox(compact.x, compact.y, compact.size * 0.62));
+          out.push(compact);
+        }
       }
       continue;
     }
 
     const sorted = sortBuildings(buildings);
     if (tier === "mid" && isSmallPlot(t.area)) {
+      const before = localOcc.length;
       const compact =
         tryPlaceCompact(
           t,
           buildings,
-          Math.max(size * 0.8, 1.5),
+          Math.max(size * 0.85, 5.5),
           gap,
-          occupied,
+          localOcc,
         ) ??
         (isPlayerBase
-          ? forcePlayerCompact(t, buildings, Math.max(size * 0.8, 1.5), occupied)
+          ? forcePlayerCompact(t, buildings, Math.max(size * 0.85, 5.5), localOcc)
           : null);
-      if (compact) out.push(compact);
+      if (compact) {
+        for (let i = before; i < localOcc.length; i++) occupied.push(localOcc[i]!);
+        out.push(compact);
+      }
       continue;
     }
 
     const maxShow = tier === "mid" ? Math.min(3, sorted.length) : sorted.length;
     const shown = sorted.slice(0, maxShow);
-    // Deep: shrink until the full set fits inland beside the label.
-    // Mid: one try at the zoom size, then compact fallback.
+    // Prefer a spread of readable icons (≥24px on 844 focus frames) over a
+    // single oversized chip parked by the label.
+    const paintSize = size;
+    // ≥24px on 844×390 focus frames ≈ 5.1wu at camW=180; prefer that floor.
+    const minReadable = Math.max(5.5, paintSize * 0.58);
     const sizeTries =
       tier === "deep"
-        ? [size, size * 0.88, size * 0.76, Math.max(2.6, size * 0.65)]
-        : [size];
+        ? [
+            paintSize,
+            paintSize * 0.92,
+            paintSize * 0.82,
+            paintSize * 0.72,
+            minReadable,
+            Math.max(5.2, paintSize * 0.55),
+            Math.max(4.6, paintSize * 0.48),
+            Math.max(4.0, paintSize * 0.42),
+          ]
+        : [paintSize, paintSize * 0.88, paintSize * 0.75, minReadable, Math.max(4.2, paintSize * 0.55)];
     let placed = false;
+    let bestTrial: { minis: PlacedMini[]; occ: Box[]; score: number } | null =
+      null;
     for (const trySize of sizeTries) {
+      const want = shown.length + (sorted.length > shown.length ? 1 : 0);
       const centers = claimInteriorCluster(
         t,
-        shown.length + (tier === "mid" ? 1 : 0),
+        want,
         trySize,
-        occupied,
-        gap * 0.28,
+        localOcc,
+        Math.max(gap * 0.12, trySize * 0.04),
       );
-      const need = shown.length;
-      if (centers.length < need && tier === "deep") continue;
-      if (centers.length === 0) break;
+      if (centers.length === 0) continue;
 
       const placeN = Math.min(shown.length, centers.length);
       const trial: PlacedMini[] = [];
+      const trialOcc: Box[] = [];
       for (let i = 0; i < placeN; i++) {
         const c = centers[i]!;
         const mini = toMini(t.id, shown[i]!, c.x, c.y, trySize);
         if (!mini) continue;
-        occupied.push(groundedOccupancyBox(c.x, c.y, trySize));
+        trialOcc.push(groundedOccupancyBox(c.x, c.y, trySize * 0.55));
         trial.push(mini);
       }
       const leftover = sorted.length - placeN;
       if (leftover > 0 && centers[placeN]) {
         const c = centers[placeN]!;
         const moreSize = trySize * 0.85;
-        occupied.push(groundedOccupancyBox(c.x, c.y, moreSize));
+        trialOcc.push(groundedOccupancyBox(c.x, c.y, moreSize * 0.55));
         trial.push({
           key: `${t.id}:more`,
           territoryId: t.id,
@@ -334,61 +373,76 @@ export function layoutBuildingMinis(
           more: leftover,
         });
       } else if (leftover > 0 && trial.length === 1) {
-        // Single inland slot — show count on that chip rather than dropping peers.
         trial[0] = { ...trial[0]!, compact: true, count: sorted.length };
       }
-      if (trial.length) {
+      if (!trial.length) continue;
+      // Score: fill the set when land allows; otherwise keep chips readable
+      // (≥~24px / minReadable) instead of one oversized clump on the label.
+      const fullBonus = trial.length >= shown.length ? 70 : 0;
+      const readableBonus =
+        trySize >= minReadable ? 55 : trySize >= 5.0 ? 28 : trySize >= 4.5 ? 10 : 0;
+      const score = trial.length * 45 + fullBonus + readableBonus + trySize;
+      if (trial.length >= shown.length && trySize >= 5.0) {
+        for (const box of trialOcc) occupied.push(box);
         out.push(...trial);
         placed = true;
         break;
       }
+      if (!bestTrial || score > bestTrial.score) {
+        bestTrial = { minis: trial, occ: trialOcc, score };
+      }
+    }
+    if (!placed && bestTrial) {
+      for (const box of bestTrial.occ) occupied.push(box);
+      out.push(...bestTrial.minis);
+      placed = true;
     }
     if (placed) continue;
 
+    const before = localOcc.length;
     const compact = tryPlaceCompact(
       t,
       buildings,
-      Math.max(size * 0.85, 1.6),
+      Math.max(size * 0.85, 5.5),
       gap,
-      occupied,
+      localOcc,
     );
     if (compact) {
+      for (let i = before; i < localOcc.length; i++) occupied.push(localOcc[i]!);
       out.push(compact);
       continue;
     }
 
-    // Player bases must stay visible even when label keep-out fills the plot.
+    // Player bases must stay visible — still clear the country label.
     if (isPlayerBase) {
-      const forced = forcePlayerCompact(t, buildings, size, occupied);
-      if (forced) out.push(forced);
+      const forced = forcePlayerCompact(t, buildings, size, localOcc);
+      if (forced) {
+        occupied.push(groundedOccupancyBox(forced.x, forced.y, forced.size * 0.62));
+        out.push(forced);
+      }
     }
   }
 
   return out;
 }
 
-/** Last-resort chip for owned bases — inland land only (ignore label boxes). */
+/** Last-resort chip for owned bases — inland + label keep-out respected. */
 function forcePlayerCompact(
   t: TerritoryDef,
   buildings: PlacedBuilding[],
   size: number,
   occupied: Box[],
 ): PlacedMini | null {
-  let placeSize = Math.max(size, 5.5);
+  let placeSize = Math.max(size, 6.5);
   let slot: { x: number; y: number } | null = null;
-  for (const trySize of [placeSize, placeSize * 0.85, placeSize * 0.7, 4.2]) {
-    // Empty keep-out: only land constraint, so the chip still lands on-plot.
-    slot = claimInteriorSlot(t, trySize, [], trySize * 0.2);
+  for (const trySize of [placeSize, placeSize * 0.85, placeSize * 0.7, 5.0, 3.8]) {
+    slot = claimInteriorSlot(t, trySize, occupied, trySize * 0.18);
     if (slot) {
       placeSize = trySize;
       break;
     }
   }
-  if (!slot) {
-    const anchors = getTerritoryAnchors(t);
-    slot = anchors.pole;
-    placeSize = Math.min(placeSize, 4.5);
-  }
+  if (!slot) return null;
   occupied.push(groundedOccupancyBox(slot.x, slot.y, placeSize * 1.1));
   let spriteId = "building-nexus";
   try {

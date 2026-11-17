@@ -150,12 +150,16 @@ export function layoutUnitMinis(
   wantCompact?: (t: TerritoryDef, ts: TerritoryState | undefined) => boolean,
 ): PlacedUnitMini[] {
   const tier: MiniZoomTier = miniZoomTier(zoomScale);
-  const sizeScale = tier === "world" ? 0.62 : tier === "mid" ? 0.62 : 0.74;
-  const size = iconWorldSize(zoomScale, cam.w, tier) * sizeScale;
-  const gap = Math.max(0.55, size * 0.2);
-  // Hard label keep-out — garrison chips clear the country name.
-  const labelBoxes: Box[] = labels.map((l) => labelKeepOutBox(l, size));
-  const occupied: Box[] = [...labelBoxes, ...occupiedExtra];
+  // Match building readability (~2× prior); deep units stay ≥~24px on focus frames.
+  const sizeScale = tier === "world" ? 0.92 : tier === "mid" ? 0.95 : 1;
+  const size = Math.max(
+    tier === "deep" ? 5.2 : 0,
+    iconWorldSize(zoomScale, cam.w, tier) * sizeScale,
+  );
+  const gap = Math.max(1.0, size * 0.24);
+  // Peer occupancy from buildings / prior units. Each territory adds its own
+  // label keep-out so adjacent country names don't starve neighboring plots.
+  const occupied: Box[] = [...occupiedExtra];
   const out: PlacedUnitMini[] = [];
 
   const ranked = [...territories].sort((a, b) => b.area - a.area);
@@ -179,26 +183,47 @@ export function layoutUnitMinis(
       continue;
     }
 
+    const localOcc: Box[] = [
+      ...labels
+        .filter((l) => {
+          if (l.id === t.id) return true;
+          return Math.hypot(l.x - pole.x, l.y - pole.y) < size * 3.2 + l.w * 0.6;
+        })
+        .map((l) =>
+          labelKeepOutBox(
+            l,
+            l.id === t.id ? size : Math.min(size * 0.4, 2.8),
+          ),
+        ),
+      ...occupied,
+    ];
+
     const total = sorted.reduce((s, u) => s + u.count, 0);
     const compactOnly = Boolean(wantCompact?.(t, ts));
 
     const placeCompact = (chipSize: number) => {
-      const slot = claimInteriorSlot(t, chipSize, occupied, gap * 0.7);
-      const pt = slot ?? (isPlayer ? { x: pole.x, y: pole.y + chipSize * 0.45 } : null);
-      if (!pt) return false;
-      occupied.push(groundedOccupancyBox(pt.x, pt.y, chipSize));
-      const top = sorted[0]!;
-      const m = toMini(
-        `${t.id}:troops`,
-        top.unitId,
-        total,
-        pt.x,
-        pt.y,
-        chipSize,
-        { territoryId: t.id, compact: true, owner: ts?.owner },
-      );
-      if (m) out.push(m);
-      return true;
+      // Never fall back onto the label pole — keep-outs stay hard.
+      for (const trySize of [chipSize, chipSize * 0.85, chipSize * 0.7, 5.0, 4.2]) {
+        const pt = claimInteriorSlot(t, trySize, localOcc, gap * 0.55);
+        if (pt) {
+          const box = groundedOccupancyBox(pt.x, pt.y, trySize);
+          localOcc.push(box);
+          occupied.push(box);
+          const top = sorted[0]!;
+          const m = toMini(
+            `${t.id}:troops`,
+            top.unitId,
+            total,
+            pt.x,
+            pt.y,
+            trySize,
+            { territoryId: t.id, compact: true, owner: ts?.owner },
+          );
+          if (m) out.push(m);
+          return true;
+        }
+      }
+      return false;
     };
 
     if (tier === "world" || compactOnly) {
@@ -225,34 +250,69 @@ export function layoutUnitMinis(
     const shown = sorted.slice(0, maxShow);
     const moreCount = sorted.length - shown.length;
     const slotCount = shown.length + (moreCount > 0 ? 1 : 0);
-    const centers = claimInteriorCluster(
-      t,
-      slotCount,
+    const sizeTries = [
       size,
-      occupied,
-      gap * 0.5,
-    );
-
-    if (centers.length >= shown.length) {
-      for (let i = 0; i < shown.length; i++) {
+      size * 0.9,
+      size * 0.78,
+      Math.max(5.2, size * 0.62),
+      Math.max(4.6, size * 0.52),
+      Math.max(4.0, size * 0.45),
+    ];
+    let placed = false;
+    let best: {
+      centers: { x: number; y: number }[];
+      trySize: number;
+    } | null = null;
+    for (const trySize of sizeTries) {
+      const centers = claimInteriorCluster(
+        t,
+        slotCount,
+        trySize,
+        localOcc,
+        Math.max(gap * 0.2, trySize * 0.08),
+      );
+      if (!centers.length) continue;
+      if (
+        centers.length >= shown.length ||
+        (best && centers.length > best.centers.length) ||
+        !best
+      ) {
+        if (
+          !best ||
+          centers.length > best.centers.length ||
+          (centers.length === best.centers.length && trySize > best.trySize)
+        ) {
+          best = { centers, trySize };
+        }
+      }
+      if (centers.length >= shown.length) break;
+    }
+    if (best && best.centers.length > 0) {
+      const { centers, trySize } = best;
+      const placeN = Math.min(shown.length, centers.length);
+      for (let i = 0; i < placeN; i++) {
         const c = centers[i]!;
         const u = shown[i]!;
-        occupied.push(groundedOccupancyBox(c.x, c.y, size));
+        const box = groundedOccupancyBox(c.x, c.y, trySize * 0.55);
+        localOcc.push(box);
+        occupied.push(box);
         const m = toMini(
           `${t.id}:${u.unitId}`,
           u.unitId,
           u.count,
           c.x,
           c.y,
-          size,
+          trySize,
           { territoryId: t.id, owner: ts?.owner },
         );
         if (m) out.push(m);
       }
-      if (moreCount > 0 && centers[shown.length]) {
-        const c = centers[shown.length]!;
-        const moreSize = size * 0.85;
-        occupied.push(groundedOccupancyBox(c.x, c.y, moreSize));
+      if (moreCount > 0 && centers[placeN]) {
+        const c = centers[placeN]!;
+        const moreSize = trySize * 0.85;
+        const box = groundedOccupancyBox(c.x, c.y, moreSize * 0.55);
+        localOcc.push(box);
+        occupied.push(box);
         out.push({
           key: `${t.id}:more`,
           territoryId: t.id,
@@ -266,11 +326,13 @@ export function layoutUnitMinis(
           more: moreCount,
           owner: ts?.owner,
         });
+      } else if (moreCount > 0 && placeN === 1) {
+        const only = out[out.length - 1];
+        if (only) only.compact = true;
       }
-      continue;
+      placed = true;
     }
-
-    placeCompact(size * 0.85);
+    if (!placed) placeCompact(Math.max(size * 0.85, 5.0));
   }
 
   return out;

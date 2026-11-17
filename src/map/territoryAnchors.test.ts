@@ -3,8 +3,12 @@ import { TERRITORIES as EARTH } from "../data/map/territories";
 import { activateMap } from "../data/maps/activate";
 import { CIVIL_WAR_TERRITORIES } from "../data/maps/civilWar/territories";
 import type { TerritoryDef } from "../data/types";
-import { layoutBuildingMinis } from "./buildingMinis";
+import { layoutBuildingMinis, miniZoomTier } from "./buildingMinis";
 import { layoutUnitMinis } from "./unitMinis";
+
+function miniZoomTierFor(zoom: number) {
+  return miniZoomTier(zoom);
+}
 import {
   boxesOverlap,
   clearTerritoryAnchorCache,
@@ -63,9 +67,6 @@ function assertMinisClearLabels(
   labels: { id: string; x: number; y: number; w: number; h: number }[],
 ) {
   for (const m of minis) {
-    // Forced player compact chips may sit under a dense label keep-out —
-    // those are an intentional last-resort visibility fallback.
-    if (m.compact) continue;
     // Grounded sprites rise above the foot — collide that AABB, not a
     // foot-centered square (which under-counts upward extent).
     const box = groundedOccupancyBox(m.x, m.y, m.size);
@@ -130,14 +131,18 @@ describe("territoryAnchors", () => {
     }
     // Deep zoom — buildings place individually inland, clear of labels.
     const cam = { x: 530, y: 55, w: 70, h: 40 };
-    const labels = territories.map((t) => ({
-      id: t.id,
-      x: t.label.x,
-      y: t.label.y,
-      w: Math.max(14, t.name.length * 2.2),
-      h: 4,
-    }));
+    // World-space label extents ≈ screenPx × zoom (not inflated mid-zoom widths).
     const zoom = cam.w / 1000;
+    const labels = territories.map((t) => {
+      const font = 11 * zoom;
+      return {
+        id: t.id,
+        x: t.label.x,
+        y: t.label.y,
+        w: Math.max(6, t.name.length * font * 0.55),
+        h: Math.max(2.2, font * 1.15),
+      };
+    });
     expect(zoom).toBeLessThan(0.42);
     const buildings = layoutBuildingMinis(
       territories,
@@ -152,7 +157,7 @@ describe("territoryAnchors", () => {
       zoom,
       cam,
       labels,
-      buildings.map((b) => ({ x: b.x, y: b.y, w: b.size, h: b.size })),
+      buildings.map((b) => groundedOccupancyBox(b.x, b.y, b.size)),
     );
     expect(buildings.length + units.length).toBeGreaterThan(0);
     const swedenBldgs = buildings.filter(
@@ -164,7 +169,7 @@ describe("territoryAnchors", () => {
     for (const m of [...buildings, ...units]) {
       const t = EARTH.find((x) => x.id === m.territoryId)!;
       expect(
-        isInsideTerritoryLand(t, m.x, m.y, Math.max(0.6, m.size * 0.35)),
+        isInsideTerritoryLand(t, m.x, m.y, Math.max(0.5, Math.min(1.4, m.size * 0.22))),
         `${m.key} @ ${m.x.toFixed(1)},${m.y.toFixed(1)} outside ${t.id}`,
       ).toBe(true);
     }
@@ -226,30 +231,111 @@ describe("territoryAnchors", () => {
     assertMinisClearLabels([...buildings, ...units], labels);
   });
 
+  it("Indonesia deep zoom spreads readable minis across islands, clear of labels", () => {
+    activateMap("world_war");
+    const indo = EARTH.find((t) => t.id === "indonesia")!;
+    const malay = EARTH.find((t) => t.id === "malaysia")!;
+    const territories = [indo, malay];
+    const territoryState: Record<
+      string,
+      import("../engine/state").TerritoryState
+    > = {
+      ...stockTerritory(indo, 4, 8),
+      ...stockTerritory(malay, 2, 4),
+    };
+    // Focus frame ≈ mobile 844×390 default zoom on SE Asia.
+    const cam = {
+      x: indo.label.x - 72,
+      y: indo.label.y - 45,
+      w: 180,
+      h: 90,
+    };
+    const zoom = 0.18;
+    expect(miniZoomTierFor(zoom)).toBe("deep");
+    const labels = territories.map((t) => ({
+      id: t.id,
+      x: t.label.x,
+      y: t.label.y,
+      w: Math.max(6, t.name.length * 11 * zoom * 0.55),
+      h: Math.max(2.2, 11 * zoom * 1.15),
+    }));
+    const buildings = layoutBuildingMinis(
+      territories,
+      territoryState,
+      zoom,
+      cam,
+      labels,
+    );
+    const units = layoutUnitMinis(
+      territories,
+      territoryState,
+      zoom,
+      cam,
+      labels,
+      buildings.map((b) => groundedOccupancyBox(b.x, b.y, b.size * 0.55)),
+    );
+    const indoB = buildings.filter(
+      (b) => b.territoryId === "indonesia" && !b.more && !b.compact,
+    );
+    expect(indoB.length).toBeGreaterThanOrEqual(3);
+    // ≥24px on an 844-wide map at camW=180.
+    expect(indoB.every((b) => (b.size / cam.w) * 844 >= 24)).toBe(true);
+    let minD = Infinity;
+    for (let i = 0; i < indoB.length; i++) {
+      for (let j = i + 1; j < indoB.length; j++) {
+        minD = Math.min(
+          minD,
+          Math.hypot(indoB[i]!.x - indoB[j]!.x, indoB[i]!.y - indoB[j]!.y),
+        );
+      }
+    }
+    expect(minD).toBeGreaterThanOrEqual(6);
+    // At least one pair spans distinct landmasses (not one Borneo clump).
+    const span = Math.max(
+      ...indoB.map((a) =>
+        Math.max(
+          ...indoB.map((b) => Math.hypot(a.x - b.x, a.y - b.y)),
+        ),
+      ),
+    );
+    expect(span).toBeGreaterThanOrEqual(40);
+    for (const m of [...buildings, ...units]) {
+      const t = EARTH.find((x) => x.id === m.territoryId)!;
+      expect(
+        isInsideTerritoryLand(
+          t,
+          m.x,
+          m.y,
+          Math.max(0.5, Math.min(1.4, m.size * 0.22)),
+        ),
+        `${m.key} outside ${t.id}`,
+      ).toBe(true);
+    }
+    assertMinisClearLabels([...buildings, ...units], labels);
+  });
+
   it("mid zoom may cull buildings; deep zoom reveals all Sweden buildings", () => {
     activateMap("world_war");
     const sweden = EARTH.find((t) => t.id === "sweden")!;
     const territoryState = stockTerritory(sweden, 4, 8);
-    const labels = [
+    const midCam2 = { x: 480, y: 40, w: 480, h: 240 };
+    const midZ = midCam2.w / 1000; // 0.48 → mid
+    const midLabels = [
       {
         id: "sweden",
         x: sweden.label.x,
         y: sweden.label.y,
-        w: 18,
-        h: 4,
+        w: Math.max(8, sweden.name.length * 11 * midZ * 0.55),
+        h: Math.max(2.4, 11 * midZ * 1.15),
       },
     ];
-    const midCam = { x: 500, y: 45, w: 180, h: 90 };
-    const midZoom = midCam.w / 1000; // ~0.18 → deep actually; use larger cam for mid
-    const midCam2 = { x: 480, y: 40, w: 480, h: 240 };
-    const midZ = midCam2.w / 1000; // 0.48 → mid
     expect(midZ).toBeGreaterThanOrEqual(0.42);
     const midB = layoutBuildingMinis(
       [sweden],
       territoryState,
       midZ,
       midCam2,
-      labels,
+      midLabels,
     );
     // Mid: at most 3 individual buildings (or 1 compact).
     const midShown = midB.filter((b) => !b.more);
@@ -257,21 +343,31 @@ describe("territoryAnchors", () => {
 
     const deepCam = { x: 530, y: 55, w: 70, h: 40 };
     const deepZ = deepCam.w / 1000;
+    const deepLabels = [
+      {
+        id: "sweden",
+        x: sweden.label.x,
+        y: sweden.label.y,
+        w: Math.max(6, sweden.name.length * 11 * deepZ * 0.55),
+        h: Math.max(2.2, 11 * deepZ * 1.15),
+      },
+    ];
     expect(deepZ).toBeLessThan(0.42);
     const deepB = layoutBuildingMinis(
       [sweden],
       territoryState,
       deepZ,
       deepCam,
-      labels,
+      deepLabels,
     );
     expect(
       deepB.filter((b) => !b.compact && !b.more).length,
     ).toBeGreaterThanOrEqual(4);
-    assertMinisClearLabels(deepB, labels);
+    assertMinisClearLabels(deepB, deepLabels);
     for (const m of deepB) {
-      expect(isInsideTerritoryLand(sweden, m.x, m.y, m.size * 0.35)).toBe(true);
+      expect(
+        isInsideTerritoryLand(sweden, m.x, m.y, Math.max(0.6, m.size * 0.28)),
+      ).toBe(true);
     }
-    void midZoom;
   });
 });

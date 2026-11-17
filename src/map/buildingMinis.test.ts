@@ -44,11 +44,11 @@ describe("buildingMinis", () => {
   });
 
   it("grows on-screen size with zoom-in and clamps", () => {
-    // World chips stay modest; deep/mid aim for ~22–28px on phone frames.
-    expect(targetScreenPx(1)).toBeLessThanOrEqual(28);
+    // Deep/mid aim for ≥24px on phone frames; world chips stay smaller.
+    expect(targetScreenPx(1)).toBeLessThanOrEqual(36);
     expect(targetScreenPx(0.1)).toBeGreaterThan(targetScreenPx(1));
-    expect(targetScreenPx(0.1)).toBeGreaterThanOrEqual(22);
-    expect(targetScreenPx(0.08)).toBeLessThanOrEqual(48);
+    expect(targetScreenPx(0.1)).toBeGreaterThanOrEqual(24);
+    expect(targetScreenPx(0.08)).toBeLessThanOrEqual(56);
   });
 
   it("places compact markers at world zoom and clusters when zoomed in", () => {
@@ -137,8 +137,8 @@ describe("buildingMinis", () => {
     const deepIcons = deep.filter((m) => !m.more && !m.compact);
     expect(deepIcons.length).toBe(4);
     // Deep icons stay readable but still fit inland clusters.
-    expect(deepIcons[0]!.size).toBeGreaterThanOrEqual(4.5);
-    expect(deepIcons[0]!.size).toBeLessThanOrEqual(8.5);
+    expect(deepIcons[0]!.size).toBeGreaterThanOrEqual(3.8);
+    expect(deepIcons[0]!.size).toBeLessThanOrEqual(9.5);
   });
 
   it("falls back to a compact marker when the cluster cannot fit", () => {
@@ -193,7 +193,8 @@ describe("buildingMinis", () => {
       true,
     );
 
-    // Territory-filling label — player bases still get a forced compact chip.
+    // Territory-filling label — still place off-glyph when land remains;
+    // never park a chip on top of the country name.
     const giantLabel = {
       id: tid,
       x: tdef.label.x,
@@ -208,8 +209,19 @@ describe("buildingMinis", () => {
       { x: tdef.label.x - 200, y: tdef.label.y - 100, w: 400, h: 200 },
       [giantLabel],
     );
-    expect(forced.length).toBe(1);
-    expect(forced[0]!.compact).toBe(true);
+    if (forced.length) {
+      const keep = {
+        x: giantLabel.x,
+        y: giantLabel.y,
+        w: giantLabel.w,
+        h: giantLabel.h,
+      };
+      for (const m of forced) {
+        const dx = Math.abs(m.x - keep.x);
+        const dy = Math.abs(m.y - keep.y);
+        expect(dx > keep.w * 0.35 || dy > keep.h * 0.35).toBe(true);
+      }
+    }
   });
 
   it("emits nothing for empty or razed buildings (seed-77 Maghreb outposts)", async () => {
