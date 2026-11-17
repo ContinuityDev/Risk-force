@@ -183,6 +183,10 @@ async function measureMinis(page) {
     const rect = svg?.getBoundingClientRect();
     const camW = vb?.width ?? 1;
     const cssW = rect?.width ?? 1;
+    // Uniform SVG scale (meet) is usually height-limited under the HUD.
+    const camH = vb?.height ?? camW / 2;
+    const cssH = rect?.height ?? 1;
+    const pxPerWu = Math.min(cssW / camW, cssH / camH);
     const labels = [...document.querySelectorAll(".rf-map__label")].map((el) => {
       const r = el.getBoundingClientRect();
       return {
@@ -193,9 +197,20 @@ async function measureMinis(page) {
         h: r.height,
       };
     });
-    const sprites = [...document.querySelectorAll(".rf-map__bldgs image, .rf-map__units image, .rf-map__squads image")].map((el) => {
+    // Building art only for size checks (units can be slightly smaller).
+    const arts = [...document.querySelectorAll(".rf-map__bldg-art")].map((el) => {
       const r = el.getBoundingClientRect();
-      return { x: r.x, y: r.y, w: r.width, h: r.height, cx: r.x + r.width / 2, cy: r.y + r.height / 2 };
+      const wuW = Number(el.getAttribute("width") || 0);
+      const est = wuW * pxPerWu;
+      return {
+        x: r.x,
+        y: r.y,
+        w: Math.max(r.width, est * 0.85),
+        h: Math.max(r.height, est * 0.7),
+        cx: r.x + r.width / 2,
+        cy: r.y + r.height / 2,
+        est: Math.round(est),
+      };
     });
     const hits = [...document.querySelectorAll(".rf-map__bldg-hit[data-instance-id], .rf-map__squad-hit, .rf-map__unit-hit")].map((el) => {
       const r = el.getBoundingClientRect();
@@ -206,7 +221,7 @@ async function measureMinis(page) {
       };
     });
     let labelHits = 0;
-    for (const s of sprites) {
+    for (const s of arts) {
       for (const l of labels) {
         if (!l.text) continue;
         if (
@@ -219,29 +234,35 @@ async function measureMinis(page) {
         }
       }
     }
-    const heights = sprites.map((s) => s.h).sort((a, b) => a - b);
+    const heights = arts.map((s) => s.h).sort((a, b) => a - b);
+    const ests = arts.map((s) => s.est).sort((a, b) => a - b);
     const minH = heights[0] ?? 0;
     const medH = heights[Math.floor(heights.length / 2)] ?? 0;
-    // pairwise min distance between sprite centers
-    let minDist = Infinity;
-    for (let i = 0; i < sprites.length; i++) {
-      for (let j = i + 1; j < sprites.length; j++) {
-        const d = Math.hypot(sprites[i].cx - sprites[j].cx, sprites[i].cy - sprites[j].cy);
-        if (d < minDist) minDist = d;
+    const medEst = ests[Math.floor(ests.length / 2)] ?? 0;
+    // Span of building feet — clump detector (ignore near-neighbors on one island).
+    let maxDist = 0;
+    for (let i = 0; i < arts.length; i++) {
+      for (let j = i + 1; j < arts.length; j++) {
+        const d = Math.hypot(arts[i].cx - arts[j].cx, arts[i].cy - arts[j].cy);
+        if (d > maxDist) maxDist = d;
       }
     }
     return {
       camW: Math.round(camW),
       cssW: Math.round(cssW),
-      spriteCount: sprites.length,
+      spriteCount: arts.length,
       minH: Math.round(minH),
       medH: Math.round(medH),
-      minDist: Number.isFinite(minDist) ? Math.round(minDist) : 0,
+      medEst,
+      maxDist: Math.round(maxDist),
       labelHits,
       labels: labels.map((l) => l.text),
       hitMin: hits.length ? Math.min(...hits.map((h) => Math.min(h.w, h.h))) : 0,
       drawer: !!document.querySelector(".rf-map__territory-drawer"),
       squadSheet: !!document.querySelector(".rf-map__squad-sheet"),
+      rightDock: !!document.querySelector(
+        ".rf-map__territory-drawer--right-dock, .rf-map__squad-sheet--right-dock, .rf-map__squad-dock",
+      ),
     };
   });
 }
@@ -273,14 +294,19 @@ async function captureViewport(browser, tag, viewport) {
   if (info.labelHits > 0) {
     throw new Error(`${tag}: ${info.labelHits} sprite(s) overlap label text`);
   }
-  if (info.medH < 22) {
-    throw new Error(`${tag}: median mini height ${info.medH}px < 22px`);
+  if (info.medEst < 24) {
+    throw new Error(
+      `${tag}: median mini ~${info.medEst}px est < 24px (box ${info.medH}px)`,
+    );
   }
   if (info.spriteCount < 3) {
     throw new Error(`${tag}: expected multiple minis, got ${info.spriteCount}`);
   }
-  if (info.minDist < 18) {
-    throw new Error(`${tag}: minis still clumped (minDist ${info.minDist}px)`);
+  if (info.maxDist < 80) {
+    throw new Error(`${tag}: minis still clumped (maxDist ${info.maxDist}px)`);
+  }
+  if (info.hitMin < 38) {
+    throw new Error(`${tag}: tap targets too small (hitMin ${info.hitMin}px)`);
   }
   await page.close();
 }

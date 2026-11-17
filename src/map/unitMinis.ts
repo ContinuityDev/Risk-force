@@ -150,10 +150,10 @@ export function layoutUnitMinis(
   wantCompact?: (t: TerritoryDef, ts: TerritoryState | undefined) => boolean,
 ): PlacedUnitMini[] {
   const tier: MiniZoomTier = miniZoomTier(zoomScale);
-  // Match building readability (~2× prior); deep units stay ≥~24px on focus frames.
-  const sizeScale = tier === "world" ? 0.92 : tier === "mid" ? 0.95 : 1;
+  // Match building readability; deep units track the ≥24px focus-frame floor.
+  const sizeScale = tier === "world" ? 0.92 : tier === "mid" ? 0.95 : 0.92;
   const size = Math.max(
-    tier === "deep" ? 5.2 : 0,
+    tier === "deep" ? 7.0 : 0,
     iconWorldSize(zoomScale, cam.w, tier) * sizeScale,
   );
   const gap = Math.max(1.0, size * 0.24);
@@ -187,12 +187,12 @@ export function layoutUnitMinis(
       ...labels
         .filter((l) => {
           if (l.id === t.id) return true;
-          return Math.hypot(l.x - pole.x, l.y - pole.y) < size * 3.2 + l.w * 0.6;
+          return Math.hypot(l.x - pole.x, l.y - pole.y) < size * 2.2 + l.w * 0.55;
         })
         .map((l) =>
           labelKeepOutBox(
             l,
-            l.id === t.id ? size : Math.min(size * 0.4, 2.8),
+            l.id === t.id ? size : Math.min(size * 0.35, 2.4),
           ),
         ),
       ...occupied,

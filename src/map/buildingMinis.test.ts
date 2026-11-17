@@ -138,7 +138,7 @@ describe("buildingMinis", () => {
     expect(deepIcons.length).toBe(4);
     // Deep icons stay readable but still fit inland clusters.
     expect(deepIcons[0]!.size).toBeGreaterThanOrEqual(3.8);
-    expect(deepIcons[0]!.size).toBeLessThanOrEqual(9.5);
+    expect(deepIcons[0]!.size).toBeLessThanOrEqual(11.5);
   });
 
   it("falls back to a compact marker when the cluster cannot fit", () => {

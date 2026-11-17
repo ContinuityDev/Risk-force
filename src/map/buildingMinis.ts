@@ -128,12 +128,14 @@ export function iconWorldSize(
   camW: number,
   tier: MiniZoomTier,
 ): number {
-  // ~2× prior mobile sizes. At focus camW≈180 on ~844px map: deep ≈28–36px.
+  // Target ≥24px on mobile landscape focus frames. Map CSS is often
+  // height-limited (≈844×300 under the HUD), so scale ≈ camH-limited
+  // (~3.3px/wu at camW=180) — need ≥~7.5wu paint, not camW/width alone.
   const frac =
     tier === "deep" ? 0.055 : tier === "mid" ? 0.042 : 0.026;
   const raw = camW * frac;
-  const min = tier === "deep" ? 6.5 : tier === "mid" ? 5.2 : 4.5;
-  const max = tier === "deep" ? 9.5 : tier === "mid" ? 7.5 : 6.2;
+  const min = tier === "deep" ? 8.2 : tier === "mid" ? 6.0 : 4.5;
+  const max = tier === "deep" ? 11.5 : tier === "mid" ? 8.2 : 6.2;
   void zoomScale;
   return Math.min(max, Math.max(min, raw));
 }
@@ -255,19 +257,19 @@ export function layoutBuildingMinis(
       continue;
     }
 
-    // Own name is hard. Nearby foreign names use a glyph-tight keep-out so
-    // shared coastlines (Borneo) don't erase every inland slot, while Civil
-    // War neighbors still refuse to cover each other's text.
+    // Own name is hard. Nearby foreign names get a glyph-tight keep-out
+    // (not every label in the camera — that starved Indonesia under Thailand
+    // / Vietnam padding).
     const localOcc: Box[] = [
       ...labels
         .filter((l) => {
           if (l.id === t.id) return true;
-          return Math.hypot(l.x - pole.x, l.y - pole.y) < size * 3.2 + l.w * 0.6;
+          return Math.hypot(l.x - pole.x, l.y - pole.y) < size * 2.2 + l.w * 0.55;
         })
         .map((l) =>
           labelKeepOutBox(
             l,
-            l.id === t.id ? size : Math.min(size * 0.4, 2.8),
+            l.id === t.id ? size : Math.min(size * 0.35, 2.4),
           ),
         ),
       ...occupied,
@@ -315,21 +317,18 @@ export function layoutBuildingMinis(
     // Prefer a spread of readable icons (≥24px on 844 focus frames) over a
     // single oversized chip parked by the label.
     const paintSize = size;
-    // ≥24px on 844×390 focus frames ≈ 5.1wu at camW=180; prefer that floor.
-    const minReadable = Math.max(5.5, paintSize * 0.58);
+    // ≥24px on height-limited 844×390 map ≈ 7.8wu at focus scale ~3.3px/wu.
+    const minReadable = Math.max(7.8, paintSize * 0.78);
     const sizeTries =
       tier === "deep"
         ? [
             paintSize,
             paintSize * 0.92,
-            paintSize * 0.82,
-            paintSize * 0.72,
+            paintSize * 0.85,
             minReadable,
-            Math.max(5.2, paintSize * 0.55),
-            Math.max(4.6, paintSize * 0.48),
-            Math.max(4.0, paintSize * 0.42),
+            Math.max(6.6, paintSize * 0.7),
           ]
-        : [paintSize, paintSize * 0.88, paintSize * 0.75, minReadable, Math.max(4.2, paintSize * 0.55)];
+        : [paintSize, paintSize * 0.88, paintSize * 0.75, minReadable, Math.max(5.2, paintSize * 0.65)];
     let placed = false;
     let bestTrial: { minis: PlacedMini[]; occ: Box[]; score: number } | null =
       null;
@@ -376,13 +375,20 @@ export function layoutBuildingMinis(
         trial[0] = { ...trial[0]!, compact: true, count: sorted.length };
       }
       if (!trial.length) continue;
-      // Score: fill the set when land allows; otherwise keep chips readable
-      // (≥~24px / minReadable) instead of one oversized clump on the label.
-      const fullBonus = trial.length >= shown.length ? 70 : 0;
+      // Score: ≥~24px (5.0–5.5wu on focus frames) beats stuffing every
+      // building at ~4wu; full sets still win when they stay readable.
+      // Never let a full set of tiny chips beat a readable spread.
+      const fullBonus =
+        trial.length >= shown.length
+          ? trySize >= minReadable
+            ? 100
+            : 20
+          : 0;
       const readableBonus =
-        trySize >= minReadable ? 55 : trySize >= 5.0 ? 28 : trySize >= 4.5 ? 10 : 0;
-      const score = trial.length * 45 + fullBonus + readableBonus + trySize;
-      if (trial.length >= shown.length && trySize >= 5.0) {
+        trySize >= minReadable ? 220 : trySize >= 6.6 ? 50 : 0;
+      const score = trial.length * 25 + fullBonus + readableBonus + trySize;
+      // Full readable set — done.
+      if (trial.length >= shown.length && trySize >= minReadable) {
         for (const box of trialOcc) occupied.push(box);
         out.push(...trial);
         placed = true;

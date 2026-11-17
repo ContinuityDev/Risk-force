@@ -137,15 +137,16 @@ export function groundedUnitFootprint(
         }
       : null,
     progressBar: null,
+    // Match building hit budget so unit chips stay ≥40px on focus frames.
     hit: (() => {
-      const pad = Math.max(s * 0.65, 3.0);
-      const top = spriteY * scaleY - pad * 0.1;
-      const bottom = shadow.cy + shadow.ry + pad * 0.3;
+      const pad = Math.max(s * 0.95, 6.4);
+      const top = spriteY * scaleY - pad * 0.25;
+      const bottom = shadow.cy + shadow.ry + pad * 0.5;
       return {
         x: -pad,
         y: top,
         w: pad * 2,
-        h: Math.max(pad * 1.55, bottom - top),
+        h: Math.max(pad * 2, bottom - top, 12.2),
       };
     })(),
   };
@@ -212,16 +213,16 @@ export function groundedBuildingFootprint(
             h: barH,
           }
         : null,
-    // Generous tap target (~40px on typical mobile frames) without growing art.
+    // ≥40px taps on height-limited mobile maps (scale ≈3.3px/wu at focus).
     hit: (() => {
-      const pad = Math.max(s * 0.7, 3.2);
-      const top = spriteY * scaleY - pad * 0.15;
-      const bottom = shadow.cy + shadow.ry + pad * 0.35;
+      const pad = Math.max(s * 0.95, 6.4);
+      const top = spriteY * scaleY - pad * 0.25;
+      const bottom = shadow.cy + shadow.ry + pad * 0.5;
       return {
         x: -pad,
         y: top,
         w: pad * 2,
-        h: Math.max(pad * 1.6, bottom - top),
+        h: Math.max(pad * 2, bottom - top, 12.2),
       };
     })(),
   };

@@ -533,7 +533,7 @@ export function claimInteriorCluster(
   const localOcc = [...occupied];
   // Peer spacing is tighter than the painted sprite so readable minis can
   // fan across skinny land; label keep-outs in `occupied` stay full-size.
-  const peerSize = Math.max(size * 0.4, Math.min(size * 0.58, 4.4));
+  const peerSize = Math.max(size * 0.34, Math.min(size * 0.5, 3.8));
   for (let i = 0; i < count; i++) {
     const p = claimInteriorSlot(t, size, localOcc, pad);
     if (!p) break;

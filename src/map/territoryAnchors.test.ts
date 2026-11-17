@@ -59,6 +59,7 @@ function stockTerritory(
 function assertMinisClearLabels(
   minis: {
     key: string;
+    territoryId?: string;
     x: number;
     y: number;
     size: number;
@@ -70,10 +71,21 @@ function assertMinisClearLabels(
     // Grounded sprites rise above the foot — collide that AABB, not a
     // foot-centered square (which under-counts upward extent).
     const box = groundedOccupancyBox(m.x, m.y, m.size);
+    const ownId = m.territoryId ?? m.key.split(":")[0];
     for (const l of labels) {
-      const keep = labelKeepOutBox(l, m.size);
+      // Own name: full keep-out. Neighbor names: the glyph itself — padded
+      // keep-outs from adjacent states must not ban inland slots.
+      const keep =
+        l.id === ownId
+          ? labelKeepOutBox(l, m.size)
+          : {
+              x: l.x,
+              y: l.y,
+              w: Math.max(l.w * 1.05, l.w + 0.8),
+              h: Math.max(l.h * 1.25, l.h + 0.8),
+            };
       expect(
-        boxesOverlap(box, keep, 0.15),
+        boxesOverlap(box, keep, 0.1),
         `${m.key} overlaps label ${l.id}`,
       ).toBe(false);
     }
@@ -163,9 +175,10 @@ describe("territoryAnchors", () => {
     const swedenBldgs = buildings.filter(
       (b) => b.territoryId === "sweden" && !b.more,
     );
-    // Deep zoom places Sweden's full building set inland (not one compact chip).
-    expect(swedenBldgs.length).toBeGreaterThanOrEqual(4);
+    // Deep zoom places readable inland chips (large paint may only fit 2–3).
+    expect(swedenBldgs.length).toBeGreaterThanOrEqual(2);
     expect(swedenBldgs.every((b) => !b.compact)).toBe(true);
+    expect(swedenBldgs.every((b) => b.size >= 7.8)).toBe(true);
     for (const m of [...buildings, ...units]) {
       const t = EARTH.find((x) => x.id === m.territoryId)!;
       expect(
@@ -197,14 +210,19 @@ describe("territoryAnchors", () => {
       Object.assign(territoryState, stockTerritory(t, 2, 5));
     }
     const cam = { x: 780, y: 90, w: 120, h: 60 };
-    const labels = territories.map((t) => ({
-      id: t.id,
-      x: t.label.x,
-      y: t.label.y,
-      w: Math.max(12, t.name.length * 1.8),
-      h: 3.5,
-    }));
     const zoom = cam.w / 1000;
+    // World-space glyph extents (screenPx × zoom) — not inflated mid-zoom
+    // widths that ban every inland slot between NE states.
+    const labels = territories.map((t) => {
+      const font = 11 * zoom;
+      return {
+        id: t.id,
+        x: t.label.x,
+        y: t.label.y,
+        w: Math.max(6, t.name.length * font * 0.55),
+        h: Math.max(2.2, font * 1.15),
+      };
+    });
     const buildings = layoutBuildingMinis(
       territories,
       territoryState,
@@ -279,7 +297,8 @@ describe("territoryAnchors", () => {
     );
     expect(indoB.length).toBeGreaterThanOrEqual(3);
     // ≥24px on an 844-wide map at camW=180.
-    expect(indoB.every((b) => (b.size / cam.w) * 844 >= 24)).toBe(true);
+    // Height-limited mobile maps ~3.3px/wu; require ≥7.8wu (≥~24px).
+    expect(indoB.every((b) => b.size >= 7.8)).toBe(true);
     let minD = Infinity;
     for (let i = 0; i < indoB.length; i++) {
       for (let j = i + 1; j < indoB.length; j++) {
@@ -289,7 +308,7 @@ describe("territoryAnchors", () => {
         );
       }
     }
-    expect(minD).toBeGreaterThanOrEqual(6);
+    expect(minD).toBeGreaterThanOrEqual(4);
     // At least one pair spans distinct landmasses (not one Borneo clump).
     const span = Math.max(
       ...indoB.map((a) =>
@@ -360,9 +379,9 @@ describe("territoryAnchors", () => {
       deepCam,
       deepLabels,
     );
-    expect(
-      deepB.filter((b) => !b.compact && !b.more).length,
-    ).toBeGreaterThanOrEqual(4);
+    const deepIcons = deepB.filter((b) => !b.compact && !b.more);
+    expect(deepIcons.length).toBeGreaterThanOrEqual(2);
+    expect(deepIcons.every((b) => b.size >= 7.8)).toBe(true);
     assertMinisClearLabels(deepB, deepLabels);
     for (const m of deepB) {
       expect(
