@@ -298,8 +298,14 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const [mapBuildingMode, setMapBuildingMode] =
     useState<BuildingPopoverMode>("menu");
   const [squadDockOpen, setSquadDockOpen] = useState(false);
+  /** Skip one sheet reset when a map building tap also selects the territory. */
+  const skipSheetResetRef = useRef(false);
   useEffect(() => {
     setOpsMode(null);
+    if (skipSheetResetRef.current) {
+      skipSheetResetRef.current = false;
+      return;
+    }
     // Short landscape: open straight on the buildings list so the sheet
     // is not just a Buildings label above the fold.
     setSheetSection(shortLandscape ? "buildings" : "overview");
@@ -568,8 +574,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     if (!humanId) return [];
     const tier = miniZoomTier(deferredCam.w / OCEAN_VIEW.w);
     const size = Math.max(
-      6.5,
-      iconWorldSize(deferredCam.w / OCEAN_VIEW.w, deferredCam.w, tier) * 1.35,
+      9,
+      iconWorldSize(deferredCam.w / OCEAN_VIEW.w, deferredCam.w, tier) * 1.7,
     );
     const out: PlacedSquadMarker[] = [];
     const byId = Object.fromEntries(TERRITORIES.map((t) => [t.id, t]));
@@ -985,6 +991,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               type: "SELECT_SQUAD",
               payload: { squadId: null },
             });
+            // Preserve building menu across the territory-select sheet reset.
+            if (bTid !== selectedIdRef.current) {
+              skipSheetResetRef.current = true;
+            }
             dispatch({
               type: "SELECT_TERRITORY",
               payload: { territoryId: bTid },
@@ -1007,7 +1017,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
               top,
             });
             setMapBuildingMode("menu");
-            setSheetSection(shortLandscape ? "building" : "buildings");
+            // Always open the building menu inside the right panel.
+            setSheetSection("building");
           } else if (g.pendingSquadId) {
             const sid = g.pendingSquadId;
             dispatch({
@@ -2192,7 +2203,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       </button>
 
       <Drawer
-        open={legendOpen}
+        /* Desktop uses the collapsible legend aside — never mount the
+           full-screen backdrop Drawer there or it blocks map mini taps. */
+        open={legendOpen && shortLandscape}
         onClose={() => setLegendOpen(false)}
         side="left"
         className="rf-map__legend-drawer"
@@ -2224,9 +2237,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
 
       <Drawer
         open={
-          Boolean(selected) &&
-          !state.selectedSquadId &&
-          (shortLandscape ? detailOpen : true)
+          Boolean(selected) && !state.selectedSquadId && detailOpen
         }
         onClose={() => {
           setDetailOpen(false);
@@ -2241,40 +2252,53 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         }}
         side="right"
         inline
-        className={`rf-map__territory-drawer${
-          shortLandscape ? " rf-map__territory-drawer--sheet" : ""
-        }${
-          shortLandscape &&
-          (sheetSection === "building" ||
-            sheetSection === "create" ||
-            sheetSection === "buildings")
-            ? " rf-map__territory-drawer--sheet-tall"
-            : ""
-        }`}
+        className="rf-map__territory-drawer rf-map__territory-drawer--right-dock"
         tutorialId="territory-sheet"
       >
         {selected && (
           <>
             <header className="rf-map__sheet-head">
               <div>
-                <span className="rf-label">Selected</span>
+                {sheetSection === "building" ? (
+                  <button
+                    type="button"
+                    className="ghost rf-map__sheet-back"
+                    data-testid="territory-sheet-back"
+                    aria-label="Back to buildings"
+                    onClick={() => {
+                      setMapBuildingMenu(null);
+                      setMapBuildingMode("menu");
+                      setSheetSection(
+                        shortLandscape ? "buildings" : "overview",
+                      );
+                    }}
+                  >
+                    ← Buildings
+                  </button>
+                ) : (
+                  <span className="rf-label">Selected</span>
+                )}
                 <h3 className="rf-map__sheet-title">{selected.name}</h3>
               </div>
-              {shortLandscape && (
-                <button
-                  type="button"
-                  className="ghost rf-map__sheet-close"
-                  data-testid="territory-sheet-close"
-                  aria-label="Close territory sheet"
-                  onClick={() => {
-                    setDetailOpen(false);
-                    setMapBuildingMenu(null);
-                    setSheetSection("overview");
-                  }}
-                >
-                  ×
-                </button>
-              )}
+              <button
+                type="button"
+                className="ghost rf-map__sheet-close"
+                data-testid="territory-sheet-close"
+                aria-label="Close territory sheet"
+                onClick={() => {
+                  setDetailOpen(false);
+                  setMapBuildingMenu(null);
+                  setSheetSection("overview");
+                  if (!shortLandscape) {
+                    dispatch({
+                      type: "SELECT_TERRITORY",
+                      payload: { territoryId: null },
+                    });
+                  }
+                }}
+              >
+                ×
+              </button>
             </header>
             {selectedIsEnemy && humanId && (
               <div className="rf-map__ops" data-tutorial="enemy-ops">
@@ -2479,11 +2503,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                       setMapBuildingMode("menu");
                       // On short landscape, replace sheet content so the
                       // popover is never clipped under the sheet.
-                      if (shortLandscape) {
-                        setSheetSection("building");
-                      } else {
-                        setSheetSection("buildings");
-                      }
+                      setSheetSection("building");
                     }}
                   />
                 </section>
@@ -2761,9 +2781,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
 
       {humanId && state.selectedSquadId && state.players[humanId] && (
         <div
-          className={`rf-map__squad-sheet${
-            shortLandscape ? " rf-map__squad-sheet--bottom" : ""
-          }`}
+          className="rf-map__squad-sheet rf-map__squad-sheet--right-dock"
           data-testid="map-squad-sheet"
         >
           <SquadsView
@@ -2782,37 +2800,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         </div>
       )}
 
-      {/* Floating popover only when not already embedded in the territory sheet. */}
-      {mapBuildingMenu &&
-        sheetSection !== "building" &&
-        state.players[humanId ?? ""] &&
-        (() => {
-          const inst = state.territories[
-            mapBuildingMenu.territoryId
-          ]?.buildings.find((b) => b.instanceId === mapBuildingMenu.instanceId);
-          if (!inst) return null;
-          return (
-            <BuildingActionPopover
-              state={state}
-              activePlayer={state.players[humanId!]!}
-              territoryId={mapBuildingMenu.territoryId}
-              instance={inst}
-              canAct={
-                state.playerOrder[state.activePlayerIndex] === humanId &&
-                state.phase === "play"
-              }
-              left={mapBuildingMenu.left}
-              top={mapBuildingMenu.top}
-              mode={mapBuildingMode}
-              onMode={setMapBuildingMode}
-              onClose={() => {
-                setMapBuildingMenu(null);
-                setMapBuildingMode("menu");
-              }}
-              dispatch={dispatch}
-            />
-          );
-        })()}
+      {/* Building menus always embed in the right territory panel — no floating popover. */}
     </div>
   );
 }

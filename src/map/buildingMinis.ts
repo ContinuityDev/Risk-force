@@ -128,15 +128,13 @@ export function iconWorldSize(
   camW: number,
   tier: MiniZoomTier,
 ): number {
-  // Fraction of the visible camera width → roughly constant*growing screen px
+  // Fraction of the visible camera width → roughly constant*growing screen px.
+  // ~1.6–2× prior mobile sizes; deep/mid aim for ~22–28px on phone frames.
   const frac =
-    tier === "deep" ? 0.048 : tier === "mid" ? 0.034 : 0.013;
+    tier === "deep" ? 0.055 : tier === "mid" ? 0.038 : 0.02;
   const raw = camW * frac;
-  // Hard clamps — deep zoom stays small enough to fit a full building cluster
-  // inland beside the country label (e.g. 4 on Sweden with upright sprites).
-  // Keep grounded minis readable on 844×390 without blowing inland clusters.
-  const min = tier === "deep" ? 4.0 : tier === "mid" ? 3.2 : 2.0;
-  const max = tier === "deep" ? 7.0 : tier === "mid" ? 5.5 : 3.6;
+  const min = tier === "deep" ? 5.2 : tier === "mid" ? 3.8 : 3.2;
+  const max = tier === "deep" ? 8.5 : tier === "mid" ? 6.2 : 5.4;
   void zoomScale;
   return Math.min(max, Math.max(min, raw));
 }
@@ -198,10 +196,12 @@ function tryPlaceCompact(
   } catch {
     /* */
   }
+  const top = sortBuildings(buildings)[0]!;
   return {
     key: `${t.id}:compact`,
     territoryId: t.id,
-    buildingId: "command_nexus",
+    buildingId: top.buildingId,
+    instanceId: top.instanceId,
     spriteId,
     spriteUrl: getSpriteUrl(spriteId),
     x: slot.x,
@@ -259,14 +259,10 @@ export function layoutBuildingMinis(
       // Player bases keep a compact building chip even at world zoom so the
       // map always shows something to tap; quiet neutrals stay bare.
       if (isPlayerBase) {
+        const chip = Math.max(size * 1.7, 6.5);
         const compact =
-          tryPlaceCompact(
-            t,
-            buildings,
-            Math.max(size * 1.35, 2.6),
-            gap,
-            occupied,
-          ) ?? forcePlayerCompact(t, buildings, Math.max(size * 1.35, 2.6), occupied);
+          tryPlaceCompact(t, buildings, chip, gap, occupied) ??
+          forcePlayerCompact(t, buildings, chip, occupied);
         if (compact) out.push(compact);
       }
       continue;
@@ -371,52 +367,46 @@ export function layoutBuildingMinis(
   return out;
 }
 
-/** Last-resort chip for owned bases — prefer inland pole, ignore label boxes. */
+/** Last-resort chip for owned bases — inland land only (ignore label boxes). */
 function forcePlayerCompact(
   t: TerritoryDef,
   buildings: PlacedBuilding[],
   size: number,
   occupied: Box[],
 ): PlacedMini | null {
-  const anchors = getTerritoryAnchors(t);
-  const candidates = [
-    { x: anchors.pole.x, y: anchors.pole.y + size * 0.55 },
-    { x: anchors.pole.x, y: anchors.pole.y },
-    { x: anchors.pole.x + size * 0.4, y: anchors.pole.y + size * 0.35 },
-    { x: anchors.pole.x - size * 0.4, y: anchors.pole.y + size * 0.35 },
-  ];
-  // Prefer a free slot; otherwise park on the pole anyway.
-  let pt = candidates[0]!;
-  for (const c of candidates) {
-    const box = groundedOccupancyBox(c.x, c.y, size);
-    const hits = occupied.some(
-      (o) =>
-        box.x < o.x + o.w &&
-        box.x + box.w > o.x &&
-        box.y < o.y + o.h &&
-        box.y + box.h > o.y,
-    );
-    if (!hits) {
-      pt = c;
+  let placeSize = Math.max(size, 5.5);
+  let slot: { x: number; y: number } | null = null;
+  for (const trySize of [placeSize, placeSize * 0.85, placeSize * 0.7, 4.2]) {
+    // Empty keep-out: only land constraint, so the chip still lands on-plot.
+    slot = claimInteriorSlot(t, trySize, [], trySize * 0.2);
+    if (slot) {
+      placeSize = trySize;
       break;
     }
   }
-  occupied.push(groundedOccupancyBox(pt.x, pt.y, size * 1.1));
+  if (!slot) {
+    const anchors = getTerritoryAnchors(t);
+    slot = anchors.pole;
+    placeSize = Math.min(placeSize, 4.5);
+  }
+  occupied.push(groundedOccupancyBox(slot.x, slot.y, placeSize * 1.1));
   let spriteId = "building-nexus";
   try {
     spriteId = getBuilding(sortBuildings(buildings)[0]!.buildingId).sprite.id;
   } catch {
     /* */
   }
+  const top = sortBuildings(buildings)[0]!;
   return {
     key: `${t.id}:compact`,
     territoryId: t.id,
-    buildingId: "command_nexus",
+    buildingId: top.buildingId,
+    instanceId: top.instanceId,
     spriteId,
     spriteUrl: getSpriteUrl(spriteId),
-    x: pt.x,
-    y: pt.y,
-    size: Math.max(size, 3.2),
+    x: slot.x,
+    y: slot.y,
+    size: placeSize,
     constructing: false,
     progress: 1,
     compact: true,

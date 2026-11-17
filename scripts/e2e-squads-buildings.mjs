@@ -128,6 +128,7 @@ async function stockHome(page) {
           },
           selectedTerritoryId: home,
           message: null,
+          newsDigest: null,
           squads: [],
           selectedSquadId: null,
         },
@@ -135,6 +136,30 @@ async function stockHome(page) {
     });
     return { home, enemy, friend };
   });
+}
+
+/** Close news/digest overlays that steal map pointer events. */
+async function dismissOverlays(page) {
+  const news = page.locator(".rf-news__backdrop");
+  if ((await news.count()) > 0) {
+    await news.first().click({ force: true }).catch(() => {});
+  }
+  const drawer = page.locator(".rf-drawer__backdrop");
+  if ((await drawer.count()) > 0) {
+    await drawer.first().click({ force: true }).catch(() => {});
+  }
+  await page.evaluate(() => {
+    window.__RF__?.dispatch?.({ type: "DISMISS_MESSAGE" });
+    window.__RF__?.dispatch?.({ type: "DISMISS_ECONOMY_SUMMARY" });
+    const st = window.__RF__?.getState?.();
+    if (st?.newsDigest) {
+      window.__RF__.dispatch({
+        type: "LOAD_STATE",
+        payload: { state: { ...st, newsDigest: null } },
+      });
+    }
+  });
+  await page.waitForTimeout(80);
 }
 
 async function runSuite(page, label) {
@@ -390,6 +415,7 @@ async function runSuite(page, label) {
   }
 
   // Map-first: dock when nothing selected; sheet when a squad is selected
+  await dismissOverlays(page);
   await page.evaluate(() => {
     window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
     window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
@@ -426,6 +452,88 @@ async function runSuite(page, label) {
   await page.waitForTimeout(250);
   const builds = await page.getByTestId("territory-buildings").count();
   if (!builds) throw new Error("territory buildings list missing");
+
+  // Tap a building mini on the map → menu opens in the right panel
+  await dismissOverlays(page);
+  await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
+  });
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: home },
+    });
+  }, ids4.home);
+  await page.waitForTimeout(350);
+  await dismissOverlays(page);
+  // Prefer a hit whose center is not covered by dock / news / HUD.
+  const tapTarget = await page.evaluate(() => {
+    const dock = document.querySelector(".rf-map__territory-drawer");
+    const dockLeft = dock?.getBoundingClientRect().left ?? Infinity;
+    const hits = [
+      ...document.querySelectorAll(".rf-map__bldg-hit[data-instance-id]"),
+    ];
+    for (const el of hits) {
+      const r = el.getBoundingClientRect();
+      const cx = r.x + r.width / 2;
+      const cy = r.y + r.height / 2;
+      if (cx >= dockLeft - 4) continue;
+      const top = document.elementFromPoint(cx, cy);
+      if (top === el || top?.closest?.(".rf-map__bldg-hit") === el) {
+        return {
+          iid: el.getAttribute("data-instance-id"),
+          tid: el.getAttribute("data-territory-id"),
+          cx,
+          cy,
+        };
+      }
+    }
+    return null;
+  });
+  if (!tapTarget) throw new Error("no clear building mini hit target on map");
+  await page.mouse.move(tapTarget.cx, tapTarget.cy);
+  await page.mouse.down();
+  await page.waitForTimeout(40);
+  await page.mouse.up();
+  await page.waitForTimeout(450);
+  const panelPop = await page
+    .locator(".rf-map__territory-drawer [data-testid='building-popover']")
+    .count();
+  const trainItem = page.getByRole("menuitem", {
+    name: /Train unit|Workers|Info/i,
+  });
+  if (!panelPop || !(await trainItem.count())) {
+    const dbg = await page.evaluate(() => {
+      const hits = [...document.querySelectorAll(".rf-map__bldg-hit[data-instance-id]")];
+      return {
+        hitCount: hits.length,
+        first: hits[0]
+          ? {
+              iid: hits[0].getAttribute("data-instance-id"),
+              tid: hits[0].getAttribute("data-territory-id"),
+              pe: getComputedStyle(hits[0]).pointerEvents,
+            }
+          : null,
+        drawer: !!document.querySelector(".rf-map__territory-drawer"),
+        popAnywhere: !!document.querySelector("[data-testid=building-popover]"),
+        sheetText: document
+          .querySelector(".rf-map__territory-drawer")
+          ?.textContent?.slice(0, 180),
+        selected: window.__RF__.getState().selectedTerritoryId,
+        backdrops: document.querySelectorAll(".rf-drawer__backdrop").length,
+      };
+    });
+    throw new Error(
+      "building mini tap did not open right-panel building menu: " +
+        JSON.stringify(dbg),
+    );
+  }
+  const dockPanel = await page
+    .locator(".rf-map__territory-drawer.rf-map__territory-drawer--right-dock")
+    .count();
+  if (!dockPanel) {
+    throw new Error("territory right panel missing after building tap");
+  }
 
   // Capture overlay titles the captured territory, not the origin
   await page.evaluate(

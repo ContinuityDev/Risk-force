@@ -44,12 +44,11 @@ describe("buildingMinis", () => {
   });
 
   it("grows on-screen size with zoom-in and clamps", () => {
-    // world compact stays small; deep zoom reads larger (deep world-unit cap
-    // keeps clusters fitting beside labels, so mid may still floor at 10px).
-    expect(targetScreenPx(1)).toBeLessThanOrEqual(14);
+    // World chips stay modest; deep/mid aim for ~22–28px on phone frames.
+    expect(targetScreenPx(1)).toBeLessThanOrEqual(28);
     expect(targetScreenPx(0.1)).toBeGreaterThan(targetScreenPx(1));
     expect(targetScreenPx(0.1)).toBeGreaterThanOrEqual(22);
-    expect(targetScreenPx(0.08)).toBeLessThanOrEqual(40);
+    expect(targetScreenPx(0.08)).toBeLessThanOrEqual(48);
   });
 
   it("places compact markers at world zoom and clusters when zoomed in", () => {
@@ -138,8 +137,8 @@ describe("buildingMinis", () => {
     const deepIcons = deep.filter((m) => !m.more && !m.compact);
     expect(deepIcons.length).toBe(4);
     // Deep icons stay readable but still fit inland clusters.
-    expect(deepIcons[0]!.size).toBeGreaterThanOrEqual(4.0);
-    expect(deepIcons[0]!.size).toBeLessThanOrEqual(7.0);
+    expect(deepIcons[0]!.size).toBeGreaterThanOrEqual(4.5);
+    expect(deepIcons[0]!.size).toBeLessThanOrEqual(8.5);
   });
 
   it("falls back to a compact marker when the cluster cannot fit", () => {

@@ -137,12 +137,17 @@ export function groundedUnitFootprint(
         }
       : null,
     progressBar: null,
-    hit: {
-      x: -shadow.rx * 1.15,
-      y: spriteY * scaleY - s * 0.05,
-      w: shadow.rx * 2.3,
-      h: -spriteY * scaleY + shadow.ry * 2.4,
-    },
+    hit: (() => {
+      const pad = Math.max(s * 0.65, 3.0);
+      const top = spriteY * scaleY - pad * 0.1;
+      const bottom = shadow.cy + shadow.ry + pad * 0.3;
+      return {
+        x: -pad,
+        y: top,
+        w: pad * 2,
+        h: Math.max(pad * 1.55, bottom - top),
+      };
+    })(),
   };
 }
 
@@ -207,12 +212,18 @@ export function groundedBuildingFootprint(
             h: barH,
           }
         : null,
-    hit: {
-      x: -shadow.rx * 1.15,
-      y: spriteY * scaleY - s * 0.04,
-      w: shadow.rx * 2.3,
-      h: -spriteY * scaleY + shadow.ry * 2.6,
-    },
+    // Generous tap target (~40px on typical mobile frames) without growing art.
+    hit: (() => {
+      const pad = Math.max(s * 0.7, 3.2);
+      const top = spriteY * scaleY - pad * 0.15;
+      const bottom = shadow.cy + shadow.ry + pad * 0.35;
+      return {
+        x: -pad,
+        y: top,
+        w: pad * 2,
+        h: Math.max(pad * 1.6, bottom - top),
+      };
+    })(),
   };
 }
 

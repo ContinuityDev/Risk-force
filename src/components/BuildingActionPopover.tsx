@@ -144,9 +144,9 @@ export const BuildingActionPopover = forwardRef<
           type="button"
           className="ghost rf-bldg-pop__close"
           onClick={onClose}
-          aria-label="Close building menu"
+          aria-label={embedded ? "Back to buildings" : "Close building menu"}
         >
-          ×
+          {embedded ? "←" : "×"}
         </button>
       </header>
 
