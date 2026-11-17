@@ -381,6 +381,8 @@ export function createInitialState(payload: NewGamePayload): GameState {
     nextInstanceId: nextId.n,
     aiAttackPlans: [],
     armiesInTransit: [],
+    squads: [],
+    selectedSquadId: null,
     pendingCapture: null,
     turnLog: [],
     relations: createDefaultRelations(playerOrder),

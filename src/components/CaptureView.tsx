@@ -52,11 +52,15 @@ export function CaptureView({ state, dispatch }: CaptureViewProps) {
   const buildingCount = pending.buildings?.length ?? 0;
 
   return (
-    <div className="rf-capture rf-fade-in">
+    <div
+      className="rf-capture rf-capture--sheet rf-fade-in"
+      data-testid="capture-sheet"
+      data-territory-id={pending.territoryId}
+    >
       <header className="rf-view-header">
         <div>
           <span className="rf-label">Occupation</span>
-          <h2>Secure {name}</h2>
+          <h2 data-testid="capture-territory-name">Secure {name}</h2>
           <p className="rf-text-dim" title={HELP.invasion}>
             Captured land is occupied (reduced output) until stabilized. Choose
             Raze or Keep, then how many survivors garrison — the rest return

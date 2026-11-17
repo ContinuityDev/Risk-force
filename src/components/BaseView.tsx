@@ -28,7 +28,9 @@ import {
   unitTrainTurns,
   workerCapForBuilding,
 } from "../engine/training";
+import { workerEffectForBuilding } from "../engine/workerEffects";
 import { pulseResources } from "../ui/resourcePulse";
+import { BuildingActionPopover } from "./BuildingActionPopover";
 import { CostLabel } from "./CostLabel";
 import { Drawer } from "./Drawer";
 import { Sprite } from "./Sprite";
@@ -69,7 +71,8 @@ export function BaseView({
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(
     null,
   );
-  const [demolishId, setDemolishId] = useState<string | null>(null);
+  /** Pending delete confirmation (from building menu Delete). */
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   /** Desktop hover preview cell. */
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
   /**
@@ -334,22 +337,9 @@ export function BaseView({
                         y < b.y + def.size.h
                       );
                     });
-                    if (inst && demolishId === inst.instanceId) {
-                      if (inst.buildingId !== "command_nexus") {
-                        dispatch({
-                          type: "DEMOLISH_BUILDING",
-                          payload: {
-                            territoryId: tid,
-                            instanceId: inst.instanceId,
-                          },
-                        });
-                      }
-                      setDemolishId(null);
-                      return;
-                    }
                     if (inst) {
                       setSelectedInstanceId(inst.instanceId);
-                      setDemolishId(inst.instanceId);
+                      setDeleteConfirmId(null);
                       setPendingPlace(null);
                       setSelectedBuilding(null);
                       setDrawerMode(null);
@@ -363,7 +353,7 @@ export function BaseView({
                       return;
                     }
                     setSelectedInstanceId(null);
-                    setDemolishId(null);
+                    setDeleteConfirmId(null);
                     setBuildingMenu(null);
                     setDrawerMode(null);
                     if (!selectedBuilding) return;
@@ -441,7 +431,7 @@ export function BaseView({
               <div
                 key={inst.instanceId}
                 className={`rf-base__structure${
-                  demolishId === inst.instanceId ? " is-target" : ""
+                  deleteConfirmId === inst.instanceId ? " is-target" : ""
                 }${constructing ? " is-building" : ""}`}
                 data-instance-id={inst.instanceId}
                 style={{
@@ -520,96 +510,124 @@ export function BaseView({
         {buildingMenu &&
           selectedInst &&
           selectedDef &&
+          tid &&
           buildingMenu.instanceId === selectedInst.instanceId && (
-            <div
+            <BuildingActionPopover
               ref={ctxRef}
-              className="rf-base__ctx"
-              role="menu"
-              data-tutorial="base-train"
-              style={{
-                left: buildingMenu.left,
-                top: buildingMenu.top,
-                visibility:
-                  buildingMenu.left === 0 && buildingMenu.top === 0
-                    ? "hidden"
-                    : "visible",
-              }}
-            >
-              {isTrainingBuilding(selectedDef) &&
-                selectedInst.buildRemaining <= 0 && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="rf-base__ctx-item"
-                    onClick={() => {
-                      setBuildingMenu(null);
-                      setDrawerMode("train");
-                      setDrawerOpen(true);
-                    }}
-                  >
-                    Train unit
-                  </button>
-                )}
-              {selectedDef.id === "war_college" &&
-                selectedInst.buildRemaining <= 0 &&
-                tid &&
-                (
-                  [
-                    "infantry",
-                    "armor",
-                    "air",
-                    "cyber",
-                  ] as const
-                ).map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    role="menuitem"
-                    className="rf-base__ctx-item"
-                    disabled={
-                      !canAct ||
-                      (activePlayer.commanders ?? []).some((c) => c.role === role)
-                    }
-                    onClick={() => {
-                      setBuildingMenu(null);
-                      dispatch({
-                        type: "TRAIN_COMMANDER",
-                        payload: {
-                          territoryId: tid,
-                          role,
-                        },
-                      });
-                    }}
-                  >
-                    Commission {role} officer
-                  </button>
-                ))}
-              <button
-                type="button"
-                role="menuitem"
-                className="rf-base__ctx-item"
-                onClick={() => {
+              state={state}
+              activePlayer={activePlayer}
+              territoryId={tid}
+              instance={selectedInst}
+              canAct={canAct}
+              left={buildingMenu.left}
+              top={buildingMenu.top}
+              mode="menu"
+              hidden={buildingMenu.left === 0 && buildingMenu.top === 0}
+              dispatch={dispatch}
+              onClose={() => setBuildingMenu(null)}
+              onMode={(m) => {
+                if (m === "train") {
+                  setBuildingMenu(null);
+                  setDrawerMode("train");
+                  setDrawerOpen(true);
+                  return;
+                }
+                if (m === "workers") {
                   setBuildingMenu(null);
                   setDrawerMode("staff");
                   setDrawerOpen(true);
-                }}
-              >
-                Staff
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="rf-base__ctx-item"
-                onClick={() => {
+                  return;
+                }
+                if (m === "info") {
                   setBuildingMenu(null);
                   setDrawerMode("info");
                   setDrawerOpen(true);
+                  return;
+                }
+                if (m === "delete") {
+                  setBuildingMenu(null);
+                  setDeleteConfirmId(selectedInst.instanceId);
+                }
+              }}
+              menuExtras={
+                selectedDef.id === "war_college" &&
+                selectedInst.buildRemaining <= 0
+                  ? (
+                      [
+                        "infantry",
+                        "armor",
+                        "air",
+                        "cyber",
+                      ] as const
+                    ).map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        role="menuitem"
+                        className="rf-bldg-pop__item"
+                        disabled={
+                          !canAct ||
+                          (activePlayer.commanders ?? []).some(
+                            (c) => c.role === role,
+                          )
+                        }
+                        onClick={() => {
+                          setBuildingMenu(null);
+                          dispatch({
+                            type: "TRAIN_COMMANDER",
+                            payload: {
+                              territoryId: tid,
+                              role,
+                            },
+                          });
+                        }}
+                      >
+                        <span>Commission {role} officer</span>
+                      </button>
+                    ))
+                  : undefined
+              }
+            />
+          )}
+
+        {deleteConfirmId && selectedInst?.instanceId === deleteConfirmId && (
+          <div className="rf-base__delete-confirm" role="alertdialog">
+            <p>
+              Demolish {selectedDef?.name ?? "this building"}? Workers return to
+              the free pool.
+            </p>
+            <div className="rf-base__delete-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setDeleteConfirmId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger"
+                data-testid="building-delete-confirm"
+                disabled={!canAct || !tid}
+                onClick={() => {
+                  if (!tid) return;
+                  dispatch({
+                    type: "DEMOLISH_BUILDING",
+                    payload: {
+                      territoryId: tid,
+                      instanceId: deleteConfirmId,
+                    },
+                  });
+                  setDeleteConfirmId(null);
+                  setSelectedInstanceId(null);
+                  setBuildingMenu(null);
                 }}
               >
-                Info
+                Delete
               </button>
             </div>
-          )}
+          </div>
+        )}
 
         {shortLandscape && (
           <button
@@ -673,14 +691,19 @@ export function BaseView({
                 >
                   ← {selectedDef.name}
                 </button>
-                <span className="rf-label">Staff</span>
+                <span className="rf-label">Workers</span>
               </div>
               <p className="rf-hint">
-                Free workers: {freeWorkers}. Output scales with assigned staff.
+                Free workers: {freeWorkers}. Staffing scales this building&apos;s
+                effect.
               </p>
               {(() => {
                 const cap = workerCapForBuilding(selectedInst.buildingId);
                 const cur = selectedInst.workers ?? 0;
+                const effect = workerEffectForBuilding(
+                  selectedInst.buildingId,
+                  cur,
+                );
                 const locked =
                   !canAct || selectedInst.buildRemaining > 0;
                 const setWorkers = (next: number) =>
@@ -719,6 +742,12 @@ export function BaseView({
                         +
                       </button>
                     </div>
+                    <p
+                      className="rf-base__staff-effect"
+                      data-testid="worker-effect"
+                    >
+                      {effect.label}
+                    </p>
                   </div>
                 );
               })()}
@@ -753,9 +782,17 @@ export function BaseView({
               </p>
               <p className="rf-base__blurb">{buildingBlurb(selectedDef)}</p>
               <p className="rf-hint">
-                HP {Math.ceil(selectedInst.hp)}/{selectedDef.maxHp} · Staff{" "}
+                HP {Math.ceil(selectedInst.hp)}/{selectedDef.maxHp} · Workers{" "}
                 {selectedInst.workers ?? 0}/
                 {workerCapForBuilding(selectedInst.buildingId)}
+              </p>
+              <p className="rf-base__staff-effect" data-testid="info-worker-effect">
+                {
+                  workerEffectForBuilding(
+                    selectedInst.buildingId,
+                    selectedInst.workers ?? 0,
+                  ).label
+                }
               </p>
             </section>
           )}
@@ -1084,7 +1121,8 @@ export function BaseView({
           </ul>
           <p className="rf-hint">
             Select a structure, then click an empty pad (on phones: tap to
-            preview, then Confirm). Tap a building for Train / Staff / Info.
+            preview, then Confirm). Tap a building for Train / Workers / Info /
+            Delete.
             Long-press a building for stats.
           </p>
             </>

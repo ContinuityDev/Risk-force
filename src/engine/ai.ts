@@ -453,8 +453,9 @@ export function planAiTurn(state: GameState): GameAction[] {
     const supplied =
       plans.find((p) => isSupplied(simState, p.fromId, pid)) ?? plans[0]!;
     actions.push({ type: "SET_AI_ATTACK_PLANS", payload: { plans } });
+    // Prefer squad march when possible; fall back to legacy invasion march.
     actions.push({
-      type: "START_INVASION",
+      type: "ORDER_MOVE",
       payload: {
         fromId: supplied.fromId,
         toId: supplied.toId,

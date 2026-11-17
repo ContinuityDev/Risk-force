@@ -5,6 +5,7 @@ import {
   layoutBuildingMinis,
   miniZoomTier,
 } from "./buildingMinis";
+import { groundedOccupancyBox } from "./territoryAnchors";
 import { layoutUnitMinis } from "./unitMinis";
 import type { TerritoryState } from "../engine/state";
 
@@ -68,8 +69,15 @@ describe("unitMinis mid/deep dense cores", () => {
     expect(iconWorldSize(zoomScale, 500, "mid")).toBeGreaterThan(2);
 
     const state = greenlandState();
+    const font = 11 * zoomScale;
     const labels = [
-      { id: "greenland", x: greenland.label.x, y: greenland.label.y, w: 28, h: 10 },
+      {
+        id: "greenland",
+        x: greenland.label.x,
+        y: greenland.label.y,
+        w: Math.max(8, greenland.name.length * font * 0.55),
+        h: Math.max(2.4, font * 1.15),
+      },
     ];
     const bldgs = layoutBuildingMinis(
       [greenland],
@@ -78,12 +86,7 @@ describe("unitMinis mid/deep dense cores", () => {
       cam,
       labels,
     );
-    const occupied = bldgs.map((b) => ({
-      x: b.x,
-      y: b.y,
-      w: b.size,
-      h: b.size,
-    }));
+    const occupied = bldgs.map((b) => groundedOccupancyBox(b.x, b.y, b.size));
     const units = layoutUnitMinis(
       [greenland],
       state,
@@ -98,13 +101,13 @@ describe("unitMinis mid/deep dense cores", () => {
 
     const lbl = labels[0]!;
     for (const u of units) {
-      const ub = { x: u.x, y: u.y, w: u.size, h: u.size };
+      const ub = groundedOccupancyBox(u.x, u.y, u.size);
       expect(
         overlaps(ub, { x: lbl.x, y: lbl.y, w: lbl.w, h: lbl.h }, 0.15),
       ).toBe(false);
       for (const b of bldgs) {
         expect(
-          overlaps(ub, { x: b.x, y: b.y, w: b.size, h: b.size }, 0.2),
+          overlaps(ub, groundedOccupancyBox(b.x, b.y, b.size), 0.15),
         ).toBe(false);
       }
     }
@@ -122,8 +125,15 @@ describe("unitMinis mid/deep dense cores", () => {
     expect(miniZoomTier(zoomScale)).toBe("deep");
 
     const state = greenlandState();
+    const font = 11 * zoomScale;
     const labels = [
-      { id: "greenland", x: greenland.label.x, y: greenland.label.y, w: 18, h: 8 },
+      {
+        id: "greenland",
+        x: greenland.label.x,
+        y: greenland.label.y,
+        w: Math.max(6, greenland.name.length * font * 0.55),
+        h: Math.max(2.2, font * 1.15),
+      },
     ];
     const bldgs = layoutBuildingMinis(
       [greenland],
@@ -132,12 +142,7 @@ describe("unitMinis mid/deep dense cores", () => {
       cam,
       labels,
     );
-    const occupied = bldgs.map((b) => ({
-      x: b.x,
-      y: b.y,
-      w: b.size,
-      h: b.size,
-    }));
+    const occupied = bldgs.map((b) => groundedOccupancyBox(b.x, b.y, b.size));
     const units = layoutUnitMinis(
       [greenland],
       state,
@@ -153,8 +158,9 @@ describe("unitMinis mid/deep dense cores", () => {
       for (const b of bldgs) {
         expect(
           overlaps(
-            { x: u.x, y: u.y, w: u.size, h: u.size },
-            { x: b.x, y: b.y, w: b.size, h: b.size },
+            groundedOccupancyBox(u.x, u.y, u.size),
+            groundedOccupancyBox(b.x, b.y, b.size),
+            0.15,
           ),
         ).toBe(false);
       }

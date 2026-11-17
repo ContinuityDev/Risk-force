@@ -23,6 +23,12 @@ import type { GameAction } from "../engine/actions";
 import { commandersOnTerritory } from "../engine/commanders";
 import { travelTurns } from "../engine/movement";
 import {
+  currentSquadLocation,
+  forceHeadcount,
+  getSquad,
+  listPlayerSquads,
+} from "../engine/squads";
+import {
   approximateGarrison,
   formatGarrisonIntel,
   isTerritoryRevealed,
@@ -41,7 +47,9 @@ import {
 } from "../ui/displayNames";
 import {
   buildingsFingerprint,
+  iconWorldSize,
   layoutBuildingMinis,
+  miniZoomTier,
 } from "../map/buildingMinis";
 import {
   armyTerritoryIdSet,
@@ -51,8 +59,10 @@ import {
   type MapChromeFocus,
 } from "../map/mapChrome";
 import {
+  claimInteriorCluster,
   getTerritoryAnchors,
   groundedOccupancyBox,
+  labelKeepOutBox,
   marchLandPoint,
 } from "../map/territoryAnchors";
 import {
@@ -60,17 +70,24 @@ import {
   layoutTransitUnitMinis,
   layoutUnitMinis,
   transitFingerprint,
+  unitPriority,
 } from "../map/unitMinis";
+import { getSpriteUrl } from "../sprites/registry";
+import { groundedUnitFootprint } from "../map/groundedChrome";
 import { getUnit } from "../data/units";
+import {
+  BuildingActionPopover,
+  type BuildingPopoverMode,
+} from "./BuildingActionPopover";
+import { CreateSquadPanel } from "./CreateSquadPanel";
 import { Drawer } from "./Drawer";
 import {
   GroundedBuildingMini,
   GroundedUnitMini,
 } from "./GroundedMapMinis";
-import {
-  InvadeFromPanel,
-  type InvadeOriginPlan,
-} from "./InvadeFromPanel";
+import { MapSquadDock } from "./MapSquadDock";
+import { SquadsView } from "./SquadsView";
+import { TerritoryBuildList } from "./TerritoryBuildList";
 
 interface WorldMapProps {
   state: GameState;
@@ -267,19 +284,42 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   /** Selected-territory right sheet (always used on short landscape). */
   const [detailOpen, setDetailOpen] = useState(false);
   const [shortLandscape, setShortLandscape] = useState(false);
-  const [invadeOpen, setInvadeOpen] = useState(false);
   /** Compact ops strip on enemy sheets: strike picker or recon picker. */
   const [opsMode, setOpsMode] = useState<null | "strike" | "recon">(null);
   const [strikePick, setStrikePick] = useState<StrikeKind>("cruise");
-  const [invadePlans, setInvadePlans] = useState<InvadeOriginPlan[]>([]);
-  const onInvadePlans = useCallback((plans: InvadeOriginPlan[]) => {
-    setInvadePlans(plans);
-  }, []);
+  const [sheetSection, setSheetSection] = useState<
+    "overview" | "buildings" | "create" | "building"
+  >("overview");
+  const [mapBuildingMenu, setMapBuildingMenu] = useState<{
+    territoryId: string;
+    instanceId: string;
+    left: number;
+    top: number;
+  } | null>(null);
+  const [mapBuildingMode, setMapBuildingMode] =
+    useState<BuildingPopoverMode>("menu");
+  const [squadDockOpen, setSquadDockOpen] = useState(false);
+  /** Skip one sheet reset when a map building tap also selects the territory. */
+  const skipSheetResetRef = useRef(false);
   useEffect(() => {
     setOpsMode(null);
-    setInvadeOpen(false);
-    setInvadePlans([]);
-  }, [state.selectedTerritoryId]);
+    if (skipSheetResetRef.current) {
+      skipSheetResetRef.current = false;
+      return;
+    }
+    // Short landscape: open straight on the buildings list so the sheet
+    // is not just a Buildings label above the fold.
+    setSheetSection(shortLandscape ? "buildings" : "overview");
+    setMapBuildingMenu(null);
+  }, [state.selectedTerritoryId, shortLandscape]);
+  useEffect(() => {
+    setMapBuildingMode("menu");
+  }, [mapBuildingMenu?.instanceId]);
+  // Squad sheet owns selection details — keep the dock collapsed so it
+  // does not stack with CONTINENTS / the squad sheet.
+  useEffect(() => {
+    if (state.selectedSquadId) setSquadDockOpen(false);
+  }, [state.selectedSquadId]);
   useEffect(() => {
     const mq = window.matchMedia(
       "(orientation: landscape) and (max-height: 500px)",
@@ -301,6 +341,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     startMid: { x: number; y: number };
     moved: boolean;
     pendingTerritoryId: string | null;
+    pendingSquadId: string | null;
+    pendingCreateSquadTerritoryId: string | null;
+    pendingBuilding: { territoryId: string; instanceId: string } | null;
   }>({
     mode: "none",
     origin: { x: 0, y: 0, w: OCEAN_VIEW.w, h: OCEAN_VIEW.h },
@@ -308,6 +351,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     startMid: { x: 0, y: 0 },
     moved: false,
     pendingTerritoryId: null,
+    pendingSquadId: null,
+    pendingCreateSquadTerritoryId: null,
+    pendingBuilding: null,
   });
   const cameraRef = useRef<Camera>({ x: 0, y: 0, w: OCEAN_VIEW.w, h: OCEAN_VIEW.h });
   const rafRef = useRef<number | null>(null);
@@ -338,11 +384,15 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     setDetailOpen(true);
     const t = TERRITORIES.find((x) => x.id === id);
     if (!t) return;
-    // Frame selection in the left ~58% so the right drawer does not cover it.
-    const focusW = Math.min(OCEAN_VIEW.w, Math.max(MIN_VIEW_W * 1.6, OCEAN_VIEW.w * 0.32));
+    // Tight regional frame so grounded minis stay readable (~18–24px).
+    const focusW = Math.min(
+      OCEAN_VIEW.w,
+      Math.max(MIN_VIEW_W * 2.2, OCEAN_VIEW.w * 0.18),
+    );
     const focusH = focusW * (OCEAN_VIEW.h / OCEAN_VIEW.w);
-    const cx = t.label.x + focusW * 0.14;
-    const cy = t.label.y;
+    // Bias left so a bottom/right sheet does not cover the selection.
+    const cx = t.label.x + focusW * 0.08;
+    const cy = t.label.y - focusH * 0.06;
     const next = clampCamera({
       x: cx - focusW / 2,
       y: cy - focusH / 2,
@@ -371,6 +421,16 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     const def = TERRITORIES.find((t) => t.id === id);
     return new Set(def?.neighbors ?? []);
   }, [state.selectedTerritoryId]);
+
+  const squadMoveNeighborSet = useMemo(() => {
+    if (!state.selectedSquadId || !humanId) return new Set<string>();
+    const squad = getSquad(state, state.selectedSquadId);
+    if (!squad || squad.owner !== humanId || squad.status !== "idle") {
+      return new Set<string>();
+    }
+    const def = TERRITORIES.find((t) => t.id === squad.territoryId);
+    return new Set(def?.neighbors ?? []);
+  }, [state.selectedSquadId, state.squads, humanId]);
 
   const chromeFocus: MapChromeFocus = useMemo(
     () => ({
@@ -472,7 +532,10 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const transitMinis = useMemo(
     () =>
       layoutTransitUnitMinis(
-        state.armiesInTransit ?? [],
+        // Squad marches / joiners render as grounded squad markers instead.
+        (state.armiesInTransit ?? []).filter(
+          (a) => !a.squadId && !a.joiningSquadId,
+        ),
         TERRITORIES,
         deferredCam.w / OCEAN_VIEW.w,
         deferredCam,
@@ -480,6 +543,189 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [deferredCam, transitFp],
   );
+
+  const squadsFp = useMemo(
+    () =>
+      (state.squads ?? [])
+        .map(
+          (s) =>
+            `${s.id}:${s.territoryId}:${s.status}:${forceHeadcount(s.force)}`,
+        )
+        .join("|"),
+    [state.squads],
+  );
+
+  interface PlacedSquadMarker {
+    key: string;
+    squadId: string | null;
+    joiningSquadId?: string;
+    joiningLabel?: string;
+    territoryId: string;
+    x: number;
+    y: number;
+    size: number;
+    count: number;
+    spriteUrl: string;
+    selected: boolean;
+    marching: boolean;
+    joining: boolean;
+  }
+
+  const squadMarkers = useMemo((): PlacedSquadMarker[] => {
+    if (!humanId) return [];
+    const tier = miniZoomTier(deferredCam.w / OCEAN_VIEW.w);
+    const size = Math.max(
+      11,
+      iconWorldSize(deferredCam.w / OCEAN_VIEW.w, deferredCam.w, tier) * 1.35,
+    );
+    const out: PlacedSquadMarker[] = [];
+    const byId = Object.fromEntries(TERRITORIES.map((t) => [t.id, t]));
+
+    const topSprite = (force: { unitId: string; count: number }[]) => {
+      const sorted = [...force]
+        .filter((f) => f.count > 0)
+        .sort(
+          (a, b) =>
+            unitPriority(b.unitId, b.count) - unitPriority(a.unitId, a.count),
+        );
+      const top = sorted[0];
+      if (!top) return "";
+      try {
+        return getSpriteUrl(getUnit(top.unitId).sprite.id);
+      } catch {
+        return "";
+      }
+    };
+
+    // Idle squads on territory — always render the player's own squads
+    // (never camera-cull them; the focus zoom may lag a frame behind).
+    const idle = listPlayerSquads(state, humanId).filter(
+      (s) => s.status === "idle",
+    );
+    const byTerritory = new Map<string, typeof idle>();
+    for (const s of idle) {
+      const tdef = byId[s.territoryId];
+      const ts = state.territories[s.territoryId];
+      if (!tdef || !ts) continue;
+      const list = byTerritory.get(s.territoryId) ?? [];
+      list.push(s);
+      byTerritory.set(s.territoryId, list);
+    }
+    for (const [tid, squadsOnPlot] of byTerritory) {
+      const tdef = byId[tid]!;
+      const labelBoxes = labels
+        .filter((l) => l.id === tid)
+        .map((l) => labelKeepOutBox(l, size));
+      const occupied = [
+        ...labelBoxes,
+        ...unitMinis
+          .filter((m) => m.territoryId === tid)
+          .map((m) => groundedOccupancyBox(m.x, m.y, m.size)),
+        ...buildingMinis
+          .filter((m) => m.territoryId === tid)
+          .map((m) => groundedOccupancyBox(m.x, m.y, m.size)),
+      ];
+      let placeSize = size;
+      let centers = claimInteriorCluster(
+        tdef,
+        squadsOnPlot.length,
+        placeSize,
+        occupied,
+        placeSize * 0.28,
+      );
+      if (centers.length < squadsOnPlot.length) {
+        placeSize = size * 0.82;
+        centers = claimInteriorCluster(
+          tdef,
+          squadsOnPlot.length,
+          placeSize,
+          occupied,
+          placeSize * 0.22,
+        );
+      }
+      squadsOnPlot.forEach((squad, i) => {
+        const c = centers[i];
+        if (!c) return;
+        occupied.push(groundedOccupancyBox(c.x, c.y, placeSize));
+        out.push({
+          key: squad.id,
+          squadId: squad.id,
+          territoryId: tid,
+          x: c.x,
+          y: c.y,
+          size: placeSize,
+          count: forceHeadcount(squad.force),
+          spriteUrl: topSprite(squad.force),
+          selected: state.selectedSquadId === squad.id,
+          marching: false,
+          joining: false,
+        });
+      });
+    }
+
+    // Marching squads + pending joiners along their route (never cull player)
+    for (const army of state.armiesInTransit ?? []) {
+      if (army.owner !== humanId) continue;
+      const from = byId[army.fromId];
+      const to = byId[army.toId];
+      if (!from || !to) continue;
+      const progress =
+        1 - army.turnsRemaining / Math.max(1, army.totalTurns);
+      const t = Math.min(0.85, 0.12 + progress * 0.7);
+      const pt = marchLandPoint(from, to, t, false);
+
+      if (army.squadId) {
+        out.push({
+          key: `march-${army.id}`,
+          squadId: army.squadId,
+          territoryId: army.toId,
+          x: pt.x,
+          y: pt.y,
+          size: size * 0.95,
+          count: forceHeadcount(army.force),
+          spriteUrl: topSprite(army.force),
+          selected: state.selectedSquadId === army.squadId,
+          marching: true,
+          joining: false,
+        });
+      } else if (army.joiningSquadId) {
+        const squad = getSquad(state, army.joiningSquadId);
+        out.push({
+          key: `join-${army.id}`,
+          squadId: null,
+          joiningSquadId: army.joiningSquadId,
+          joiningLabel: squad ? `joining ${squad.name}` : "joining",
+          territoryId: army.toId,
+          x: pt.x,
+          y: pt.y,
+          size: size * 0.85,
+          count: forceHeadcount(army.force),
+          spriteUrl: topSprite(army.force),
+          selected: false,
+          marching: true,
+          joining: true,
+        });
+      }
+    }
+
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    deferredCam,
+    humanId,
+    squadsFp,
+    transitFp,
+    state.selectedSquadId,
+    showChrome,
+    unitMinis,
+    buildingMinis,
+  ]);
+
+  /** Keep latest selection id for same-tap sheet reopen without stale closures. */
+  const selectedSquadIdRef = useRef(state.selectedSquadId);
+  selectedSquadIdRef.current = state.selectedSquadId;
+  const squadMoveNeighborsRef = useRef(squadMoveNeighborSet);
+  squadMoveNeighborsRef.current = squadMoveNeighborSet;
 
   /** Keep latest selection id for same-tap sheet reopen without stale closures. */
   const selectedIdRef = useRef(state.selectedTerritoryId);
@@ -608,6 +854,39 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         target,
       );
       const onTerritory = Boolean(territoryId);
+      const squadHit =
+        target.closest?.("[data-squad-id].rf-map__squad-hit")?.getAttribute(
+          "data-squad-id",
+        ) ?? null;
+      const bldgHit = target.closest?.(".rf-map__bldg-hit");
+      const bldgTerritory = bldgHit?.getAttribute("data-territory-id");
+      const bldgInstance = bldgHit?.getAttribute("data-instance-id");
+      let pendingBuilding: { territoryId: string; instanceId: string } | null =
+        null;
+      if (
+        bldgTerritory &&
+        bldgInstance &&
+        humanId &&
+        state.territories[bldgTerritory]?.owner === humanId
+      ) {
+        pendingBuilding = {
+          territoryId: bldgTerritory,
+          instanceId: bldgInstance,
+        };
+      }
+      let createFromUnit: string | null = null;
+      const unitHit = target.closest?.(
+        "[data-territory-id].rf-map__unit-hit",
+      );
+      if (unitHit && humanId && !pendingBuilding) {
+        const utid = unitHit.getAttribute("data-territory-id");
+        const ts = utid ? state.territories[utid] : undefined;
+        const hasUnits =
+          utid &&
+          ts?.owner === humanId &&
+          Object.values(ts.garrison ?? {}).some((c) => c > 0);
+        if (hasUnits) createFromUnit = utid;
+      }
 
       (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
       pointersRef.current.set(e.pointerId, {
@@ -619,23 +898,34 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       const g = gestureRef.current;
       g.origin = { ...cameraRef.current };
       g.moved = false;
+      g.pendingSquadId = squadHit;
+      g.pendingCreateSquadTerritoryId = createFromUnit;
+      g.pendingBuilding = pendingBuilding;
 
       if (pointersRef.current.size >= 2) {
         g.mode = "pinch";
         g.startDist = Math.max(1, pointerDistance());
         g.startMid = pointerMid();
         g.pendingTerritoryId = null;
+        g.pendingSquadId = null;
+        g.pendingCreateSquadTerritoryId = null;
+        g.pendingBuilding = null;
         setDragging(true);
         return;
       }
 
       // One finger: allow pan from anywhere; suppress select if we drag.
       g.mode = "pan";
-      g.pendingTerritoryId = onTerritory ? territoryId : null;
+      g.pendingTerritoryId =
+        squadHit || createFromUnit || pendingBuilding
+          ? null
+          : onTerritory
+            ? territoryId
+            : null;
       g.startMid = { x: e.clientX, y: e.clientY };
       setDragging(true);
     },
-    [resolveTerritoryAtPoint],
+    [resolveTerritoryAtPoint, humanId, state.territories],
   );
 
   const onPointerMove = useCallback(
@@ -712,24 +1002,103 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       const g = gestureRef.current;
 
       if (pointersRef.current.size === 0) {
-        if (
-          g.mode === "pan" &&
-          !g.moved &&
-          g.pendingTerritoryId
-        ) {
-          const tid = g.pendingTerritoryId;
-          // Same-id re-tap must reopen the short-landscape sheet (closing the
-          // drawer keeps selection, so SELECT alone was a no-op before).
-          if (tid === selectedIdRef.current) {
+        if (g.mode === "pan" && !g.moved) {
+          if (g.pendingBuilding) {
+            const { territoryId: bTid, instanceId } = g.pendingBuilding;
+            dispatch({
+              type: "SELECT_SQUAD",
+              payload: { squadId: null },
+            });
+            // Preserve building menu across the territory-select sheet reset.
+            if (bTid !== selectedIdRef.current) {
+              skipSheetResetRef.current = true;
+            }
+            dispatch({
+              type: "SELECT_TERRITORY",
+              payload: { territoryId: bTid },
+            });
             setDetailOpen(true);
+            const popW = 200;
+            const popH = 220;
+            const left = Math.min(
+              Math.max(8, e.clientX + 8),
+              window.innerWidth - popW - 8,
+            );
+            const top = Math.min(
+              Math.max(8, e.clientY - 24),
+              window.innerHeight - popH - 8,
+            );
+            setMapBuildingMenu({
+              territoryId: bTid,
+              instanceId,
+              left,
+              top,
+            });
+            setMapBuildingMode("menu");
+            // Always open the building menu inside the right panel.
+            setSheetSection("building");
+          } else if (g.pendingSquadId) {
+            const sid = g.pendingSquadId;
+            dispatch({
+              type: "SELECT_SQUAD",
+              payload: {
+                squadId:
+                  sid === selectedSquadIdRef.current ? null : sid,
+              },
+            });
+            setMapBuildingMenu(null);
+          } else if (g.pendingCreateSquadTerritoryId) {
+            setSheetSection("create");
+            dispatch({
+              type: "SELECT_TERRITORY",
+              payload: { territoryId: g.pendingCreateSquadTerritoryId },
+            });
+            setDetailOpen(true);
+          } else if (g.pendingTerritoryId) {
+            const tid = g.pendingTerritoryId;
+            const squadId = selectedSquadIdRef.current;
+            if (
+              squadId &&
+              squadMoveNeighborsRef.current.has(tid)
+            ) {
+              dispatch({
+                type: "ORDER_SQUAD_MOVE",
+                payload: { squadId, toId: tid },
+              });
+              dispatch({
+                type: "SELECT_SQUAD",
+                payload: { squadId: null },
+              });
+            } else {
+              // Re-tap selected territory on short landscape reopens the sheet.
+              if (tid === selectedIdRef.current && shortLandscape) {
+                setDetailOpen(true);
+              }
+              dispatch({
+                type: "SELECT_TERRITORY",
+                payload: { territoryId: tid },
+              });
+              setMapBuildingMenu(null);
+            }
+          } else {
+            // Tap empty ocean/space — dismiss panels without blocking pans.
+            dispatch({
+              type: "SELECT_TERRITORY",
+              payload: { territoryId: null },
+            });
+            dispatch({
+              type: "SELECT_SQUAD",
+              payload: { squadId: null },
+            });
+            setMapBuildingMenu(null);
+            setDetailOpen(false);
           }
-          dispatch({
-            type: "SELECT_TERRITORY",
-            payload: { territoryId: tid },
-          });
         }
         g.mode = "none";
         g.pendingTerritoryId = null;
+        g.pendingSquadId = null;
+        g.pendingCreateSquadTerritoryId = null;
+        g.pendingBuilding = null;
         g.moved = false;
         setDragging(false);
         // Commit any pending camera frame
@@ -747,8 +1116,33 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
         g.moved = true;
       }
     },
-    [dispatch],
+    [dispatch, shortLandscape],
   );
+
+  // Pan to selected squad so map-first selection stays visible.
+  useEffect(() => {
+    const sid = state.selectedSquadId;
+    if (!sid) return;
+    const squad = getSquad(state, sid);
+    if (!squad) return;
+    const locId = currentSquadLocation(state, squad);
+    const t = TERRITORIES.find((x) => x.id === locId);
+    if (!t) return;
+    const focusW = Math.min(
+      OCEAN_VIEW.w,
+      Math.max(MIN_VIEW_W * 2.2, OCEAN_VIEW.w * 0.18),
+    );
+    const focusH = focusW * (OCEAN_VIEW.h / OCEAN_VIEW.w);
+    const next = clampCamera({
+      x: t.label.x + focusW * 0.08 - focusW / 2,
+      y: t.label.y - focusH * 0.06 - focusH / 2,
+      w: focusW,
+      h: focusH,
+    });
+    cameraRef.current = next;
+    setCamera(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.selectedSquadId]);
 
   const selected = state.selectedTerritoryId
     ? TERRITORIES.find((t) => t.id === state.selectedTerritoryId)
@@ -765,14 +1159,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
   const hovered = hoveredId
     ? TERRITORIES.find((t) => t.id === hoveredId)
     : null;
-
-  // Capture / owner flip can leave invade cards pointing at friendly land.
-  useEffect(() => {
-    if (!selectedIsEnemy && invadeOpen) {
-      setInvadeOpen(false);
-      setInvadePlans([]);
-    }
-  }, [selectedIsEnemy, invadeOpen, selectedTs?.owner]);
 
   // Friendly neighbors for march UI
   const marchTargets = useMemo(() => {
@@ -907,17 +1293,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           >
             <path d="M 0 0 L 10 5 L 0 10 z" fill="#9fd4e4" />
           </marker>
-          <marker
-            id="rf-invade-arrow"
-            viewBox="0 0 10 10"
-            refX="8"
-            refY="5"
-            markerWidth="5.5"
-            markerHeight="5.5"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e07060" />
-          </marker>
         </defs>
 
         <rect width={OCEAN_VIEW.w} height={OCEAN_VIEW.h} fill="url(#rf-ocean)" />
@@ -973,37 +1348,6 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     strokeDasharray="4 3"
                     opacity="0.9"
                     markerEnd="url(#rf-ai-arrow)"
-                  />
-                </g>
-              );
-            })}
-          </g>
-        )}
-
-        {invadeOpen &&
-          selectedIsEnemy &&
-          invadePlans.length > 0 &&
-          selected && (
-          <g className="rf-map__invade-plans" pointerEvents="none">
-            {invadePlans.map((plan) => {
-              const from = TERRITORIES.find((t) => t.id === plan.fromId);
-              if (!from) return null;
-              const x1 = from.label.x;
-              const y1 = from.label.y;
-              const x2 = selected.label.x;
-              const y2 = selected.label.y;
-              const mx = (x1 + x2) / 2;
-              const my = (y1 + y2) / 2 - 10;
-              return (
-                <g key={`invade-${plan.fromId}`}>
-                  <path
-                    d={`M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`}
-                    fill="none"
-                    stroke="#e07060"
-                    strokeWidth={Math.max(1.4, 2.4 * zoomScale)}
-                    strokeDasharray="6 4"
-                    opacity="0.95"
-                    markerEnd="url(#rf-invade-arrow)"
                   />
                 </g>
               );
@@ -1093,6 +1437,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           const isNeutral = owner === "neutral";
           const base = factionColor(owner);
           const isSelected = state.selectedTerritoryId === t.id;
+          const isSquadDest = squadMoveNeighborSet.has(t.id);
           return (
             <g
               key={t.id}
@@ -1102,16 +1447,47 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             >
               <path
                 d={t.path}
-                className={`rf-map__territory${isSelected ? " is-selected" : ""}${isNeutral ? " is-neutral" : ""}`}
+                className={`rf-map__territory${isSelected ? " is-selected" : ""}${isNeutral ? " is-neutral" : ""}${isSquadDest ? " is-squad-dest" : ""}`}
                 data-territory-id={t.id}
                 data-owner={owner}
-                fill={hexToRgba(base, isNeutral ? (isSelected ? 0.72 : 0.55) : isSelected ? 0.9 : 0.82)}
+                fill={hexToRgba(
+                  base,
+                  isSquadDest
+                    ? 0.94
+                    : isNeutral
+                      ? isSelected
+                        ? 0.72
+                        : 0.55
+                      : isSelected
+                        ? 0.9
+                        : 0.82,
+                )}
                 stroke={
-                  isSelected ? "#e8f4f8" : isNeutral ? "#9aa3ad" : "#7eb6c9"
+                  isSquadDest
+                    ? "#9fd4e4"
+                    : isSelected
+                      ? "#e8f4f8"
+                      : isNeutral
+                        ? "#9aa3ad"
+                        : "#7eb6c9"
                 }
-                strokeDasharray={isNeutral ? `${2.2 * zoomScale} ${1.6 * zoomScale}` : undefined}
+                strokeDasharray={
+                  isSquadDest
+                    ? `${3 * zoomScale} ${2 * zoomScale}`
+                    : isNeutral
+                      ? `${2.2 * zoomScale} ${1.6 * zoomScale}`
+                      : undefined
+                }
                 // Counter-scale: strokeWidth in user units × zoomScale ≈ constant screen px.
-                strokeWidth={(isSelected ? 1.4 : isNeutral ? 0.95 : 1.05) * zoomScale}
+                strokeWidth={
+                  (isSquadDest
+                    ? 1.55
+                    : isSelected
+                      ? 1.4
+                      : isNeutral
+                        ? 0.95
+                        : 1.05) * zoomScale
+                }
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
@@ -1522,7 +1898,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
             neighbouring minis never paint a shadow over another piece. */}
         {(unitMinis.length > 0 ||
           transitMinis.length > 0 ||
-          buildingMinis.length > 0) && (
+          buildingMinis.length > 0 ||
+          squadMarkers.length > 0) && (
           <g className="rf-map__mini-shadows" pointerEvents="none">
             {[...unitMinis, ...transitMinis].map((m) => {
               const col = factionColor(
@@ -1539,6 +1916,22 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     compact={m.compact}
                     transit={m.transit}
                     more={m.more}
+                    shadowOnly
+                  />
+                </g>
+              );
+            })}
+            {squadMarkers.map((m) => {
+              const col = factionColor(humanId ?? "neutral");
+              return (
+                <g key={`sh-sq-${m.key}`} transform={`translate(${m.x}, ${m.y})`}>
+                  <GroundedUnitMini
+                    territoryId={m.territoryId}
+                    size={m.size}
+                    zoomScale={zoomScale}
+                    factionHex={col}
+                    count={m.count}
+                    omitHit
                     shadowOnly
                   />
                 </g>
@@ -1600,6 +1993,80 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </g>
         )}
 
+        {squadMarkers.length > 0 && humanId && (
+          <g className="rf-map__squads">
+            {squadMarkers.map((m) => {
+              const col = factionColor(humanId);
+              const fp = groundedUnitFootprint(m.size, zoomScale, {
+                count: m.count,
+              });
+              return (
+                <g
+                  key={m.key}
+                  transform={`translate(${m.x}, ${m.y})`}
+                  opacity={m.joining ? 0.55 : 1}
+                  data-testid={
+                    m.joining
+                      ? "joining-squad"
+                      : m.selected
+                        ? "selected-squad"
+                        : "squad-marker"
+                  }
+                >
+                  <GroundedUnitMini
+                    territoryId={m.territoryId}
+                    size={m.size}
+                    zoomScale={zoomScale}
+                    factionHex={col}
+                    spriteUrl={m.spriteUrl || undefined}
+                    count={m.count}
+                    transit={m.marching}
+                    omitHit
+                    omitShadow
+                  />
+                  {m.selected && (
+                    <ellipse
+                      cx={fp.shadow.cx}
+                      cy={fp.shadow.cy}
+                      rx={fp.shadow.rx * 1.35}
+                      ry={fp.shadow.ry * 1.5}
+                      fill="none"
+                      stroke="#b8f0ff"
+                      strokeWidth={Math.max(0.5, 0.9 * zoomScale)}
+                      pointerEvents="none"
+                    />
+                  )}
+                  {m.joining && m.joiningLabel && (
+                    <text
+                      className="rf-map__joining-label"
+                      x={0}
+                      y={fp.shadow.cy + fp.shadow.ry + 2.2 * zoomScale}
+                      textAnchor="middle"
+                      fontSize={Math.max(2.4 * zoomScale, m.size * 0.28)}
+                      fill="#b8d8e8"
+                      pointerEvents="none"
+                    >
+                      {m.joiningLabel}
+                    </text>
+                  )}
+                  {m.squadId && (
+                    <rect
+                      className="rf-map__squad-hit"
+                      data-squad-id={m.squadId}
+                      data-territory-id={m.territoryId}
+                      x={fp.hit.x}
+                      y={fp.hit.y}
+                      width={fp.hit.w}
+                      height={fp.hit.h}
+                      fill="transparent"
+                    />
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        )}
+
         {buildingMinis.length > 0 && (
           <g className="rf-map__bldgs">
             {buildingMinis.map((m) => {
@@ -1622,6 +2089,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     constructing={m.constructing}
                     progress={m.progress}
                     more={m.more}
+                    instanceId={m.instanceId}
                     omitShadow
                   />
                 </g>
@@ -1738,8 +2206,8 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       </svg>
 
       <div className="rf-map__hint rf-text-dim">
-        Scroll or pinch to zoom · drag to pan · tap to select · Open Base /
-        Invade are explicit actions
+        Scroll or pinch to zoom · drag to pan · tap to select · tap squads to
+        march · Buildings and Create squad live on the territory sheet
       </div>
 
       <button
@@ -1753,7 +2221,9 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       </button>
 
       <Drawer
-        open={legendOpen}
+        /* Desktop uses the collapsible legend aside — never mount the
+           full-screen backdrop Drawer there or it blocks map mini taps. */
+        open={legendOpen && shortLandscape}
         onClose={() => setLegendOpen(false)}
         side="left"
         className="rf-map__legend-drawer"
@@ -1784,9 +2254,13 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
       )}
 
       <Drawer
-        open={Boolean(selected) && (shortLandscape ? detailOpen : true)}
+        open={
+          Boolean(selected) && !state.selectedSquadId && detailOpen
+        }
         onClose={() => {
           setDetailOpen(false);
+          setMapBuildingMenu(null);
+          setSheetSection("overview");
           if (!shortLandscape) {
             dispatch({
               type: "SELECT_TERRITORY",
@@ -1795,59 +2269,88 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           }
         }}
         side="right"
-        inline={!shortLandscape}
-        className="rf-map__territory-drawer"
+        inline
+        className="rf-map__territory-drawer rf-map__territory-drawer--right-dock"
         tutorialId="territory-sheet"
       >
         {selected && (
           <>
-            {!(invadeOpen && selectedIsEnemy) && (
-              <>
-                <span className="rf-label">Selected</span>
-                <h3 className="rf-map__sheet-title">{selected.name}</h3>
-                {/* Ops row sits under the title so Invade/Strike/Recon stay above the fold at 844×390. */}
-                {selectedIsEnemy && humanId && (
-                  <div className="rf-map__ops" data-tutorial="enemy-ops">
-                    <div className="rf-map__ops-row">
-                      <button
-                        type="button"
-                        className="primary"
-                        data-tutorial="invade-btn"
-                        onClick={() => {
-                          setOpsMode(null);
-                          setInvadeOpen(true);
-                        }}
-                      >
-                        Invade
-                      </button>
-                      <button
-                        type="button"
-                        className={opsMode === "strike" ? "primary" : "ghost"}
-                        onClick={() =>
-                          setOpsMode((m) => (m === "strike" ? null : "strike"))
-                        }
-                      >
-                        Strike
-                      </button>
-                      <button
-                        type="button"
-                        className={opsMode === "recon" ? "primary" : "ghost"}
-                        onClick={() =>
-                          setOpsMode((m) => (m === "recon" ? null : "recon"))
-                        }
-                      >
-                        Recon
-                      </button>
-                    </div>
-                  </div>
+            <header className="rf-map__sheet-head">
+              <div>
+                {sheetSection === "building" ? (
+                  <button
+                    type="button"
+                    className="ghost rf-map__sheet-back"
+                    data-testid="territory-sheet-back"
+                    aria-label="Back to buildings"
+                    onClick={() => {
+                      setMapBuildingMenu(null);
+                      setMapBuildingMode("menu");
+                      setSheetSection(
+                        shortLandscape ? "buildings" : "overview",
+                      );
+                    }}
+                  >
+                    ← Buildings
+                  </button>
+                ) : (
+                  <span className="rf-label">Selected</span>
                 )}
-                <p className="rf-text-dim rf-map__sheet-meta">
-                  {selected.continent} · {biomeLabel(selected.id)}
-                  {selectedTs
-                    ? ` · ${selectedTs.control} · Pop ${selectedTs.population}`
-                    : ""}
-                </p>
-                {selectedTs && (
+                <h3 className="rf-map__sheet-title">{selected.name}</h3>
+              </div>
+              <button
+                type="button"
+                className="ghost rf-map__sheet-close"
+                data-testid="territory-sheet-close"
+                aria-label="Close territory sheet"
+                onClick={() => {
+                  setDetailOpen(false);
+                  setMapBuildingMenu(null);
+                  setSheetSection("overview");
+                  if (!shortLandscape) {
+                    dispatch({
+                      type: "SELECT_TERRITORY",
+                      payload: { territoryId: null },
+                    });
+                  }
+                }}
+              >
+                ×
+              </button>
+            </header>
+            {selectedIsEnemy && humanId && (
+              <div className="rf-map__ops" data-tutorial="enemy-ops">
+                <div className="rf-map__ops-row">
+                  <button
+                    type="button"
+                    className={opsMode === "strike" ? "primary" : "ghost"}
+                    onClick={() =>
+                      setOpsMode((m) => (m === "strike" ? null : "strike"))
+                    }
+                  >
+                    Strike
+                  </button>
+                  <button
+                    type="button"
+                    className={opsMode === "recon" ? "primary" : "ghost"}
+                    onClick={() =>
+                      setOpsMode((m) => (m === "recon" ? null : "recon"))
+                    }
+                  >
+                    Recon
+                  </button>
+                </div>
+              </div>
+            )}
+                {!shortLandscape && (
+                  <p className="rf-text-dim rf-map__sheet-meta">
+                    {selected.continent} · {biomeLabel(selected.id)}
+                    {selectedTs
+                      ? ` · ${selectedTs.control} · Pop ${selectedTs.population}`
+                      : ""}
+                  </p>
+                )}
+                {selectedTs && !shortLandscape && (
                   <p
                     className={`rf-map__sheet-owner${selectedTs.owner === "neutral" ? " is-neutral" : ""}`}
                     data-testid="territory-owner-label"
@@ -1879,7 +2382,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     )}
                   </p>
                 )}
-                {selectedTs && humanId && (
+                {selectedTs && humanId && !shortLandscape && (
                   <p className="rf-map__sheet-garrison" title={HELP.recon}>
                     <span className="rf-label">Garrison</span>{" "}
                     {isTerritoryRevealed(state, humanId, selected.id)
@@ -1895,6 +2398,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                 )}
                 {selectedTs &&
                   humanId &&
+                  !shortLandscape &&
                   selectedTs.owner === humanId &&
                   commandersOnTerritory(
                     state.players[humanId]!,
@@ -1910,69 +2414,133 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                         .join(", ")}
                     </p>
                   )}
-                {selectedTs?.control === "occupied" && humanId && selectedTs.owner === humanId && (
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() =>
-                      dispatch({
-                        type: "STABILIZE_TERRITORY",
-                        payload: { territoryId: selected.id },
-                      })
-                    }
-                  >
-                    Stabilize (35E / 10A)
-                  </button>
-                )}
-              </>
+            {selectedTs?.control === "occupied" && humanId && selectedTs.owner === humanId && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() =>
+                  dispatch({
+                    type: "STABILIZE_TERRITORY",
+                    payload: { territoryId: selected.id },
+                  })
+                }
+              >
+                Stabilize (35E / 10A)
+              </button>
             )}
 
-            {invadeOpen && selectedIsEnemy && humanId ? (
-              <InvadeFromPanel
-                state={state}
-                activePlayer={state.players[humanId]!}
-                targetId={selected.id}
-                canAct={
-                  state.phase === "play" &&
-                  state.players[state.playerOrder[state.activePlayerIndex]!]
-                    ?.kind === "human"
-                }
-                dispatch={dispatch}
-                onCancel={() => {
-                  setInvadeOpen(false);
-                  setInvadePlans([]);
-                }}
-                onPlansChange={onInvadePlans}
-              />
-            ) : (
-              <>
-                {!selectedIsEnemy && (
-                  <div className="rf-map__sheet-actions">
+            {humanId &&
+              selectedTs?.owner === humanId &&
+              !selectedIsEnemy &&
+              sheetSection !== "create" &&
+              sheetSection !== "building" && (
+                <div className="rf-map__sheet-actions" data-tutorial="dock-base">
+                  <button
+                    type="button"
+                    className={
+                      sheetSection === "buildings" || sheetSection === "overview"
+                        ? "primary"
+                        : "ghost"
+                    }
+                    data-testid="sheet-buildings-btn"
+                    onClick={() => {
+                      setSheetSection("buildings");
+                      setMapBuildingMenu(null);
+                    }}
+                  >
+                    Buildings
+                  </button>
+                  {Object.values(selectedTs.garrison).some((c) => c > 0) && (
                     <button
                       type="button"
-                      className="primary"
-                      onClick={() =>
-                        dispatch({
-                          type: "SET_SCREEN",
-                          payload: { screen: "base" },
-                        })
-                      }
+                      className="ghost"
+                      data-testid="create-squad-btn"
+                      onClick={() => {
+                        setSheetSection("create");
+                        setMapBuildingMenu(null);
+                      }}
                     >
-                      Open Base
+                      Create squad
                     </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        dispatch({
-                          type: "SET_SCREEN",
-                          payload: { screen: "invade" },
-                        })
+                  )}
+                </div>
+              )}
+
+            {humanId &&
+              selectedTs?.owner === humanId &&
+              sheetSection === "building" &&
+              mapBuildingMenu &&
+              (() => {
+                const inst = selectedTs.buildings.find(
+                  (b) => b.instanceId === mapBuildingMenu.instanceId,
+                );
+                if (!inst || !state.players[humanId]) return null;
+                return (
+                  <div className="rf-map__sheet-building-action">
+                    <BuildingActionPopover
+                      state={state}
+                      activePlayer={state.players[humanId]!}
+                      territoryId={selected.id}
+                      instance={inst}
+                      canAct={
+                        state.playerOrder[state.activePlayerIndex] ===
+                          humanId && state.phase === "play"
                       }
-                    >
-                      Army
-                    </button>
+                      left={0}
+                      top={0}
+                      mode={mapBuildingMode}
+                      onMode={setMapBuildingMode}
+                      onClose={() => {
+                        setMapBuildingMenu(null);
+                        setSheetSection("buildings");
+                        setMapBuildingMode("menu");
+                      }}
+                      dispatch={dispatch}
+                      embedded
+                    />
                   </div>
-                )}
+                );
+              })()}
+
+            {humanId &&
+              selectedTs?.owner === humanId &&
+              (sheetSection === "buildings" || sheetSection === "overview") && (
+                <section className="rf-map__sheet-buildings">
+                  <span className="rf-label">Buildings</span>
+                  <TerritoryBuildList
+                    buildings={selectedTs.buildings}
+                    trainingQueue={selectedTs.trainingQueue}
+                    selectedInstanceId={mapBuildingMenu?.instanceId}
+                    onSelectBuilding={(instanceId) => {
+                      setMapBuildingMenu({
+                        territoryId: selected.id,
+                        instanceId,
+                        left: 12,
+                        top: 12,
+                      });
+                      setMapBuildingMode("menu");
+                      // On short landscape, replace sheet content so the
+                      // popover is never clipped under the sheet.
+                      setSheetSection("building");
+                    }}
+                  />
+                </section>
+              )}
+
+            {sheetSection === "create" &&
+            humanId &&
+            selectedTs?.owner === humanId ? (
+              <CreateSquadPanel
+                state={state}
+                territoryId={selected.id}
+                dispatch={dispatch}
+                compact={shortLandscape}
+                onClose={() => {
+                  setSheetSection("buildings");
+                }}
+              />
+            ) : sheetSection === "building" ? null : (
+              <>
 
                 {selectedIsEnemy && humanId && opsMode === "strike" && (
                   <div className="rf-map__strike-panel">
@@ -2098,7 +2666,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                     </div>
                   )}
 
-                {!selectedIsEnemy && (
+                {!selectedIsEnemy && !shortLandscape && (
                   <>
                     <span className="rf-label">Your territories</span>
                     <ul className="rf-picker__list rf-map__owned-list">
@@ -2134,7 +2702,7 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
                   </>
                 )}
 
-                {marchTargets.length > 0 && (
+                {marchTargets.length > 0 && !shortLandscape && (
                   <div className="rf-map__march">
                     <span className="rf-label">March to (friendly)</span>
                     <ul className="rf-picker__list">
@@ -2214,6 +2782,43 @@ export function WorldMap({ state, dispatch, focusViewBox }: WorldMapProps) {
           </ul>
         )}
       </aside>
+
+      {/* Dock lists squads when none is selected; the squad sheet owns selection. */}
+      {humanId &&
+        state.screen !== "capture" &&
+        !state.pendingCapture &&
+        !state.selectedSquadId && (
+        <MapSquadDock
+          state={state}
+          humanId={humanId}
+          dispatch={dispatch}
+          open={squadDockOpen}
+          onOpenChange={setSquadDockOpen}
+        />
+      )}
+
+      {humanId && state.selectedSquadId && state.players[humanId] && (
+        <div
+          className="rf-map__squad-sheet rf-map__squad-sheet--right-dock"
+          data-testid="map-squad-sheet"
+        >
+          <SquadsView
+            state={state}
+            activePlayer={state.players[humanId]!}
+            dispatch={dispatch}
+            canAct={
+              state.playerOrder[state.activePlayerIndex] === humanId &&
+              state.phase === "play"
+            }
+            variant="sheet"
+            onClose={() =>
+              dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } })
+            }
+          />
+        </div>
+      )}
+
+      {/* Building menus always embed in the right territory panel — no floating popover. */}
     </div>
   );
 }

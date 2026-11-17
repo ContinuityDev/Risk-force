@@ -8,6 +8,7 @@ import { GAME_LOOP } from "../data/gameLoop";
 import type { ArmorType } from "../data/types";
 import { getUnit } from "../data/units";
 import type { GameState, StrikeForceSlot, TerritoryState } from "./state";
+import { staffedDefenseBonus } from "./workerEffects";
 
 export function frontageEfficiency(unitIndex: number): number {
   const cap = GAME_LOOP.combat.frontageCap;
@@ -40,6 +41,8 @@ export function fortificationBonus(ts: TerritoryState): number {
       bonus += GAME_LOOP.combat.fortificationBuildingBonus;
     }
   }
+  // Staffed defenses add a visible, scaling bonus.
+  bonus += staffedDefenseBonus(ts.buildings);
   return bonus;
 }
 

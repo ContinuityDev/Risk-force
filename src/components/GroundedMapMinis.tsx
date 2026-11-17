@@ -24,6 +24,8 @@ interface UnitMiniProps {
   shadowOnly?: boolean;
   /** When true, omit the contact shadow (sprite/chrome pass). */
   omitShadow?: boolean;
+  /** When true, skip the transparent tap target (caller supplies its own). */
+  omitHit?: boolean;
 }
 
 interface BuildingMiniProps {
@@ -40,6 +42,9 @@ interface BuildingMiniProps {
   more?: number;
   shadowOnly?: boolean;
   omitShadow?: boolean;
+  instanceId?: string;
+  /** When true, skip the transparent tap target. */
+  omitHit?: boolean;
 }
 
 function CountTag({
@@ -115,6 +120,7 @@ export function GroundedUnitMini({
   more,
   shadowOnly,
   omitShadow,
+  omitHit,
 }: UnitMiniProps) {
   const col = muteFactionColor(factionHex, transit ? 0.22 : 0.38);
   if (more != null) {
@@ -167,15 +173,17 @@ export function GroundedUnitMini({
       opacity={transit ? 0.9 : 1}
     >
       {!omitShadow && <GroundedContactShadow fp={fp} kind="unit" />}
-      <rect
-        className="rf-map__unit-hit"
-        data-territory-id={territoryId}
-        x={fp.hit.x}
-        y={fp.hit.y}
-        width={fp.hit.w}
-        height={fp.hit.h}
-        fill="transparent"
-      />
+      {!omitHit && (
+        <rect
+          className="rf-map__unit-hit"
+          data-territory-id={territoryId}
+          x={fp.hit.x}
+          y={fp.hit.y}
+          width={fp.hit.w}
+          height={fp.hit.h}
+          fill="transparent"
+        />
+      )}
       <g
         className="rf-map__unit-sprite"
         transform={`skewX(${fp.skewX}) scale(1 ${fp.scaleY})`}
@@ -227,6 +235,8 @@ export function GroundedBuildingMini({
   more,
   shadowOnly,
   omitShadow,
+  instanceId,
+  omitHit,
 }: BuildingMiniProps) {
   const col = muteFactionColor(factionHex, 0.42);
   if (more != null) {
@@ -240,15 +250,18 @@ export function GroundedBuildingMini({
     return (
       <g className="rf-map__bldg-more is-grounded">
         {!omitShadow && <GroundedContactShadow fp={fp} kind="building" />}
-        <rect
-          className="rf-map__bldg-hit"
-          data-territory-id={territoryId}
-          x={fp.hit.x}
-          y={fp.hit.y}
-          width={fp.hit.w}
-          height={fp.hit.h}
-          fill="transparent"
-        />
+        {!omitHit && (
+          <rect
+            className="rf-map__bldg-hit"
+            data-territory-id={territoryId}
+            data-instance-id={instanceId}
+            x={fp.hit.x}
+            y={fp.hit.y}
+            width={fp.hit.w}
+            height={fp.hit.h}
+            fill="transparent"
+          />
+        )}
         <text
           y={-size * 0.12}
           textAnchor="middle"
@@ -286,15 +299,18 @@ export function GroundedBuildingMini({
       opacity={constructing ? 0.7 : 1}
     >
       {!omitShadow && <GroundedContactShadow fp={fp} kind="building" />}
-      <rect
-        className="rf-map__bldg-hit"
-        data-territory-id={territoryId}
-        x={fp.hit.x}
-        y={fp.hit.y}
-        width={fp.hit.w}
-        height={fp.hit.h}
-        fill="transparent"
-      />
+      {!omitHit && (
+        <rect
+          className="rf-map__bldg-hit"
+          data-territory-id={territoryId}
+          data-instance-id={instanceId}
+          x={fp.hit.x}
+          y={fp.hit.y}
+          width={fp.hit.w}
+          height={fp.hit.h}
+          fill="transparent"
+        />
+      )}
       <g
         className="rf-map__bldg-sprite"
         transform={`skewX(${fp.skewX}) scale(1 ${fp.scaleY})`}

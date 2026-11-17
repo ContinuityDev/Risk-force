@@ -22,12 +22,10 @@ interface HudProps {
   onOpenMarket?: () => void;
 }
 
+/** Map-first: only Research is a full in-game screen tab. */
 const NAV: { screen: Screen; label: string }[] = [
   { screen: "map", label: "Map" },
-  { screen: "base", label: "Base" },
   { screen: "research", label: "Research" },
-  { screen: "invade", label: "Army" },
-  { screen: "save", label: "Save" },
 ];
 
 export function Hud({
@@ -317,11 +315,23 @@ export function Hud({
 
       <nav className="rf-hud__nav rf-hud__nav--desktop" aria-label="Primary">
         <div className="rf-hud__nav-primary">
-          {NAV.filter((n) => n.screen !== "save").map(({ screen, label }) => (
+          {NAV.map(({ screen, label }) => (
             <button
               key={screen}
               type="button"
-              className={state.screen === screen ? "primary" : "ghost"}
+              className={
+                screen === "map"
+                  ? state.screen === "map" ||
+                    state.screen === "base" ||
+                    state.screen === "squads" ||
+                    state.screen === "invade" ||
+                    state.screen === "capture"
+                    ? "primary"
+                    : "ghost"
+                  : state.screen === screen
+                    ? "primary"
+                    : "ghost"
+              }
               disabled={!isHumanTurn && screen !== "map"}
               onClick={() =>
                 dispatch({ type: "SET_SCREEN", payload: { screen } })
@@ -332,38 +342,6 @@ export function Hud({
           ))}
         </div>
         <div className="rf-hud__nav-tools">
-          <button
-            type="button"
-            className={state.screen === "save" ? "primary" : "ghost"}
-            onClick={() =>
-              dispatch({ type: "SET_SCREEN", payload: { screen: "save" } })
-            }
-          >
-            Save
-          </button>
-          {onOpenMarket && (
-            <button
-              type="button"
-              className="ghost"
-              onClick={onOpenMarket}
-              title={HELP.logistics}
-            >
-              Market
-            </button>
-          )}
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => setHelpOpen((v) => !v)}
-            title="Game loop help"
-          >
-            Help
-          </button>
-          {onTutorial && (
-            <button type="button" className="ghost" onClick={onTutorial}>
-              Tutorial
-            </button>
-          )}
           <button
             type="button"
             className="primary rf-hud__end-turn"
@@ -494,7 +472,10 @@ export function Hud({
         </div>
       )}
 
-      {state.message && (
+      {state.message &&
+        state.screen !== "capture" &&
+        state.phase !== "capture" &&
+        !state.pendingCapture && (
         <div className="rf-hud__message rf-hud__toast" role="status">
           <span>{state.message}</span>
           <button

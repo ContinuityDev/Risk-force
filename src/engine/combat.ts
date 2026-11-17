@@ -821,11 +821,28 @@ export function retreatBattle(state: GameState): GameState {
   };
 }
 
+function clearEngagedSquads(state: GameState, owner: string): GameState {
+  const squads = (state.squads ?? []).filter(
+    (s) => !(s.owner === owner && s.status === "engaged"),
+  );
+  return {
+    ...state,
+    squads,
+    selectedSquadId:
+      state.selectedSquadId &&
+      squads.some((s) => s.id === state.selectedSquadId)
+        ? state.selectedSquadId
+        : null,
+  };
+}
+
 export function applyBattleResult(state: GameState): GameState {
   const battle = state.battle;
   if (!battle || battle.status === "running" || battle.status === "retreated") {
     return state;
   }
+  // Engaged squads are consumed by the fight — survivors occupy via capture.
+  state = clearEngagedSquads(state, battle.attacker);
 
   const tid = battle.territoryId;
   const ts = state.territories[tid]!;

@@ -1,0 +1,620 @@
+#!/usr/bin/env node
+/**
+ * Squads + buildings e2e (desktop 1440 + mobile 844×390).
+ */
+import { chromium } from "playwright";
+
+const BASE = process.env.RF_URL ?? "http://127.0.0.1:4173/Risk-force";
+
+async function boot(page) {
+  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.evaluate(async () => {
+    try {
+      const regs = await navigator.serviceWorker?.getRegistrations?.();
+      if (regs) for (const r of regs) await r.unregister();
+      const keys = await caches?.keys?.();
+      if (keys) for (const k of keys) await caches.delete(k);
+    } catch {
+      /* */
+    }
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  const newBtn = page.getByRole("button", { name: /New Campaign/i });
+  if (await newBtn.count()) await newBtn.click();
+  await page.waitForTimeout(300);
+  await page.waitForSelector('[data-testid="map-picker"]', { timeout: 15000 });
+  await page.getByTestId("map-world_war").click();
+  await page.getByRole("button", { name: /^Start$/i }).click();
+  await page.waitForTimeout(500);
+  await page.waitForFunction(
+    () => window.__RF__ && typeof window.__RF__.dispatch === "function",
+  );
+  await page.evaluate(() => {
+    window.__RF__.dispatch({
+      type: "NEW_GAME",
+      payload: {
+        humanCount: 1,
+        aiCount: 1,
+        multiplayerMode: "solo",
+        seed: 42,
+        difficulty: "normal",
+        doctrineId: "vanguard",
+        mapId: "world_war",
+      },
+    });
+  });
+  await page.waitForTimeout(400);
+  await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "DISMISS_MESSAGE" });
+    window.__RF__.dispatch({ type: "DISMISS_ECONOMY_SUMMARY" });
+  });
+}
+
+async function stockHome(page) {
+  return page.evaluate(() => {
+    const s = window.__RF__.getState();
+    const home = Object.entries(s.territories).find(
+      ([, t]) => t.owner === "player",
+    )?.[0];
+    if (!home) return null;
+    const neighbors = window.__RF__.neighbors?.[home] ?? [];
+    const enemy =
+      neighbors.find((n) => s.territories[n]?.owner !== "player") ??
+      neighbors[0];
+    const friend = neighbors.find((n) => n !== enemy) ?? neighbors[1];
+    // Own a second plot for reinforce / join tests
+    const territories = { ...s.territories };
+    if (friend) {
+      territories[friend] = {
+        ...territories[friend],
+        owner: "player",
+        garrison: { trooper: 3 },
+        garrisonHp: {},
+        control: "occupied",
+        occupiedTurns: 0,
+        trainingQueue: [],
+      };
+    }
+    const homeTs = territories[home];
+    const buildings = [
+      ...(homeTs.buildings ?? []).map((b) =>
+        b.buildingId === "command_nexus" || b.buildingId === "barracks"
+          ? { ...b, buildRemaining: 0, hp: Math.max(b.hp, 200) }
+          : b,
+      ),
+    ];
+    if (!buildings.some((b) => b.buildingId === "barracks")) {
+      buildings.push({
+        instanceId: "e2e_barracks",
+        buildingId: "barracks",
+        x: 0,
+        y: 1,
+        hp: 260,
+        buildRemaining: 0,
+        workers: 0,
+      });
+    }
+    if (!buildings.some((b) => b.buildingId === "reactor")) {
+      buildings.push({
+        instanceId: "e2e_reactor",
+        buildingId: "reactor",
+        x: 1,
+        y: 0,
+        hp: 240,
+        buildRemaining: 0,
+        workers: 0,
+      });
+    }
+    window.__RF__.dispatch({
+      type: "LOAD_STATE",
+      payload: {
+        state: {
+          ...s,
+          territories: {
+            ...territories,
+            [home]: {
+              ...homeTs,
+              garrison: { trooper: 10, assault_mech: 2, hover_tank: 1 },
+              garrisonHp: {},
+              population: 30,
+              // Pool must cover already-assigned building staff + free headroom.
+              workers: 20,
+              buildings: buildings.map((b) => ({
+                ...b,
+                workers: b.buildingId === "command_nexus" ? 0 : b.workers ?? 0,
+              })),
+              supplyStock: 40,
+            },
+          },
+          selectedTerritoryId: home,
+          message: null,
+          newsDigest: null,
+          squads: [],
+          selectedSquadId: null,
+        },
+      },
+    });
+    return { home, enemy, friend };
+  });
+}
+
+/** Close news/digest overlays that steal map pointer events. */
+async function dismissOverlays(page) {
+  const news = page.locator(".rf-news__backdrop");
+  if ((await news.count()) > 0) {
+    await news.first().click({ force: true }).catch(() => {});
+  }
+  const drawer = page.locator(".rf-drawer__backdrop");
+  if ((await drawer.count()) > 0) {
+    await drawer.first().click({ force: true }).catch(() => {});
+  }
+  await page.evaluate(() => {
+    window.__RF__?.dispatch?.({ type: "DISMISS_MESSAGE" });
+    window.__RF__?.dispatch?.({ type: "DISMISS_ECONOMY_SUMMARY" });
+    const st = window.__RF__?.getState?.();
+    if (st?.newsDigest) {
+      window.__RF__.dispatch({
+        type: "LOAD_STATE",
+        payload: { state: { ...st, newsDigest: null } },
+      });
+    }
+  });
+  await page.waitForTimeout(80);
+}
+
+async function runSuite(page, label) {
+  console.log("suite", label);
+  const ids = await stockHome(page);
+  if (!ids?.home) throw new Error("no home");
+
+  // Create squad
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "CREATE_SQUAD",
+      payload: {
+        territoryId: home,
+        force: [{ unitId: "trooper", count: 4 }],
+        name: "E2E Alpha",
+      },
+    });
+  }, ids.home);
+  let s = await page.evaluate(() => window.__RF__.getState());
+  if (!s.squads.some((q) => q.name === "E2E Alpha")) {
+    throw new Error("squad not created");
+  }
+  const squadId = s.squads.find((q) => q.name === "E2E Alpha").id;
+
+  // Reinforce owned
+  if (ids.friend) {
+    await page.evaluate(
+      ({ squadId, toId }) => {
+        window.__RF__.dispatch({
+          type: "ORDER_SQUAD_MOVE",
+          payload: { squadId, toId },
+        });
+      },
+      { squadId, toId: ids.friend },
+    );
+    s = await page.evaluate(() => window.__RF__.getState());
+    if (!s.armiesInTransit.some((a) => a.squadId === squadId)) {
+      throw new Error("reinforce march missing");
+    }
+    // Arrive
+    for (let i = 0; i < 14; i++) {
+      await page.evaluate(() => {
+        const st = window.__RF__.getState();
+        // tick via END_TURN only advances active player armies at start —
+        // call LOAD_STATE with tick result is hard; use many END_TURNs carefully.
+      });
+      break;
+    }
+    // Direct tick through reducer by re-dispatching END_TURN is heavy; use
+    // internal evaluate of module not available. Fast-forward transit turns.
+    await page.evaluate((squadId) => {
+      const st = window.__RF__.getState();
+      const armies = (st.armiesInTransit ?? []).map((a) =>
+        a.squadId === squadId || a.joiningSquadId === squadId
+          ? { ...a, turnsRemaining: 1, pathRemaining: [] }
+          : a,
+      );
+      window.__RF__.dispatch({
+        type: "LOAD_STATE",
+        payload: { state: { ...st, armiesInTransit: armies } },
+      });
+      window.__RF__.dispatch({ type: "END_TURN" });
+    }, squadId);
+    await page.waitForTimeout(200);
+    // Skip AI by loading play again if needed
+    await page.evaluate(() => {
+      const st = window.__RF__.getState();
+      if (st.phase === "battle") {
+        // let battle run — skip for reinforce path
+      }
+    });
+  }
+
+  // Fresh stock for attack + join + buildings
+  const ids2 = await stockHome(page);
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "CREATE_SQUAD",
+      payload: {
+        territoryId: home,
+        force: [{ unitId: "trooper", count: 3 }],
+        name: "Strike",
+      },
+    });
+  }, ids2.home);
+  s = await page.evaluate(() => window.__RF__.getState());
+  const strikeId = s.squads.find((q) => q.name === "Strike")?.id;
+  if (!strikeId) throw new Error("strike squad missing");
+
+  // Attack enemy/neutral
+  if (ids2.enemy) {
+    await page.evaluate(
+      ({ squadId, toId }) => {
+        window.__RF__.dispatch({
+          type: "ORDER_SQUAD_MOVE",
+          payload: { squadId, toId },
+        });
+      },
+      { squadId: strikeId, toId: ids2.enemy },
+    );
+    s = await page.evaluate(() => window.__RF__.getState());
+    if (!s.armiesInTransit.some((a) => a.squadId === strikeId)) {
+      throw new Error("attack march missing");
+    }
+  }
+
+  // Distant join + follow
+  const ids3 = await stockHome(page);
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "CREATE_SQUAD",
+      payload: {
+        territoryId: home,
+        force: [{ unitId: "trooper", count: 2 }],
+        name: "Core",
+      },
+    });
+  }, ids3.home);
+  s = await page.evaluate(() => window.__RF__.getState());
+  const coreId = s.squads.find((q) => q.name === "Core")?.id;
+  if (ids3.friend && coreId) {
+    await page.evaluate(
+      ({ squadId, fromId }) => {
+        window.__RF__.dispatch({
+          type: "ADD_TO_SQUAD",
+          payload: {
+            squadId,
+            fromId,
+            force: [{ unitId: "trooper", count: 2 }],
+          },
+        });
+      },
+      { squadId: coreId, fromId: ids3.friend },
+    );
+    s = await page.evaluate(() => window.__RF__.getState());
+    if (!s.armiesInTransit.some((a) => a.joiningSquadId === coreId)) {
+      throw new Error("joiner missing");
+    }
+    // Move squad while joiners en route
+    if (ids3.enemy) {
+      await page.evaluate(
+        ({ squadId, toId }) => {
+          window.__RF__.dispatch({
+            type: "ORDER_SQUAD_MOVE",
+            payload: { squadId, toId },
+          });
+        },
+        { squadId: coreId, toId: ids3.friend },
+      );
+    }
+    // Depart
+    await page.evaluate((squadId) => {
+      const st = window.__RF__.getState();
+      // Ensure idle for depart — recreate if marching
+      const sq = st.squads.find((x) => x.id === squadId);
+      if (sq && sq.status === "idle" && (sq.force[0]?.count ?? 0) >= 2) {
+        window.__RF__.dispatch({
+          type: "DEPART_SQUAD",
+          payload: {
+            squadId,
+            force: [{ unitId: "trooper", count: 1 }],
+            mode: "new_squad",
+            name: "Detached",
+          },
+        });
+      }
+    }, coreId);
+  }
+
+  // Depart dedicated
+  const ids4 = await stockHome(page);
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "CREATE_SQUAD",
+      payload: {
+        territoryId: home,
+        force: [{ unitId: "trooper", count: 5 }],
+        name: "SplitMe",
+      },
+    });
+  }, ids4.home);
+  s = await page.evaluate(() => window.__RF__.getState());
+  const splitId = s.squads.find((q) => q.name === "SplitMe")?.id;
+  await page.evaluate((squadId) => {
+    window.__RF__.dispatch({
+      type: "DEPART_SQUAD",
+      payload: {
+        squadId,
+        force: [{ unitId: "trooper", count: 2 }],
+        mode: "new_squad",
+        name: "Detached",
+      },
+    });
+  }, splitId);
+  s = await page.evaluate(() => window.__RF__.getState());
+  if (!s.squads.some((q) => q.name === "Detached")) {
+    throw new Error("depart failed");
+  }
+
+  // Staff nexus — worker effect
+  await page.evaluate((home) => {
+    const st = window.__RF__.getState();
+    const nexus = st.territories[home].buildings.find(
+      (b) => b.buildingId === "command_nexus",
+    );
+    if (!nexus) throw new Error("no nexus");
+    window.__RF__.dispatch({
+      type: "ASSIGN_WORKERS",
+      payload: { territoryId: home, instanceId: nexus.instanceId, workers: 2 },
+    });
+  }, ids4.home);
+  s = await page.evaluate(() => window.__RF__.getState());
+  const nexus = s.territories[ids4.home].buildings.find(
+    (b) => b.buildingId === "command_nexus",
+  );
+  if ((nexus?.workers ?? 0) < 2) throw new Error("nexus not staffed");
+
+  // Train at barracks
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "TRAIN_UNIT",
+      payload: { territoryId: home, unitId: "trooper", count: 1 },
+    });
+  }, ids4.home);
+  s = await page.evaluate(() => window.__RF__.getState());
+  if (!s.territories[ids4.home].trainingQueue.length) {
+    throw new Error("barracks train failed: " + (s.message ?? ""));
+  }
+
+  // Delete a reactor via DEMOLISH
+  const deleted = await page.evaluate((home) => {
+    const st = window.__RF__.getState();
+    const before = st.territories[home].buildings.filter(
+      (b) => b.buildingId === "reactor",
+    ).length;
+    const reactor = st.territories[home].buildings.find(
+      (b) => b.buildingId === "reactor",
+    );
+    if (!reactor) throw new Error("no reactor");
+    window.__RF__.dispatch({
+      type: "DEMOLISH_BUILDING",
+      payload: { territoryId: home, instanceId: reactor.instanceId },
+    });
+    const after = window.__RF__
+      .getState()
+      .territories[home].buildings.filter(
+        (b) => b.buildingId === "reactor",
+      ).length;
+    return { before, after };
+  }, ids4.home);
+  if (!(deleted.after < deleted.before)) {
+    throw new Error("delete failed");
+  }
+
+  // Map-first: dock when nothing selected; sheet when a squad is selected
+  await dismissOverlays(page);
+  await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
+    window.__RF__.dispatch({ type: "SET_SCREEN", payload: { screen: "map" } });
+  });
+  await page.waitForTimeout(250);
+  const dock = await page.getByTestId("squad-dock").count();
+  if (!dock) throw new Error("squad dock missing");
+
+  // Select a squad via dispatch and ensure sheet + marker appear (dock hides)
+  const anySquad = await page.evaluate(() => {
+    const st = window.__RF__.getState();
+    const id = st.squads[0]?.id;
+    if (!id) return null;
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: id } });
+    return id;
+  });
+  if (!anySquad) throw new Error("no squad to select");
+  await page.waitForTimeout(300);
+  const sheet = await page.getByTestId("map-squad-sheet").count();
+  const marker = await page.locator("[data-testid='selected-squad'], [data-testid='squad-marker']").count();
+  const dockWhileSelected = await page.getByTestId("squad-dock").count();
+  if (!sheet) throw new Error("squad sheet missing after select");
+  if (!marker) throw new Error("squad marker missing on map");
+  if (dockWhileSelected) throw new Error("squad dock should hide while selected");
+
+  // Territory sheet buildings (no Base tab)
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: home },
+    });
+  }, ids4.home);
+  await page.waitForTimeout(250);
+  const builds = await page.getByTestId("territory-buildings").count();
+  if (!builds) throw new Error("territory buildings list missing");
+
+  // Tap a building mini on the map → menu opens in the right panel
+  await dismissOverlays(page);
+  await page.evaluate(() => {
+    window.__RF__.dispatch({ type: "SELECT_SQUAD", payload: { squadId: null } });
+  });
+  await page.evaluate((home) => {
+    window.__RF__.dispatch({
+      type: "SELECT_TERRITORY",
+      payload: { territoryId: home },
+    });
+  }, ids4.home);
+  await page.waitForTimeout(350);
+  await dismissOverlays(page);
+  // Prefer a hit whose center is not covered by dock / news / HUD.
+  const tapTarget = await page.evaluate(() => {
+    const dock = document.querySelector(".rf-map__territory-drawer");
+    const dockLeft = dock?.getBoundingClientRect().left ?? Infinity;
+    const hits = [
+      ...document.querySelectorAll(".rf-map__bldg-hit[data-instance-id]"),
+    ];
+    for (const el of hits) {
+      const r = el.getBoundingClientRect();
+      const cx = r.x + r.width / 2;
+      const cy = r.y + r.height / 2;
+      if (cx >= dockLeft - 4) continue;
+      const top = document.elementFromPoint(cx, cy);
+      if (top === el || top?.closest?.(".rf-map__bldg-hit") === el) {
+        return {
+          iid: el.getAttribute("data-instance-id"),
+          tid: el.getAttribute("data-territory-id"),
+          cx,
+          cy,
+        };
+      }
+    }
+    return null;
+  });
+  if (!tapTarget) throw new Error("no clear building mini hit target on map");
+  await page.mouse.move(tapTarget.cx, tapTarget.cy);
+  await page.mouse.down();
+  await page.waitForTimeout(40);
+  await page.mouse.up();
+  await page.waitForTimeout(450);
+  const panelPop = await page
+    .locator(".rf-map__territory-drawer [data-testid='building-popover']")
+    .count();
+  const trainItem = page.getByRole("menuitem", {
+    name: /Train unit|Workers|Info/i,
+  });
+  if (!panelPop || !(await trainItem.count())) {
+    const dbg = await page.evaluate(() => {
+      const hits = [...document.querySelectorAll(".rf-map__bldg-hit[data-instance-id]")];
+      return {
+        hitCount: hits.length,
+        first: hits[0]
+          ? {
+              iid: hits[0].getAttribute("data-instance-id"),
+              tid: hits[0].getAttribute("data-territory-id"),
+              pe: getComputedStyle(hits[0]).pointerEvents,
+            }
+          : null,
+        drawer: !!document.querySelector(".rf-map__territory-drawer"),
+        popAnywhere: !!document.querySelector("[data-testid=building-popover]"),
+        sheetText: document
+          .querySelector(".rf-map__territory-drawer")
+          ?.textContent?.slice(0, 180),
+        selected: window.__RF__.getState().selectedTerritoryId,
+        backdrops: document.querySelectorAll(".rf-drawer__backdrop").length,
+      };
+    });
+    throw new Error(
+      "building mini tap did not open right-panel building menu: " +
+        JSON.stringify(dbg),
+    );
+  }
+  const dockPanel = await page
+    .locator(".rf-map__territory-drawer.rf-map__territory-drawer--right-dock")
+    .count();
+  if (!dockPanel) {
+    throw new Error("territory right panel missing after building tap");
+  }
+
+  // Capture overlay titles the captured territory, not the origin
+  await page.evaluate(
+    ({ home, enemy }) => {
+      const st = window.__RF__.getState();
+      const target = enemy || home;
+      window.__RF__.dispatch({
+        type: "LOAD_STATE",
+        payload: {
+          state: {
+            ...st,
+            phase: "capture",
+            screen: "capture",
+            pendingCapture: {
+              territoryId: target,
+              attacker: "player",
+              fromId: home,
+              survivors: [{ unitId: "trooper", count: 3 }],
+              population: 6,
+              workers: 1,
+              buildings: st.territories[target]?.buildings ?? [],
+              supplyStock: 4,
+            },
+            message: null,
+          },
+        },
+      });
+    },
+    { home: ids4.home, enemy: ids4.enemy },
+  );
+  await page.waitForTimeout(250);
+  const capName = await page.getByTestId("capture-territory-name").textContent();
+  const expected = await page.evaluate((enemy) => {
+    try {
+      return window.__RF__.getState
+        ? // name via territory display in DOM assertion only
+          enemy
+        : enemy;
+    } catch {
+      return enemy;
+    }
+  }, ids4.enemy);
+  if (!capName || /Secure\s*$/i.test(capName)) {
+    throw new Error("capture title missing: " + capName);
+  }
+  // Must not falsely title the origin when a distinct enemy was captured
+  if (ids4.enemy && ids4.enemy !== ids4.home) {
+    const tid = await page
+      .getByTestId("capture-sheet")
+      .getAttribute("data-territory-id");
+    if (tid !== ids4.enemy) {
+      throw new Error(
+        `capture sheet territory ${tid} != captured ${ids4.enemy} (expected ${expected})`,
+      );
+    }
+  }
+
+  console.log("ok", label);
+}
+
+async function main() {
+  const browser = await chromium.launch({ headless: true });
+  for (const vp of [
+    { name: "desktop", viewport: { width: 1440, height: 900 } },
+    {
+      name: "mobile844",
+      viewport: { width: 844, height: 390 },
+      isMobile: true,
+      hasTouch: true,
+    },
+  ]) {
+    const page = await browser.newPage(vp);
+    await boot(page);
+    await runSuite(page, vp.name);
+    await page.close();
+  }
+  await browser.close();
+  console.log("e2e-squads-buildings passed");
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

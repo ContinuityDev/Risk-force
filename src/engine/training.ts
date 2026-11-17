@@ -6,13 +6,17 @@ import type { PlayerState, TerritoryState, TrainingJob } from "./state";
 import { canAfford, spend } from "./economy";
 import { syncHpArray } from "./garrisonHp";
 import { isUnlocked } from "./research";
+import { trainingStaffSpeedMult } from "./workerEffects";
 
 export function workerCapForBuilding(buildingId: string): number {
   try {
-    const cat = getBuilding(buildingId).category;
+    const def = getBuilding(buildingId);
+    const cat = def.category;
     if (cat === "economy") return GAME_LOOP.workers.economyCap;
     if (cat === "defense") return GAME_LOOP.workers.defenseCap;
-    if (cat === "command") return GAME_LOOP.workers.commandCap;
+    if (cat === "command" || cat === "research") return GAME_LOOP.workers.commandCap;
+    // Barracks / factories / airfields — staff for faster training.
+    if (def.produces?.length) return GAME_LOOP.workers.defaultCap + 1;
   } catch {
     /* */
   }
@@ -163,12 +167,14 @@ export function enqueueUnit(
   const cfg = GAME_LOOP.training.unit;
   const cost = unitTrainCost(unitId, count, player);
   const spent = spend(player, cost);
+  const staffMult = trainingStaffSpeedMult(ts.buildings, unitId);
+  const turns = Math.max(1, Math.ceil(unitTrainTurns(unitId) * staffMult));
   const job: TrainingJob = {
     id: `tru-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     kind: "unit",
     unitId,
     count,
-    turnsRemaining: unitTrainTurns(unitId),
+    turnsRemaining: turns,
   };
   return {
     player: spent,

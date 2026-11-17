@@ -1258,7 +1258,8 @@
   box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45);
 }
 
-.rf-base__yard:has(.rf-base__ctx) {
+.rf-base__yard:has(.rf-base__ctx),
+.rf-base__yard:has(.rf-bldg-pop) {
   overflow: visible;
   z-index: 5;
 }
@@ -1295,8 +1296,175 @@
   background: rgba(126, 182, 201, 0.15);
 }
 
+.rf-base__ctx-item--danger,
 .rf-base__ctx-item.is-danger {
   color: #d07070;
+}
+
+.rf-bldg-pop {
+  position: fixed;
+  z-index: 60;
+  min-width: 11rem;
+  max-width: min(16rem, calc(100vw - 1rem));
+  max-height: min(70vh, 22rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: rgba(10, 14, 18, 0.97);
+  border: 1px solid rgba(126, 182, 201, 0.45);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+}
+
+.rf-bldg-pop--embedded {
+  position: relative;
+  left: auto;
+  top: auto;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  visibility: visible;
+  box-shadow: none;
+  border-color: rgba(126, 182, 201, 0.28);
+}
+
+.rf-map__territory-drawer--right-dock .rf-bldg-pop--embedded {
+  max-height: none;
+  overflow: auto;
+}
+
+.rf-map__sheet-building-action {
+  margin-top: 0.35rem;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.rf-bldg-pop__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.35rem 0.35rem;
+  border-bottom: 1px solid rgba(126, 182, 201, 0.2);
+}
+
+.rf-bldg-pop__head .rf-label {
+  display: block;
+  margin-bottom: 0.1rem;
+}
+
+.rf-bldg-pop__head strong {
+  font-size: 0.85rem;
+}
+
+.rf-bldg-pop__close {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.rf-bldg-pop__items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.rf-bldg-pop__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  text-align: left;
+  min-height: 36px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  border: 0;
+  background: transparent;
+  color: var(--rf-text);
+  cursor: pointer;
+}
+
+.rf-bldg-pop__item:hover,
+.rf-bldg-pop__item:focus-visible {
+  background: rgba(126, 182, 201, 0.15);
+}
+
+.rf-bldg-pop__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rf-bldg-pop__item--danger {
+  color: #d07070;
+}
+
+.rf-bldg-pop__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.35rem;
+}
+
+.rf-bldg-pop__back {
+  align-self: flex-start;
+  font-size: 0.72rem;
+}
+
+.rf-bldg-pop__train-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-bldg-pop__confirm p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.rf-base__staff-effect {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: #9ec9b0;
+}
+
+.rf-base__delete-confirm {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  width: min(22rem, calc(100% - 1.5rem));
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  background: rgba(18, 14, 14, 0.94);
+  border: 1px solid rgba(208, 112, 112, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.rf-base__delete-confirm p {
+  margin: 0 0 0.55rem;
+  font-size: 0.85rem;
+}
+
+.rf-base__delete-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+button.danger {
+  background: #8a3030;
+  border-color: #b05050;
+  color: #f2e8e8;
 }
 
 .rf-base__terrain {
@@ -1759,6 +1927,215 @@
 .rf-research__unlocks {
   font-size: 0.68rem;
   color: var(--rf-text-faint);
+}
+
+/* ── Squads ─────────────────────────────────────────────── */
+
+.rf-squads--sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+}
+
+.rf-squads--sheet .rf-squads__detail {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 0;
+}
+
+.rf-squads__joiners--compact {
+  margin-bottom: 0;
+  padding: 0.45rem 0.55rem;
+}
+
+.rf-squads__joiners--compact ul {
+  margin-top: 0.3rem;
+}
+
+.rf-squads__sheet-hint {
+  margin: 0.5rem 0 0;
+}
+
+.rf-squads__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.rf-squads__joiners {
+  margin-bottom: 1rem;
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.65rem 0.75rem;
+}
+
+.rf-squads__joiners ul {
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-squads__joiners small {
+  display: block;
+  color: var(--rf-text-faint);
+  font-size: 0.72rem;
+}
+
+.rf-squads__list ul,
+.rf-squads__list > .rf-hint {
+  margin-top: 0.45rem;
+}
+
+.rf-squads__list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-squads__list li > button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.rf-squads__list small {
+  color: var(--rf-text-faint);
+  font-size: 0.72rem;
+  font-weight: normal;
+}
+
+.rf-squads__detail {
+  border: var(--rf-hairline);
+  background: var(--rf-panel);
+  padding: 0.75rem;
+  min-height: 12rem;
+}
+
+.rf-squads__detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.rf-squads__detail-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.rf-squads__comp {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+}
+
+.rf-squads__comp li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+}
+
+.rf-squads__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.rf-squads__tabs button {
+  font-size: 0.78rem;
+}
+
+.rf-squads__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rf-squads__rename input {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.rf-squads__rename-row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.rf-squads__rename-row input {
+  flex: 1;
+  margin: 0;
+}
+
+.rf-squads__modes {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.rf-squads__add-group + .rf-squads__add-group {
+  margin-top: 0.65rem;
+}
+
+.rf-squads__force {
+  margin-top: 0.35rem;
+}
+
+.rf-squads__danger {
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rf-border-soft);
+}
+
+.rf-squads__create-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+}
+
+.rf-squads__create-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.rf-squads__create-head h3 {
+  margin: 0.15rem 0 0;
+}
+
+.rf-squads__create-footer {
+  margin-top: 0.35rem;
+}
+
+.rf-squads__create-footer .primary {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .rf-squads__layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Invade ─────────────────────────────────────────────── */
@@ -3361,6 +3738,74 @@
   max-height: min(70vh, 18rem);
   border-radius: var(--rf-radius) var(--rf-radius) 0 0;
   animation: rf-drawer-in-up 0.2s ease;
+  overflow: auto;
+}
+
+/* Compact right dock (~280–320px), map stays interactive on the left. */
+.rf-drawer--inline.rf-map__territory-drawer.rf-map__territory-drawer--right-dock {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  left: auto;
+  width: clamp(280px, 36vw, 320px);
+  max-width: min(320px, 42vw);
+  max-height: none;
+  height: auto;
+  padding: 0.45rem 0.55rem 0.55rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  z-index: 8;
+  box-shadow: -8px 0 22px rgba(0, 0, 0, 0.45);
+}
+
+.rf-map__sheet-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0.15rem 0.35rem;
+  margin: 0 0 0.1rem;
+  font-size: 0.72rem;
+}
+
+.rf-map__territory-drawer--right-dock .rf-map__sheet-buildings {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.rf-map__territory-drawer--right-dock .rf-map__build-list {
+  max-height: none;
+}
+
+.rf-map__territory-drawer--right-dock .rf-map__sheet-actions {
+  flex-wrap: nowrap;
+  margin: 0.25rem 0 0.4rem;
+}
+
+.rf-map__territory-drawer--right-dock .rf-map__sheet-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 40px;
+  font-size: 0.72rem;
+}
+
+.rf-map__territory-drawer--right-dock .rf-map__sheet-title {
+  margin: 0.05rem 0 0.15rem;
+  font-size: 0.95rem;
+}
+
+.rf-map__territory-drawer--right-dock .rf-map__sheet-building-action {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.rf-map__territory-drawer--right-dock .rf-bldg-pop--embedded {
+  max-height: none;
 }
 
 .rf-drawer--inline {
@@ -3487,6 +3932,21 @@
 
 .rf-map__legend--desktop {
   /* keep existing .rf-map__legend styles */
+}
+
+.rf-map__sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.rf-map__sheet-close {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  line-height: 1;
+  flex: 0 0 auto;
 }
 
 .rf-map__sheet-title {
@@ -3777,8 +4237,25 @@
     overflow: hidden;
   }
 
+  .rf-drawer--inline.rf-map__territory-drawer.rf-map__territory-drawer--right-dock {
+    top: 0.3rem;
+    bottom: 0.3rem;
+    left: auto;
+    right: 0.3rem;
+    width: clamp(17.5rem, 36vw, 20rem);
+    max-width: min(20rem, 40vw);
+    max-height: none;
+    height: auto;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
   .rf-map__territory-drawer .rf-picker__list {
     max-height: min(22vh, 6.5rem);
+  }
+
+  .rf-map__territory-drawer--right-dock .rf-map__build-list {
+    max-height: none;
   }
 
   .rf-map__territory-drawer:has(.rf-invade-from) {
@@ -4204,9 +4681,13 @@
     font-size: 0.72rem;
   }
 
-  .rf-shell:has(.rf-battle) .rf-hud__toast,
-  .rf-shell:has(.rf-capture) .rf-hud__toast {
+  .rf-shell:has(.rf-battle) .rf-hud__toast {
     bottom: max(0.55rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .rf-shell:has(.rf-capture) .rf-hud__toast,
+  .rf-shell:has(.rf-map-overlay) .rf-hud__toast {
+    display: none !important;
   }
 
   /* ── Map sheets: no overlap ───────────────────────────── */
@@ -4341,7 +4822,8 @@
     touch-action: pan-x pan-y;
   }
 
-  .rf-base__yard:has(.rf-base__ctx) {
+  .rf-base__yard:has(.rf-base__ctx),
+  .rf-base__yard:has(.rf-bldg-pop) {
     overflow: visible;
   }
 
@@ -5635,5 +6117,308 @@ button.is-unaffordable {
 @media (orientation: landscape) and (max-height: 390px) and (max-width: 700px) {
   .rf-lobby__doctrine-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── Map-first: squad dock, sheets, building hits, capture overlay ── */
+
+.rf-map__squad-hit {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.rf-map__bldgs .rf-map__bldg-hit[data-instance-id] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.rf-map__squads {
+  pointer-events: none;
+}
+
+.rf-map__squads .rf-map__squad-hit {
+  pointer-events: auto;
+}
+
+.rf-map__joining-label {
+  font-family: var(--rf-font-display);
+  letter-spacing: 0.02em;
+  paint-order: stroke fill;
+  stroke: #081018;
+  stroke-width: 0.45px;
+}
+
+.rf-map__squad-dock {
+  position: absolute;
+  right: 0.55rem;
+  left: auto;
+  bottom: 3.4rem;
+  z-index: 7;
+  min-width: 11rem;
+  max-width: min(18rem, 42vw);
+  padding: 0.55rem 0.7rem;
+  border: var(--rf-hairline);
+  background: rgba(8, 12, 16, 0.9);
+  font-size: 0.72rem;
+  pointer-events: auto;
+}
+
+.rf-map__squad-dock.is-collapsed {
+  min-width: auto;
+  padding: 0.4rem 0.55rem;
+}
+
+.rf-map__squad-dock-body {
+  margin-top: 0.35rem;
+  max-height: min(40vh, 14rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.rf-map__squad-dock-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.rf-map__squad-dock-list button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.rf-map__squad-dock-list small {
+  opacity: 0.75;
+  font-size: 0.68rem;
+}
+
+.rf-map__squad-dock-joiners {
+  list-style: none;
+  margin: 0 0 0.45rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--rf-text-dim);
+}
+
+.rf-map__joining-tag {
+  display: inline-block;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid rgba(184, 240, 255, 0.35);
+  color: #b8f0ff;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rf-map__squad-sheet,
+.rf-map__squad-sheet--right-dock {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  left: auto;
+  z-index: 9;
+  width: clamp(280px, 36vw, 320px);
+  max-width: min(320px, 42vw);
+  max-height: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0.55rem 0.65rem;
+  border: var(--rf-hairline);
+  background: rgba(8, 12, 16, 0.94);
+  pointer-events: auto;
+  box-shadow: -8px 0 22px rgba(0, 0, 0, 0.45);
+}
+
+.rf-map__build-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 11rem;
+  overflow: auto;
+}
+
+.rf-map__build-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-align: left;
+  padding: 0.3rem 0.4rem;
+}
+
+.rf-map__build-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.rf-map__build-row-body small {
+  opacity: 0.75;
+  font-size: 0.68rem;
+}
+
+.rf-squads__create-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+  max-height: min(62vh, 24rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 0.25rem;
+}
+
+.rf-squads__create-panel .rf-squads__force {
+  flex: 1 1 auto;
+  min-height: 4.5rem;
+  max-height: min(36vh, 12rem);
+  overflow: auto;
+}
+
+.rf-squads__create-panel .rf-squads__force ul {
+  margin: 0.35rem 0 0;
+}
+
+.rf-squads__create-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-top: 0.35rem;
+  background: linear-gradient(180deg, transparent, rgba(8, 12, 16, 0.97) 28%);
+}
+
+.rf-squads__create-panel--compact {
+  max-height: none;
+  gap: 0.4rem;
+}
+
+.rf-squads__create-panel--compact .rf-squads__create-footer {
+  position: static;
+  background: transparent;
+  padding-top: 0.15rem;
+}
+
+.rf-squads__create-panel--compact .rf-squads__force {
+  max-height: min(28vh, 7rem);
+}
+
+.rf-map-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--rf-bg, #0c1218) 45%, transparent);
+  pointer-events: auto;
+}
+
+.rf-shell:has(.rf-map-overlay) .rf-hud__toast,
+.rf-shell:has(.rf-capture) .rf-hud__toast,
+.rf-shell:has([data-testid="capture-overlay"]) .rf-hud__message,
+.rf-shell:has([data-testid="capture-overlay"]) .rf-hud__toast {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.rf-capture--sheet {
+  width: min(28rem, 100%);
+  max-height: min(78vh, 32rem);
+  overflow: auto;
+  margin: 0;
+  padding: 0.85rem 1rem 1rem;
+  border: var(--rf-hairline);
+  background: rgba(10, 14, 18, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Right edge above the mobile dock — keep map center clear. */
+  .rf-map__squad-dock {
+    left: auto;
+    right: 0.3rem;
+    top: auto;
+    bottom: calc(3.35rem + env(safe-area-inset-bottom, 0px));
+    max-width: min(38vw, 12rem);
+    max-height: min(42vh, 9.5rem);
+    padding: 0.3rem 0.4rem;
+    z-index: 7;
+  }
+
+  .rf-map__squad-dock.is-open {
+    top: auto;
+  }
+
+  .rf-map__squad-sheet,
+  .rf-map__squad-sheet--right-dock {
+    top: 0.3rem;
+    bottom: 0.3rem;
+    right: 0.3rem;
+    left: auto;
+    width: clamp(280px, 36vw, 320px);
+    max-width: min(320px, 40vw);
+    max-height: none;
+    padding: 0.45rem 0.55rem;
+    z-index: 9;
+  }
+
+  .rf-map__squad-dock-body {
+    max-height: min(36vh, 7rem);
+  }
+
+  .rf-drawer--inline.rf-map__territory-drawer:not(
+      .rf-map__territory-drawer--right-dock
+    ) {
+    max-height: calc(100dvh - var(--rf-hud-h) - 3.4rem);
+    overflow: auto;
+  }
+
+  .rf-drawer--inline.rf-map__territory-drawer.rf-map__territory-drawer--right-dock {
+    top: 0.3rem !important;
+    right: 0.3rem !important;
+    bottom: 0.3rem !important;
+    left: auto !important;
+    width: clamp(280px, 36vw, 320px) !important;
+    max-width: min(320px, 40vw) !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .rf-map__territory-drawer--right-dock .rf-bldg-pop--embedded {
+    max-height: none;
+  }
+
+  .rf-map-overlay {
+    align-items: stretch;
+    padding: 0.35rem;
+    z-index: 100;
+  }
+
+  .rf-capture--sheet {
+    max-height: none;
+    height: 100%;
+  }
+
+  .rf-shell:has(.rf-capture) .rf-hud__toast,
+  .rf-shell:has(.rf-map-overlay) .rf-hud__toast {
+    display: none !important;
   }
 }
