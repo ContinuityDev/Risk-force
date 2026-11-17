@@ -1149,12 +1149,12 @@
 }
 
 .rf-map__units {
-  /* Never block territory hit-testing — selection uses elementsFromPoint. */
+  /* Parent stays inert; unit hits opt in so garrison taps work. */
   pointer-events: none;
 }
 
 .rf-map__unit-hit {
-  pointer-events: none;
+  pointer-events: auto;
   cursor: pointer;
 }
 
@@ -3771,10 +3771,60 @@ button.danger {
   font-size: 0.72rem;
 }
 
-.rf-map__territory-drawer--right-dock .rf-map__sheet-buildings {
+.rf-map__territory-drawer--right-dock .rf-map__sheet-buildings,
+.rf-map__territory-drawer--right-dock .rf-map__sheet-build-catalog {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+}
+
+.rf-map__build-catalog-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.rf-map__build-catalog-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(140, 170, 190, 0.22);
+  background: rgba(12, 22, 32, 0.55);
+  color: inherit;
+  cursor: pointer;
+}
+
+.rf-map__build-catalog-list button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rf-map__build-catalog-list button.is-unaffordable {
+  border-color: rgba(220, 120, 80, 0.45);
+}
+
+.rf-map__build-catalog-list button span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.rf-map__build-catalog-list strong {
+  font-size: 0.82rem;
+}
+
+.rf-map__build-catalog-list small {
+  opacity: 0.7;
+  font-size: 0.68rem;
 }
 
 .rf-map__territory-drawer--right-dock .rf-map__build-list {

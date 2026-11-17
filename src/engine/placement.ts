@@ -52,3 +52,21 @@ export function canPlaceBuilding(
   }
   return { ok: true };
 }
+
+/** First free grid cell that fits `buildingId`, or null if the yard is full. */
+export function findFreeBuildingCell(
+  territory: TerritoryState,
+  territoryId: string,
+  buildingId: string,
+  player: PlayerState,
+): { x: number; y: number } | null {
+  const tdef = getTerritory(territoryId);
+  for (let y = 0; y < tdef.grid.rows; y++) {
+    for (let x = 0; x < tdef.grid.cols; x++) {
+      if (canPlaceBuilding(territory, territoryId, buildingId, x, y, player).ok) {
+        return { x, y };
+      }
+    }
+  }
+  return null;
+}
